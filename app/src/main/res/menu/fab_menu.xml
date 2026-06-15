@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/fab_chat"
+        android:title="@string/fab_new_chat" />
+    <item
+        android:id="@+id/fab_group"
+        android:title="@string/fab_new_group" />
+</menu>

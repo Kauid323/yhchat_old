@@ -1,0 +1,25 @@
+<resources>
+    <string name="app_name">YunHu Old</string>
+    <string name="login_title">Login</string>
+    <string name="tab_email">Email Login</string>
+    <string name="tab_phone">Phone Login</string>
+    <string name="hint_email">Please enter email</string>
+    <string name="hint_password">Please enter password</string>
+    <string name="hint_phone">Please enter phone number</string>
+    <string name="hint_image_code">Image Captcha</string>
+    <string name="hint_sms_code">SMS Code</string>
+    <string name="btn_login">Login</string>
+    <string name="btn_get_code">Get Code</string>
+    <string name="menu_settings">Settings</string>
+    <string name="menu_language">Language</string>
+    <string name="menu_logout">Logout</string>
+    <string name="logout_success">Logged out successfully</string>
+    <string name="logout_failed">Logout failed</string>
+    <string name="menu_conversations">Conversations</string>
+    <string name="menu_address_book">Address Book</string>
+    <string name="menu_community">Community</string>
+    <string name="menu_discovery">Discovery</string>
+    <string name="action_search">Search</string>
+    <string name="fab_new_chat">New Chat</string>
+    <string name="fab_new_group">New Group</string>
+</resources>
