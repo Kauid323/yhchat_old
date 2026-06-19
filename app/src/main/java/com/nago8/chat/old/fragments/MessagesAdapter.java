@@ -22,9 +22,18 @@ import java.util.List;
 
 public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHolder> {
     private final List<MessageGroup> groups = new ArrayList<>();
+    private OnAvatarClickListener avatarClickListener;
 
     private static final int HEADER_ORDER_LEFT = 1;
     private static final int HEADER_ORDER_RIGHT = 2;
+
+    public interface OnAvatarClickListener {
+        void onAvatarClick(String senderId);
+    }
+
+    public void setOnAvatarClickListener(OnAvatarClickListener listener) {
+        this.avatarClickListener = listener;
+    }
 
     public void setData(List<MessageGroup> data) {
         groups.clear();
@@ -42,7 +51,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         MessageGroup group = groups.get(position);
-        holder.bind(group);
+        holder.bind(group, avatarClickListener);
     }
 
     @Override
@@ -72,7 +81,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             tvTime = itemView.findViewById(R.id.tvTime);
         }
 
-        void bind(MessageGroup group) {
+        void bind(MessageGroup group, OnAvatarClickListener listener) {
             root.setGravity(group.mine ? Gravity.RIGHT : Gravity.LEFT);
             groupContainer.setGravity(group.mine ? Gravity.RIGHT : Gravity.LEFT);
             headerRow.setGravity(group.mine ? Gravity.RIGHT : Gravity.LEFT);
@@ -81,9 +90,15 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             applyGroupOrder(group.mine);
             applyHeaderOrder(group.mine);
 
-            tvName.setText(group.senderName == null || group.senderName.length() == 0 ? "未知用户" : group.senderName);
+            tvName.setText(group.senderName == null || group.senderName.length() == 0 ? itemView.getContext().getString(R.string.unknown_user) : group.senderName);
             tvTime.setText(TimeUtils.formatMessageTime(group.firstSendTime));
             ImageUtils.loadAvatar(itemView.getContext(), group.avatarUrl, ivAvatar);
+
+            ivAvatar.setOnClickListener(v -> {
+                if (listener != null && group.senderId != null && group.senderId.length() > 0) {
+                    listener.onAvatarClick(group.senderId);
+                }
+            });
 
             contentColumn.removeAllViews();
             for (int i = 0; i < group.messages.size(); i++) {
@@ -150,7 +165,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             TextView textView = new TextView(itemView.getContext());
             textView.setText(getMessageText(msg));
             textView.setTextSize(15);
-            textView.setTextColor(itemView.getResources().getColor(group.mine ? android.R.color.white : android.R.color.black));
+            textView.setTextColor(itemView.getResources().getColor(group.mine ? android.R.color.white : R.color.bubble_text_left));
             textView.setBackgroundResource(getBubbleBackground(group.mine, index, count));
             textView.setPadding(dp(12), dp(8), dp(12), dp(8));
             textView.setGravity(Gravity.LEFT);
@@ -173,13 +188,13 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
         }
 
         private String getMessageText(Msg msg) {
-            if (msg == null || msg.content == null) return "[不支持的消息]";
+            if (msg == null || msg.content == null) return itemView.getContext().getString(R.string.message_unsupported);
             if (msg.content.text != null && msg.content.text.length() > 0) return msg.content.text;
-            if (msg.content.image_url != null && msg.content.image_url.length() > 0) return "[图片]";
-            if (msg.content.file_name != null && msg.content.file_name.length() > 0) return "[文件] " + msg.content.file_name;
-            if (msg.content.sticker_url != null && msg.content.sticker_url.length() > 0) return "[表情]";
+            if (msg.content.image_url != null && msg.content.image_url.length() > 0) return itemView.getContext().getString(R.string.message_image);
+            if (msg.content.file_name != null && msg.content.file_name.length() > 0) return itemView.getContext().getString(R.string.message_file, msg.content.file_name);
+            if (msg.content.sticker_url != null && msg.content.sticker_url.length() > 0) return itemView.getContext().getString(R.string.message_sticker);
             if (msg.content.tip != null && msg.content.tip.length() > 0) return msg.content.tip;
-            return "[不支持的消息]";
+            return itemView.getContext().getString(R.string.message_unsupported);
         }
 
         private int dp(int value) {

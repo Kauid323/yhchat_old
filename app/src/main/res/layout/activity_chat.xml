@@ -3,14 +3,14 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F7F7F7"
+    android:background="@color/chat_background"
     android:orientation="vertical">
 
     <LinearLayout
         android:id="@+id/topBar"
         android:layout_width="match_parent"
         android:layout_height="56dp"
-        android:background="@color/chat_primary"
+        android:background="@color/app_primary"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
@@ -19,7 +19,7 @@
             android:layout_width="48dp"
             android:layout_height="match_parent"
             android:background="@android:color/transparent"
-            android:contentDescription="返回"
+            android:contentDescription="@string/action_back"
             android:padding="12dp"
             app:srcCompat="@drawable/ic_back"
             app:tint="@android:color/white" />
@@ -40,7 +40,7 @@
             android:layout_width="48dp"
             android:layout_height="match_parent"
             android:background="@android:color/transparent"
-            android:contentDescription="更多"
+            android:contentDescription="@string/action_more"
             android:padding="12dp"
             app:srcCompat="@drawable/ic_more"
             app:tint="@android:color/white" />
@@ -64,7 +64,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
-            android:text="暂无聊天记录"
+            android:text="@string/chat_empty"
             android:textColor="?android:attr/textColorSecondary"
             android:textSize="14sp"
             android:visibility="gone" />
@@ -75,5 +75,56 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center"
             android:visibility="gone" />
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/fabCompose"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="16dp"
+            android:background="@drawable/bg_fab_compose"
+            android:contentDescription="@string/fab_compose"
+            android:padding="16dp"
+            app:srcCompat="@drawable/ic_edit"
+            app:tint="@android:color/white" />
+
+        <LinearLayout
+            android:id="@+id/inputBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:background="@android:color/white"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="8dp"
+            android:visibility="gone">
+
+            <androidx.appcompat.widget.AppCompatEditText
+                android:id="@+id/etMessage"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@android:color/transparent"
+                android:hint="@string/hint_input_message"
+                android:imeOptions="actionSend"
+                android:inputType="textMultiLine|textCapSentences"
+                android:maxLines="4"
+                android:minHeight="40dp"
+                android:padding="8dp"
+                android:textColor="@color/bubble_text_left"
+                android:textColorHint="?android:attr/textColorSecondary"
+                android:textSize="15sp" />
+
+            <androidx.appcompat.widget.AppCompatImageButton
+                android:id="@+id/btnSend"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
+                android:layout_marginLeft="8dp"
+            android:background="?attr/selectableItemBackground"
+                android:contentDescription="@string/btn_send"
+            app:srcCompat="@drawable/ic_send"
+                app:tint="@color/app_primary" />
+        </LinearLayout>
     </FrameLayout>
 </LinearLayout>

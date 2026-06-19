@@ -1,17 +1,16 @@
 package com.nago8.chat.old;
 
 import android.Manifest;
+import android.content.Context;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.view.Window;
-import android.view.WindowManager;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import androidx.appcompat.widget.PopupMenu;
@@ -37,6 +36,7 @@ import com.nago8.chat.old.model.UserModels;
 import com.nago8.chat.old.net.ApiClient;
 import com.nago8.chat.old.proto.user.info;
 import com.nago8.chat.old.utils.ImageUtils;
+import com.nago8.chat.old.utils.LocaleHelper;
 import com.nago8.chat.old.utils.PrefUtils;
 
 import java.io.IOException;
@@ -56,6 +56,11 @@ public class HomeActivity extends AppCompatActivity {
     private TextView tvUsername, tvUserId;
 
     @Override
+    protected void attachBaseContext(Context newBase) {
+        super.attachBaseContext(LocaleHelper.wrap(newBase));
+    }
+
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         AppCompatDelegate.setCompatVectorFromResourcesEnabled(true);
         super.onCreate(savedInstanceState);
@@ -64,16 +69,6 @@ public class HomeActivity extends AppCompatActivity {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQUEST_STORAGE_PERMISSION);
             }
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            Window window = getWindow();
-            window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
-            window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
-            window.setStatusBarColor(Color.TRANSPARENT);
-            window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            getWindow().addFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
         }
 
         try {
@@ -92,8 +87,8 @@ public class HomeActivity extends AppCompatActivity {
         tvUsername = findViewById(R.id.tvUsername);
         tvUserId = findViewById(R.id.tvUserId);
 
-        applyStatusBarFiller(findViewById(R.id.contentStatusBarFiller));
-        applyStatusBarFiller(findViewById(R.id.sidebarStatusBarFiller));
+        hideStatusBarFiller(findViewById(R.id.contentStatusBarFiller));
+        hideStatusBarFiller(findViewById(R.id.sidebarStatusBarFiller));
 
         if (toolbar != null) {
             toolbar.setNavigationOnClickListener(v -> {
@@ -122,23 +117,9 @@ public class HomeActivity extends AppCompatActivity {
         }
     }
 
-    private void applyStatusBarFiller(View filler) {
+    private void hideStatusBarFiller(View filler) {
         if (filler == null) return;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            int resourceId = getResources().getIdentifier("status_bar_height", "dimen", "android");
-            if (resourceId > 0) {
-                int statusBarHeight = getResources().getDimensionPixelSize(resourceId);
-                android.view.ViewGroup.LayoutParams lp = filler.getLayoutParams();
-                if (lp instanceof LinearLayout.LayoutParams) {
-                    LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) lp;
-                    params.height = statusBarHeight;
-                    filler.setLayoutParams(params);
-                    filler.setVisibility(View.VISIBLE);
-                }
-            }
-        } else {
-            filler.setVisibility(View.GONE);
-        }
+        filler.setVisibility(View.GONE);
     }
 
     private void setupMenuClickListeners() {
@@ -148,7 +129,7 @@ public class HomeActivity extends AppCompatActivity {
         findViewById(R.id.menu_discovery).setOnClickListener(v -> switchFragment(new DiscoveryFragment(), R.string.menu_discovery));
 
         findViewById(R.id.menu_settings).setOnClickListener(v -> handleSimpleMenuClick(R.string.menu_settings));
-        findViewById(R.id.menu_language).setOnClickListener(v -> handleSimpleMenuClick(R.string.menu_language));
+        findViewById(R.id.menu_language).setOnClickListener(v -> showLanguageDialog());
         findViewById(R.id.menu_logout).setOnClickListener(v -> performLogout());
     }
 
@@ -162,6 +143,38 @@ public class HomeActivity extends AppCompatActivity {
     private void handleSimpleMenuClick(int stringRes) {
         Toast.makeText(this, stringRes, Toast.LENGTH_SHORT).show();
         if (drawerLayout != null) drawerLayout.closeDrawer(GravityCompat.START);
+    }
+
+    private void showLanguageDialog() {
+        if (drawerLayout != null) drawerLayout.closeDrawer(GravityCompat.START);
+
+        String current = PrefUtils.getLanguage(this);
+        String[] codes = {PrefUtils.LANG_SYSTEM, PrefUtils.LANG_ZH, PrefUtils.LANG_EN};
+        String[] names = {getString(R.string.lang_system), getString(R.string.lang_chinese), getString(R.string.lang_english)};
+
+        int checked = 0;
+        for (int i = 0; i < codes.length; i++) {
+            if (codes[i].equals(current)) {
+                checked = i;
+                break;
+            }
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.menu_language)
+                .setSingleChoiceItems(names, checked, (dialog, which) -> {
+                    String selected = codes[which];
+                    if (!selected.equals(current)) {
+                        PrefUtils.setLanguage(this, selected);
+                        LocaleHelper.applyToApplication(getApplicationContext());
+                        dialog.dismiss();
+                        recreate();
+                    } else {
+                        dialog.dismiss();
+                    }
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
     }
 
     @Override

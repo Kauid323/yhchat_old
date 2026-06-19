@@ -1,12 +1,19 @@
 package com.nago8.chat.old;
 
+import android.content.Context;
+import android.content.Intent;
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.View;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
+import androidx.appcompat.widget.AppCompatEditText;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.AppCompatImageButton;
@@ -17,9 +24,12 @@ import com.nago8.chat.old.fragments.MessagesAdapter;
 import com.nago8.chat.old.model.MessageGroup;
 import com.nago8.chat.old.net.MessageRepository;
 import com.nago8.chat.old.proto.Msg;
+import com.nago8.chat.old.proto.send_message;
 import com.nago8.chat.old.proto.list_message;
 import com.nago8.chat.old.proto.list_message_by_seq;
 import com.nago8.chat.old.utils.PrefUtils;
+import com.nago8.chat.old.utils.LocaleHelper;
+
 
 import java.io.File;
 import java.io.FileWriter;
@@ -47,13 +57,23 @@ public class ChatActivity extends AppCompatActivity {
     private MessageRepository repository;
     private Call runningCall;
     private Call olderCall;
+    private Call sendCall;
     private final List<Msg> allMessages = new ArrayList<>();
     private boolean loadingOlder = false;
     private boolean noMoreOlder = false;
+    private AppCompatImageButton fabCompose;
+    private LinearLayout inputBar;
+    private AppCompatEditText etMessage;
+    private AppCompatImageButton btnSend;
 
     private String chatId;
     private int chatType;
     private String chatName;
+
+    @Override
+    protected void attachBaseContext(Context newBase) {
+        super.attachBaseContext(LocaleHelper.wrap(newBase));
+    }
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -73,11 +93,19 @@ public class ChatActivity extends AppCompatActivity {
         progressBar = findViewById(R.id.progressBar);
         tvEmpty = findViewById(R.id.tvEmpty);
 
-        if (chatName == null || chatName.length() == 0) chatName = chatId == null ? "聊天" : chatId;
+        if (chatName == null || chatName.length() == 0) chatName = chatId == null ? getString(R.string.chat_default_title) : chatId;
         tvTitle.setText(chatName);
 
-        btnBack.setOnClickListener(v -> finish());
-        btnMore.setOnClickListener(v -> Toast.makeText(this, "更多", Toast.LENGTH_SHORT).show());
+        btnBack.setOnClickListener(v -> onBackPressed());
+        btnMore.setOnClickListener(v -> {
+            if (chatType == 1) {
+                Intent intent = new Intent(this, UserProfileActivity.class);
+                intent.putExtra(UserProfileActivity.EXTRA_USER_ID, chatId);
+                startActivity(intent);
+            } else {
+                Toast.makeText(this, R.string.action_more, Toast.LENGTH_SHORT).show();
+            }
+        });
 
         layoutManager = new LinearLayoutManager(this);
         layoutManager.setStackFromEnd(true);
@@ -86,15 +114,128 @@ public class ChatActivity extends AppCompatActivity {
         adapter = new MessagesAdapter();
         recyclerView.setAdapter(adapter);
 
+        adapter.setOnAvatarClickListener(senderId -> {
+            Intent intent = new Intent(this, UserProfileActivity.class);
+            intent.putExtra(UserProfileActivity.EXTRA_USER_ID, senderId);
+            startActivity(intent);
+        });
+
+        setupComposeInput();
+
         repository = new MessageRepository();
         fetchMessages();
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (inputBar != null && inputBar.getVisibility() == View.VISIBLE) {
+            hideInputBar();
+        } else {
+            super.onBackPressed();
+        }
     }
 
     @Override
     protected void onDestroy() {
         if (runningCall != null) runningCall.cancel();
         if (olderCall != null) olderCall.cancel();
+        if (sendCall != null) sendCall.cancel();
         super.onDestroy();
+    }
+
+    private void setupComposeInput() {
+        fabCompose = findViewById(R.id.fabCompose);
+        inputBar = findViewById(R.id.inputBar);
+        etMessage = findViewById(R.id.etMessage);
+        btnSend = findViewById(R.id.btnSend);
+
+        fabCompose.setOnClickListener(v -> showInputBar());
+
+        btnSend.setOnClickListener(v -> {
+            String text = etMessage.getText() != null ? etMessage.getText().toString().trim() : "";
+            if (text.length() == 0) return;
+            performSend(text);
+        });
+
+        etMessage.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                boolean hasText = s != null && s.toString().trim().length() > 0;
+                btnSend.setAlpha(hasText ? 1.0f : 0.4f);
+                btnSend.setEnabled(hasText);
+            }
+        });
+        btnSend.setAlpha(0.4f);
+        btnSend.setEnabled(false);
+    }
+
+    private void showInputBar() {
+        fabCompose.setVisibility(View.GONE);
+        inputBar.setVisibility(View.VISIBLE);
+        etMessage.requestFocus();
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null) {
+            imm.showSoftInput(etMessage, InputMethodManager.SHOW_IMPLICIT);
+        }
+
+        inputBar.post(() -> {
+            int barHeight = inputBar.getHeight();
+            recyclerView.setPadding(
+                    recyclerView.getPaddingLeft(),
+                    recyclerView.getPaddingTop(),
+                    recyclerView.getPaddingRight(),
+                    barHeight);
+            if (adapter.getItemCount() > 0) {
+                recyclerView.smoothScrollToPosition(adapter.getItemCount() - 1);
+            }
+        });
+    }
+
+    private void hideInputBar() {
+        inputBar.setVisibility(View.GONE);
+        fabCompose.setVisibility(View.VISIBLE);
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null) {
+            imm.hideSoftInputFromWindow(etMessage.getWindowToken(), 0);
+        }
+
+        int dp12 = (int) (12 * getResources().getDisplayMetrics().density + 0.5f);
+        recyclerView.setPadding(
+                recyclerView.getPaddingLeft(),
+                recyclerView.getPaddingTop(),
+                recyclerView.getPaddingRight(),
+                dp12);
+    }
+
+    private void performSend(String text) {
+        String token = PrefUtils.getToken(this);
+        btnSend.setEnabled(false);
+        sendCall = repository.sendMessage(token, chatId, chatType, text, new MessageRepository.SendMessageCallback() {
+            @Override
+            public void onSuccess(send_message response) {
+                runOnUiThread(() -> {
+                    etMessage.setText("");
+                    btnSend.setEnabled(true);
+                    fetchMessages();
+                });
+            }
+
+            @Override
+            public void onError(Exception error) {
+                runOnUiThread(() -> {
+                    btnSend.setEnabled(true);
+                    Toast.makeText(ChatActivity.this, R.string.send_failed, Toast.LENGTH_SHORT).show();
+                });
+            }
+        });
     }
 
     private void fetchMessages() {
@@ -118,7 +259,7 @@ public class ChatActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     progressBar.setVisibility(View.GONE);
                     tvEmpty.setVisibility(View.VISIBLE);
-                    Toast.makeText(ChatActivity.this, "获取聊天记录失败", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(ChatActivity.this, R.string.chat_load_failed, Toast.LENGTH_SHORT).show();
                 });
             }
         });
@@ -157,7 +298,7 @@ public class ChatActivity extends AppCompatActivity {
             public void onError(Exception error) {
                 runOnUiThread(() -> {
                     loadingOlder = false;
-                    Toast.makeText(ChatActivity.this, "获取更早消息失败", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(ChatActivity.this, R.string.chat_load_older_failed, Toast.LENGTH_SHORT).show();
                 });
             }
         });
