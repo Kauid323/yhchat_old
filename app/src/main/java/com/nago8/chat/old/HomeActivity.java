@@ -38,6 +38,8 @@ import com.nago8.chat.old.proto.user.info;
 import com.nago8.chat.old.utils.ImageUtils;
 import com.nago8.chat.old.utils.LocaleHelper;
 import com.nago8.chat.old.utils.PrefUtils;
+import com.nago8.chat.old.ws.WsClient;
+import com.nago8.chat.old.ws.WsLogManager;
 
 import java.io.IOException;
 
@@ -128,7 +130,10 @@ public class HomeActivity extends AppCompatActivity {
         findViewById(R.id.menu_community).setOnClickListener(v -> switchFragment(new CommunityFragment(), R.string.menu_community));
         findViewById(R.id.menu_discovery).setOnClickListener(v -> switchFragment(new DiscoveryFragment(), R.string.menu_discovery));
 
-        findViewById(R.id.menu_settings).setOnClickListener(v -> handleSimpleMenuClick(R.string.menu_settings));
+        findViewById(R.id.menu_settings).setOnClickListener(v -> {
+            if (drawerLayout != null) drawerLayout.closeDrawer(GravityCompat.START);
+            startActivity(new Intent(this, SettingsActivity.class));
+        });
         findViewById(R.id.menu_language).setOnClickListener(v -> showLanguageDialog());
         findViewById(R.id.menu_logout).setOnClickListener(v -> performLogout());
     }
@@ -229,6 +234,8 @@ public class HomeActivity extends AppCompatActivity {
                         final info userInfo = info.ADAPTER.decode(response.body().source());
                         if (userInfo != null && userInfo.data != null) {
                             runOnUiThread(() -> {
+                                PrefUtils.saveUserId(HomeActivity.this, userInfo.data.id);
+                                connectWebSocket();
                                 if (tvUsername != null) tvUsername.setText(userInfo.data.name);
                                 if (tvUserId != null) tvUserId.setText("ID: " + userInfo.data.id);
                                 ImageUtils.loadAvatar(HomeActivity.this, userInfo.data.avatar_url, ivAvatar);
@@ -286,5 +293,20 @@ public class HomeActivity extends AppCompatActivity {
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);
         finish();
+    }
+
+    private void connectWebSocket() {
+        String userId = PrefUtils.getUserId(this);
+        String token = PrefUtils.getToken(this);
+        if (userId != null && userId.length() > 0 && token != null && token.length() > 0) {
+            WsLogManager.getInstance().logInfo("starting WebSocket client");
+            WsClient.getInstance().connect(userId, token);
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        WsClient.getInstance().disconnect();
+        super.onDestroy();
     }
 }

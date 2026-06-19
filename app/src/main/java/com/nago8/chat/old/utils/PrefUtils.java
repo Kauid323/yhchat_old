@@ -6,6 +6,7 @@ import android.content.SharedPreferences;
 public class PrefUtils {
     private static final String PREF_NAME = "user_prefs";
     private static final String KEY_TOKEN = "secure_token";
+    private static final String KEY_USER_ID = "user_id";
     private static final String KEY_LANGUAGE = "app_language";
     public static final String LANG_SYSTEM = "system";
     public static final String LANG_ZH = "zh";
@@ -46,5 +47,13 @@ public class PrefUtils {
 
     public static void setLanguage(Context context, String language) {
         getPrefs(context).edit().putString(KEY_LANGUAGE, language).apply();
+    }
+
+    public static void saveUserId(Context context, String userId) {
+        getPrefs(context).edit().putString(KEY_USER_ID, userId).apply();
+    }
+
+    public static String getUserId(Context context) {
+        return getPrefs(context).getString(KEY_USER_ID, "");
     }
 }

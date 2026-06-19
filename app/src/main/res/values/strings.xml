@@ -30,7 +30,7 @@
     <string name="chat_load_older_failed">获取更早消息失败</string>
     <string name="unknown_user">未知用户</string>
     <string name="message_unsupported">[不支持的消息]</string>
-    <string name="message_image">[图片]</string>
+    <string name="message_image">图片消息\n点击可查看</string>
     <string name="message_file">[文件] %1$s</string>
     <string name="message_sticker">[表情]</string>
     <string name="fab_compose">发消息</string>
@@ -58,4 +58,14 @@
     <string name="user_profile_ip_geo">IP 归属地：%1$s</string>
     <string name="user_profile_medals">徽章：%1$s</string>
     <string name="user_profile_no_medal">无</string>
+    <string name="settings_ws_log">WebSocket 日志</string>
+    <string name="ws_log_clear">清空</string>
+    <string name="ws_log_empty">暂无日志</string>
+    <string name="image_preview_desc">图片预览</string>
+    <string name="image_preview_save">保存</string>
+    <string name="image_preview_saved">已保存到相册</string>
+    <string name="image_preview_save_failed">保存失败</string>
+    <string name="image_preview_save_permission_denied">需要存储权限才能保存</string>
+    <string name="image_preview_load_failed">图片加载失败</string>
+    <string name="image_preview_not_ready">图片尚未加载完成</string>
 </resources>

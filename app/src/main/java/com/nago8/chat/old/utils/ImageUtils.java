@@ -10,7 +10,7 @@ import com.bumptech.glide.load.model.LazyHeaders;
 import com.nago8.chat.old.R;
 
 public class ImageUtils {
-
+    // 这个是用来请求获取缩略图用的参数，如果请求原图就别用这个
     private static final String AVATAR_RESIZE_PARAM = "imageView2/2/w/100/h/100";
 
     public static void loadAvatar(Context context, String url, ImageView imageView) {

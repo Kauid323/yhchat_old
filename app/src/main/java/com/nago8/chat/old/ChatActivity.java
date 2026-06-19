@@ -6,7 +6,6 @@ import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
-import android.view.inputmethod.InputMethodManager;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -61,7 +60,6 @@ public class ChatActivity extends AppCompatActivity {
     private final List<Msg> allMessages = new ArrayList<>();
     private boolean loadingOlder = false;
     private boolean noMoreOlder = false;
-    private AppCompatImageButton fabCompose;
     private LinearLayout inputBar;
     private AppCompatEditText etMessage;
     private AppCompatImageButton btnSend;
@@ -127,15 +125,6 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     @Override
-    public void onBackPressed() {
-        if (inputBar != null && inputBar.getVisibility() == View.VISIBLE) {
-            hideInputBar();
-        } else {
-            super.onBackPressed();
-        }
-    }
-
-    @Override
     protected void onDestroy() {
         if (runningCall != null) runningCall.cancel();
         if (olderCall != null) olderCall.cancel();
@@ -144,12 +133,9 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     private void setupComposeInput() {
-        fabCompose = findViewById(R.id.fabCompose);
         inputBar = findViewById(R.id.inputBar);
         etMessage = findViewById(R.id.etMessage);
         btnSend = findViewById(R.id.btnSend);
-
-        fabCompose.setOnClickListener(v -> showInputBar());
 
         btnSend.setOnClickListener(v -> {
             String text = etMessage.getText() != null ? etMessage.getText().toString().trim() : "";
@@ -175,44 +161,6 @@ public class ChatActivity extends AppCompatActivity {
         });
         btnSend.setAlpha(0.4f);
         btnSend.setEnabled(false);
-    }
-
-    private void showInputBar() {
-        fabCompose.setVisibility(View.GONE);
-        inputBar.setVisibility(View.VISIBLE);
-        etMessage.requestFocus();
-        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-        if (imm != null) {
-            imm.showSoftInput(etMessage, InputMethodManager.SHOW_IMPLICIT);
-        }
-
-        inputBar.post(() -> {
-            int barHeight = inputBar.getHeight();
-            recyclerView.setPadding(
-                    recyclerView.getPaddingLeft(),
-                    recyclerView.getPaddingTop(),
-                    recyclerView.getPaddingRight(),
-                    barHeight);
-            if (adapter.getItemCount() > 0) {
-                recyclerView.smoothScrollToPosition(adapter.getItemCount() - 1);
-            }
-        });
-    }
-
-    private void hideInputBar() {
-        inputBar.setVisibility(View.GONE);
-        fabCompose.setVisibility(View.VISIBLE);
-        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-        if (imm != null) {
-            imm.hideSoftInputFromWindow(etMessage.getWindowToken(), 0);
-        }
-
-        int dp12 = (int) (12 * getResources().getDisplayMetrics().density + 0.5f);
-        recyclerView.setPadding(
-                recyclerView.getPaddingLeft(),
-                recyclerView.getPaddingTop(),
-                recyclerView.getPaddingRight(),
-                dp12);
     }
 
     private void performSend(String text) {

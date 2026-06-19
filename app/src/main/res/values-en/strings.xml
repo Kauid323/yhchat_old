@@ -30,7 +30,7 @@
     <string name="chat_load_older_failed">Failed to load earlier messages</string>
     <string name="unknown_user">Unknown user</string>
     <string name="message_unsupported">[Unsupported message]</string>
-    <string name="message_image">[Image]</string>
+    <string name="message_image">Image message\nTap to view</string>
     <string name="message_file">[File] %1$s</string>
     <string name="message_sticker">[Sticker]</string>
     <string name="fab_compose">Compose message</string>
@@ -58,4 +58,14 @@
     <string name="user_profile_ip_geo">IP Location: %1$s</string>
     <string name="user_profile_medals">Medals: %1$s</string>
     <string name="user_profile_no_medal">None</string>
+    <string name="settings_ws_log">WebSocket Log</string>
+    <string name="ws_log_clear">Clear</string>
+    <string name="ws_log_empty">No logs yet</string>
+    <string name="image_preview_desc">Image preview</string>
+    <string name="image_preview_save">Save</string>
+    <string name="image_preview_saved">Saved to gallery</string>
+    <string name="image_preview_save_failed">Save failed</string>
+    <string name="image_preview_save_permission_denied">Storage permission required</string>
+    <string name="image_preview_load_failed">Failed to load image</string>
+    <string name="image_preview_not_ready">Image not ready yet</string>
 </resources>

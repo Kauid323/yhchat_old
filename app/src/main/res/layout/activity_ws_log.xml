@@ -7,7 +7,6 @@
     android:orientation="vertical">
 
     <LinearLayout
-        android:id="@+id/topBar"
         android:layout_width="match_parent"
         android:layout_height="56dp"
         android:background="@color/app_primary"
@@ -25,22 +24,21 @@
             app:tint="@android:color/white" />
 
         <TextView
-            android:id="@+id/tvTitle"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:ellipsize="end"
             android:singleLine="true"
+            android:text="@string/settings_ws_log"
             android:textColor="@android:color/white"
             android:textSize="18sp"
             android:textStyle="bold" />
 
         <androidx.appcompat.widget.AppCompatImageButton
-            android:id="@+id/btnMore"
+            android:id="@+id/btnClear"
             android:layout_width="48dp"
             android:layout_height="match_parent"
             android:background="@android:color/transparent"
-            android:contentDescription="@string/action_more"
+            android:contentDescription="@string/ws_log_clear"
             android:padding="12dp"
             app:srcCompat="@drawable/ic_more"
             app:tint="@android:color/white" />
@@ -52,11 +50,10 @@
         android:layout_weight="1">
 
         <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/recyclerViewMessages"
+            android:id="@+id/recyclerView"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:clipToPadding="false"
-            android:padding="12dp"
+            android:padding="8dp"
             android:scrollbars="vertical" />
 
         <TextView
@@ -64,54 +61,10 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
-            android:text="@string/chat_empty"
+            android:text="@string/ws_log_empty"
             android:textColor="?android:attr/textColorSecondary"
             android:textSize="14sp"
             android:visibility="gone" />
-
-        <ProgressBar
-            android:id="@+id/progressBar"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:visibility="gone" />
-
     </FrameLayout>
 
-    <LinearLayout
-        android:id="@+id/inputBar"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="@android:color/white"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:padding="8dp">
-
-        <androidx.appcompat.widget.AppCompatEditText
-            android:id="@+id/etMessage"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:background="@android:color/transparent"
-            android:hint="@string/hint_input_message"
-            android:imeOptions="actionSend"
-            android:inputType="textMultiLine|textCapSentences"
-            android:maxLines="4"
-            android:minHeight="40dp"
-            android:padding="8dp"
-            android:textColor="@color/bubble_text_left"
-            android:textColorHint="?android:attr/textColorSecondary"
-            android:textSize="15sp" />
-
-        <androidx.appcompat.widget.AppCompatImageButton
-            android:id="@+id/btnSend"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_marginStart="8dp"
-            android:layout_marginLeft="8dp"
-            android:background="?attr/selectableItemBackground"
-            android:contentDescription="@string/btn_send"
-            app:srcCompat="@drawable/ic_send"
-            app:tint="@color/app_primary" />
-    </LinearLayout>
 </LinearLayout>

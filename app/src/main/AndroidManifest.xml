@@ -31,6 +31,10 @@
             android:name=".ChatActivity"
             android:windowSoftInputMode="adjustResize" />
         <activity android:name=".UserProfileActivity" />
+        <activity android:name=".SettingsActivity" />
+        <activity android:name=".WsLogActivity" />
+        <activity android:name=".ImagePreviewActivity"
+            android:theme="@style/Theme.云湖Old.Fullscreen" />
     </application>
 
 </manifest>

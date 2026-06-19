@@ -1,5 +1,8 @@
 package com.nago8.chat.old.fragments;
 
+import android.content.Context;
+import android.content.Intent;
+import android.graphics.Color;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -12,6 +15,7 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.nago8.chat.old.R;
+import com.nago8.chat.old.ImagePreviewActivity;
 import com.nago8.chat.old.model.MessageGroup;
 import com.nago8.chat.old.proto.Msg;
 import com.nago8.chat.old.utils.ImageUtils;
@@ -102,7 +106,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
 
             contentColumn.removeAllViews();
             for (int i = 0; i < group.messages.size(); i++) {
-                TextView bubble = createBubble(group, group.messages.get(i), i, group.messages.size());
+                View bubble = createBubble(group, group.messages.get(i), i, group.messages.size());
                 contentColumn.addView(bubble);
             }
         }
@@ -161,7 +165,10 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             view.setLayoutParams(params);
         }
 
-        private TextView createBubble(MessageGroup group, Msg msg, int index, int count) {
+        private View createBubble(MessageGroup group, Msg msg, int index, int count) {
+            if (msg != null && msg.content != null && msg.content.image_url != null && msg.content.image_url.length() > 0) {
+                return createImageBubble(group, msg, index, count);
+            }
             TextView textView = new TextView(itemView.getContext());
             textView.setText(getMessageText(msg));
             textView.setTextSize(15);
@@ -177,6 +184,48 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             params.gravity = group.mine ? Gravity.RIGHT : Gravity.LEFT;
             textView.setLayoutParams(params);
             return textView;
+        }
+
+        private View createImageBubble(MessageGroup group, Msg msg, int index, int count) {
+            Context ctx = itemView.getContext();
+            String url = msg.content.image_url;
+
+            LinearLayout container = new LinearLayout(ctx);
+            container.setOrientation(LinearLayout.HORIZONTAL);
+            container.setGravity(Gravity.CENTER_VERTICAL);
+            container.setBackgroundResource(getBubbleBackground(group.mine, index, count));
+            container.setPadding(dp(12), dp(8), dp(12), dp(8));
+            container.setClickable(true);
+
+            ImageView icon = new ImageView(ctx);
+            int iconSize = dp(20);
+            LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(iconSize, iconSize);
+            iconParams.rightMargin = dp(6);
+            icon.setLayoutParams(iconParams);
+            icon.setImageResource(R.drawable.ic_image);
+            icon.setColorFilter(itemView.getResources().getColor(group.mine ? android.R.color.white : R.color.bubble_text_left));
+            container.addView(icon);
+
+            TextView text = new TextView(ctx);
+            text.setText(R.string.message_image);
+            text.setTextSize(15);
+            text.setTextColor(itemView.getResources().getColor(group.mine ? android.R.color.white : R.color.bubble_text_left));
+            container.addView(text);
+
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            params.topMargin = dp(2);
+            params.leftMargin = group.mine ? dp(48) : 0;
+            params.rightMargin = group.mine ? 0 : dp(48);
+            params.gravity = group.mine ? Gravity.RIGHT : Gravity.LEFT;
+            container.setLayoutParams(params);
+
+            container.setOnClickListener(v -> {
+                Intent intent = new Intent(ctx, ImagePreviewActivity.class);
+                intent.putExtra(ImagePreviewActivity.EXTRA_IMAGE_URL, url);
+                ctx.startActivity(intent);
+            });
+
+            return container;
         }
 
         private int getBubbleBackground(boolean mine, int index, int count) {
