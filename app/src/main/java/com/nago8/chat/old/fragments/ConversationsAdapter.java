@@ -1,5 +1,6 @@
 package com.nago8.chat.old.fragments;
 
+import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -17,16 +18,17 @@ import com.nago8.chat.old.utils.ImageUtils;
 import com.nago8.chat.old.utils.TimeUtils;
 import com.nago8.chat.old.utils.WsMsgConverter;
 
-import android.content.Context;
-
 import java.util.ArrayList;
 import java.util.List;
 
-public class ConversationsAdapter extends RecyclerView.Adapter<ConversationsAdapter.ViewHolder> {
+public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
+
+    private static final int TYPE_HEADER = 0;
+    private static final int TYPE_ITEM = 1;
 
     private List<ConversationList.ConversationData> dataList = new ArrayList<>();
     private OnConversationClickListener clickListener;
-    
+
     private String lastClickedChatId = "";
     private int clickCount = 0;
 
@@ -42,16 +44,24 @@ public class ConversationsAdapter extends RecyclerView.Adapter<ConversationsAdap
         this.dataList = new ArrayList<>(data);
         notifyDataSetChanged();
     }
-    
+
     public void markAsRead(int position) {
         if (position >= 0 && position < dataList.size()) {
             ConversationList.ConversationData oldData = dataList.get(position);
+            if (isHeader(oldData)) return;
             ConversationList.ConversationData newData = oldData.newBuilder()
                     .unread_message(0)
                     .build();
             dataList.set(position, newData);
             notifyItemChanged(position);
         }
+    }
+
+    /**
+     * 判断是否为搜索分组标题项（chat_id 为空即为标题）
+     */
+    private boolean isHeader(ConversationList.ConversationData data) {
+        return data.chat_id == null || data.chat_id.length() == 0;
     }
 
     /**
@@ -96,29 +106,50 @@ public class ConversationsAdapter extends RecyclerView.Adapter<ConversationsAdap
         notifyDataSetChanged();
     }
 
+    @Override
+    public int getItemViewType(int position) {
+        return isHeader(dataList.get(position)) ? TYPE_HEADER : TYPE_ITEM;
+    }
+
     @NonNull
     @Override
-    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+    public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        if (viewType == TYPE_HEADER) {
+            View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_search_header, parent, false);
+            return new HeaderViewHolder(view);
+        }
         View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_conversation, parent, false);
-        return new ViewHolder(view);
+        return new ItemViewHolder(view);
     }
 
     @Override
-    public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+    public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
         ConversationList.ConversationData data = dataList.get(position);
-        holder.tvName.setText(data.name);
-        holder.tvContent.setText(data.chat_content);
-        holder.tvTime.setText(TimeUtils.formatChatTime(data.timestamp_ms));
-        ImageUtils.loadAvatar(holder.itemView.getContext(), data.avatar_url, holder.ivAvatar);
 
-        if (data.unread_message > 0) {
-            holder.tvUnreadCount.setVisibility(View.VISIBLE);
-            holder.tvUnreadCount.setText(String.valueOf(data.unread_message));
-        } else {
-            holder.tvUnreadCount.setVisibility(View.GONE);
+        if (holder instanceof HeaderViewHolder) {
+            ((HeaderViewHolder) holder).tvHeader.setText(data.name);
+            return;
         }
 
-        holder.itemView.setOnClickListener(v -> {
+        ItemViewHolder h = (ItemViewHolder) holder;
+        h.tvName.setText(data.name);
+        h.tvContent.setText(data.chat_content);
+        if (data.timestamp_ms > 0) {
+            h.tvTime.setVisibility(View.VISIBLE);
+            h.tvTime.setText(TimeUtils.formatChatTime(data.timestamp_ms));
+        } else {
+            h.tvTime.setVisibility(View.GONE);
+        }
+        ImageUtils.loadAvatar(h.itemView.getContext(), data.avatar_url, h.ivAvatar);
+
+        if (data.unread_message > 0) {
+            h.tvUnreadCount.setVisibility(View.VISIBLE);
+            h.tvUnreadCount.setText(String.valueOf(data.unread_message));
+        } else {
+            h.tvUnreadCount.setVisibility(View.GONE);
+        }
+
+        h.itemView.setOnClickListener(v -> {
             if (data.chat_id.equals(lastClickedChatId)) {
                 clickCount++;
             } else {
@@ -142,11 +173,20 @@ public class ConversationsAdapter extends RecyclerView.Adapter<ConversationsAdap
         return dataList.size();
     }
 
-    static class ViewHolder extends RecyclerView.ViewHolder {
+    static class HeaderViewHolder extends RecyclerView.ViewHolder {
+        TextView tvHeader;
+
+        public HeaderViewHolder(@NonNull View itemView) {
+            super(itemView);
+            tvHeader = itemView.findViewById(R.id.tvHeader);
+        }
+    }
+
+    static class ItemViewHolder extends RecyclerView.ViewHolder {
         ImageView ivAvatar;
         TextView tvName, tvContent, tvTime, tvUnreadCount;
 
-        public ViewHolder(@NonNull View itemView) {
+        public ItemViewHolder(@NonNull View itemView) {
             super(itemView);
             ivAvatar = itemView.findViewById(R.id.ivAvatar);
             tvName = itemView.findViewById(R.id.tvName);

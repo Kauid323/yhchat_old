@@ -40,7 +40,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
     private static final int HEADER_ORDER_RIGHT = 2;
 
     public interface OnAvatarClickListener {
-        void onAvatarClick(String senderId);
+        void onAvatarClick(String senderId, int senderChatType);
     }
 
     public void setOnAvatarClickListener(OnAvatarClickListener listener) {
@@ -80,6 +80,8 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
         ImageView ivAvatar;
         TextView tvName;
         TextView tvTime;
+        TextView tvAdminTag;
+        TextView tvOwnerTag;
 
         ViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -91,6 +93,8 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             ivAvatar = itemView.findViewById(R.id.ivAvatar);
             tvName = itemView.findViewById(R.id.tvName);
             tvTime = itemView.findViewById(R.id.tvTime);
+            tvAdminTag = itemView.findViewById(R.id.tvAdminTag);
+            tvOwnerTag = itemView.findViewById(R.id.tvOwnerTag);
         }
 
         void bind(MessageGroup group, OnAvatarClickListener listener) {
@@ -105,10 +109,14 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             tvName.setText(group.senderName == null || group.senderName.length() == 0 ? itemView.getContext().getString(R.string.unknown_user) : group.senderName);
             tvTime.setText(TimeUtils.formatMessageTime(group.firstSendTime));
             ImageUtils.loadAvatar(itemView.getContext(), group.avatarUrl, ivAvatar);
+            // 管理员标签：仅在群聊且 sender 是管理员时显示
+            tvAdminTag.setVisibility(group.isAdmin ? View.VISIBLE : View.GONE);
+            // 群主标签：sender 是群主时显示
+            tvOwnerTag.setVisibility(group.isOwner ? View.VISIBLE : View.GONE);
 
             ivAvatar.setOnClickListener(v -> {
-                if (listener != null && group.senderId != null && group.senderId.length() > 0) {
-                    listener.onAvatarClick(group.senderId);
+                if (listener != null && group.senderId != null && group.senderId.length() > 0 && group.senderChatType > 0) {
+                    listener.onAvatarClick(group.senderId, group.senderChatType);
                 }
             });
 
@@ -155,12 +163,20 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             if (mine) {
                 headerRow.addView(tvTime);
                 headerRow.addView(tvName);
-                setHorizontalMargins(tvName, dp(6), dp(8));
+                headerRow.addView(tvAdminTag);
+                headerRow.addView(tvOwnerTag);
+                setHorizontalMargins(tvName, dp(6), dp(4));
+                setHorizontalMargins(tvAdminTag, dp(4), dp(4));
+                setHorizontalMargins(tvOwnerTag, dp(4), dp(8));
                 setHorizontalMargins(tvTime, 0, dp(6));
             } else {
+                headerRow.addView(tvOwnerTag);
+                headerRow.addView(tvAdminTag);
                 headerRow.addView(tvName);
                 headerRow.addView(tvTime);
-                setHorizontalMargins(tvName, 0, dp(6));
+                setHorizontalMargins(tvOwnerTag, 0, dp(4));
+                setHorizontalMargins(tvAdminTag, dp(4), dp(4));
+                setHorizontalMargins(tvName, dp(4), dp(6));
                 setHorizontalMargins(tvTime, 0, 0);
             }
             headerRow.setTag(expectedOrder);

@@ -11,6 +11,9 @@ public class MessageGroup {
     public final boolean mine;
     public final String senderId;
     public final String senderName;
+    public final int senderChatType;
+    public boolean isAdmin;
+    public boolean isOwner;
     public final String avatarUrl;
     public final long firstSendTime;
     public final List<Msg> messages = new ArrayList<>();
@@ -18,6 +21,7 @@ public class MessageGroup {
     private MessageGroup(Msg msg) {
         this.mine = isMine(msg);
         this.senderId = msg.sender == null ? "" : msg.sender.chat_id;
+        this.senderChatType = msg.sender == null ? 0 : msg.sender.chat_type;
         this.senderName = msg.sender == null ? "" : msg.sender.name;
         this.avatarUrl = msg.sender == null ? "" : msg.sender.avatar_url;
         this.firstSendTime = msg.send_time;

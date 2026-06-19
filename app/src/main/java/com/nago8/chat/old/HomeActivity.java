@@ -1,5 +1,8 @@
 package com.nago8.chat.old;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
 import android.Manifest;
 import android.content.Context;
 import android.app.AlertDialog;
@@ -31,6 +34,7 @@ import androidx.fragment.app.FragmentManager;
 import com.nago8.chat.old.fragments.AddressBookFragment;
 import com.nago8.chat.old.fragments.CommunityFragment;
 import com.nago8.chat.old.fragments.ConversationsFragment;
+import com.nago8.chat.old.fragments.StickyConversationsFragment;
 import com.nago8.chat.old.fragments.DiscoveryFragment;
 import com.nago8.chat.old.model.UserModels;
 import com.nago8.chat.old.net.ApiClient;
@@ -57,6 +61,13 @@ public class HomeActivity extends AppCompatActivity {
     private ImageView ivAvatar;
     private TextView tvUsername, tvUserId;
     private Fragment currentFragment;
+    private View conversationTabBar;
+    private View conversationTabDivider;
+    private TextView tabConversations;
+    private TextView tabSticky;
+    private boolean showingSticky = false;
+    private int conversationCount = 0;
+    private int stickyCount = 0;
 
     @Override
     protected void attachBaseContext(Context newBase) {
@@ -103,10 +114,12 @@ public class HomeActivity extends AppCompatActivity {
         if (fabAdd != null) fabAdd.setOnClickListener(this::showFabMenu);
 
         setupMenuClickListeners();
+        initConversationTabs();
         fetchUserInfo();
 
         if (savedInstanceState == null) {
             switchFragment(new ConversationsFragment(), R.string.menu_conversations);
+            updateTabSelection();
         }
     }
 
@@ -126,7 +139,11 @@ public class HomeActivity extends AppCompatActivity {
     }
 
     private void setupMenuClickListeners() {
-        findViewById(R.id.menu_conversations).setOnClickListener(v -> switchFragment(new ConversationsFragment(), R.string.menu_conversations));
+        findViewById(R.id.menu_conversations).setOnClickListener(v -> {
+            showingSticky = false;
+            switchFragment(new ConversationsFragment(), R.string.menu_conversations);
+            updateTabSelection();
+        });
         findViewById(R.id.menu_address_book).setOnClickListener(v -> switchFragment(new AddressBookFragment(), R.string.menu_address_book));
         findViewById(R.id.menu_community).setOnClickListener(v -> switchFragment(new CommunityFragment(), R.string.menu_community));
         findViewById(R.id.menu_discovery).setOnClickListener(v -> switchFragment(new DiscoveryFragment(), R.string.menu_discovery));
@@ -145,6 +162,132 @@ public class HomeActivity extends AppCompatActivity {
         currentFragment = fragment;
         if (getSupportActionBar() != null) getSupportActionBar().setTitle(titleRes);
         if (drawerLayout != null) drawerLayout.closeDrawer(GravityCompat.START);
+
+        // 只有会话/置顶 Fragment 时显示 Tab 栏
+        boolean isConversationTab = fragment instanceof ConversationsFragment
+                || fragment instanceof StickyConversationsFragment;
+        if (conversationTabBar != null) {
+            boolean visible = isConversationTab && stickyCount > 0;
+            conversationTabBar.setVisibility(visible ? View.VISIBLE : View.GONE);
+            conversationTabDivider.setVisibility(visible ? View.VISIBLE : View.GONE);
+        }
+    }
+
+    private void initConversationTabs() {
+        conversationTabBar = findViewById(R.id.conversationTabBar);
+        conversationTabDivider = findViewById(R.id.conversationTabDivider);
+        tabConversations = findViewById(R.id.tabConversations);
+        tabSticky = findViewById(R.id.tabSticky);
+
+        tabConversations.setOnClickListener(v -> switchConversationTab(false));
+        tabSticky.setOnClickListener(v -> switchConversationTab(true));
+
+        updateTabTexts();
+    }
+
+    private void switchConversationTab(boolean toSticky) {
+        if (showingSticky == toSticky) return;
+        showingSticky = toSticky;
+
+        if (toSticky) {
+            switchFragment(new StickyConversationsFragment(), R.string.tab_sticky_title);
+        } else {
+            switchFragment(new ConversationsFragment(), R.string.menu_conversations);
+        }
+        updateTabSelection();
+    }
+
+    private void updateTabSelection() {
+        if (tabConversations == null || tabSticky == null) return;
+        if (showingSticky) {
+            tabConversations.setTextColor(0xCCFFFFFF);
+            tabConversations.setTypeface(null, android.graphics.Typeface.NORMAL);
+            tabSticky.setTextColor(getResources().getColor(android.R.color.white));
+            tabSticky.setTypeface(null, android.graphics.Typeface.BOLD);
+        } else {
+            tabConversations.setTextColor(getResources().getColor(android.R.color.white));
+            tabConversations.setTypeface(null, android.graphics.Typeface.BOLD);
+            tabSticky.setTextColor(0xCCFFFFFF);
+            tabSticky.setTypeface(null, android.graphics.Typeface.NORMAL);
+        }
+    }
+
+    private void updateTabTexts() {
+        if (tabConversations == null || tabSticky == null) return;
+        tabConversations.setText(getString(R.string.tab_conversations_format, conversationCount));
+        tabSticky.setText(getString(R.string.tab_sticky_format, stickyCount));
+
+        // 有置顶会话时显示 tab 栏
+        if (stickyCount > 0) {
+            conversationTabBar.setVisibility(View.VISIBLE);
+            conversationTabDivider.setVisibility(View.VISIBLE);
+        } else {
+            conversationTabBar.setVisibility(View.GONE);
+            conversationTabDivider.setVisibility(View.GONE);
+            // 无置顶时切回会话列表
+            if (showingSticky) {
+                switchConversationTab(false);
+            }
+        }
+    }
+
+    /**
+     * 供 ConversationsFragment 回调更新会话数量。
+     */
+    public void updateConversationCount(int count) {
+        conversationCount = count;
+        updateTabTexts();
+    }
+
+    /**
+     * 供 ConversationsFragment 控制会话 Tab 栏显隐（搜索时隐藏）。
+     */
+    public void setConversationTabBarVisible(boolean visible) {
+        if (conversationTabBar == null) return;
+        // 仅在有置顶会话时才允许显示
+        boolean show = visible && stickyCount > 0;
+        conversationTabBar.setVisibility(show ? View.VISIBLE : View.GONE);
+        conversationTabDivider.setVisibility(show ? View.VISIBLE : View.GONE);
+    }
+
+    private void fetchStickyCount() {
+        String token = PrefUtils.getToken(this);
+        if (token == null) return;
+
+        Request request = new Request.Builder()
+                .url(ApiClient.BASE_URL + "/v1/sticky/list")
+                .header("token", token)
+                .post(RequestBody.create(MediaType.parse("application/json; charset=utf-8"), "{}"))
+                .build();
+
+        ApiClient.getClient().newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {}
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                if (response.isSuccessful() && response.body() != null) {
+                    try {
+                        String respStr = response.body().string();
+                        JsonObject root = JsonParser.parseString(respStr).getAsJsonObject();
+                        int count = 0;
+                        if (root.has("data") && !root.get("data").isJsonNull()) {
+                            JsonObject data = root.getAsJsonObject("data");
+                            if (data.has("sticky") && !data.get("sticky").isJsonNull()) {
+                                count = data.getAsJsonArray("sticky").size();
+                            }
+                        }
+                        final int finalCount = count;
+                        runOnUiThread(() -> {
+                            stickyCount = finalCount;
+                            updateTabTexts();
+                        });
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        });
     }
 
     private void handleSimpleMenuClick(int stringRes) {
@@ -242,6 +385,7 @@ public class HomeActivity extends AppCompatActivity {
                             runOnUiThread(() -> {
                                 PrefUtils.saveUserId(HomeActivity.this, userInfo.data.id);
                                 connectWebSocket();
+                               fetchStickyCount();
                                 if (tvUsername != null) tvUsername.setText(userInfo.data.name);
                                 if (tvUserId != null) tvUserId.setText("ID: " + userInfo.data.id);
                                 ImageUtils.loadAvatar(HomeActivity.this, userInfo.data.avatar_url, ivAvatar);

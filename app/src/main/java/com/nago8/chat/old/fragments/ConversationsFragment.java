@@ -1,6 +1,7 @@
 package com.nago8.chat.old.fragments;
 
 import android.content.Intent;
+import android.util.Log;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -8,12 +9,12 @@ import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
-import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.widget.AppCompatImageView;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -23,6 +24,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.nago8.chat.old.ChatActivity;
+import com.nago8.chat.old.HomeActivity;
 import com.nago8.chat.old.R;
 import com.nago8.chat.old.net.ApiClient;
 import com.nago8.chat.old.proto.chat_ws_go.WsMsg;
@@ -52,8 +54,8 @@ public class ConversationsFragment extends Fragment {
     private View searchBar;
     private View searchDivider;
     private EditText etSearch;
-    private ImageView btnSearch;
-    private ImageView btnSearchClose;
+    private AppCompatImageView btnSearch;
+    private AppCompatImageView btnSearchClose;
     private boolean searchMode = false;
 
     @Nullable
@@ -73,6 +75,9 @@ public class ConversationsFragment extends Fragment {
         recyclerView.setAdapter(adapter);
 
         adapter.setOnConversationClickListener((data, position) -> {
+            // 标题项（chat_id 为空）不响应点击
+            if (data.chat_id == null || data.chat_id.length() == 0) return;
+
             if (searchMode) {
                 openChatFromSearch(data);
             } else {
@@ -102,28 +107,32 @@ public class ConversationsFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        // 在 onResume 注册，确保从 ChatActivity 返回后能重新监听
-        wsListener = new WsClient.MessageListener() {
-            @Override
-            public void onPushMessage(WsMsg msg) {
-                if (getActivity() != null) {
-                    getActivity().runOnUiThread(() -> {
-                        if (adapter != null) {
-                            adapter.onPushMessage(msg, getContext());
-                        }
-                    });
+        // 如果 listener 还没注册（首次 onResume），则注册
+        if (wsListener == null) {
+            wsListener = new WsClient.MessageListener() {
+                @Override
+                public void onPushMessage(WsMsg msg) {
+                    if (getActivity() != null) {
+                        getActivity().runOnUiThread(() -> {
+                            if (adapter != null) {
+                                adapter.onPushMessage(msg, getContext());
+                            }
+                        });
+                    }
                 }
-            }
-        };
-        WsClient.getInstance().setMessageListener(wsListener);
+            };
+            WsClient.getInstance().addMessageListener(wsListener);
+        }
     }
 
     @Override
-    public void onPause() {
-        // 注销监听，让 ChatActivity 等其他页面可以接管
-        WsClient.getInstance().setMessageListener(null);
-        wsListener = null;
-        super.onPause();
+    public void onDestroyView() {
+        // Fragment 销毁时才注销，后台时保持监听以实时更新会话列表
+        if (wsListener != null) {
+            WsClient.getInstance().removeMessageListener(wsListener);
+            wsListener = null;
+        }
+        super.onDestroyView();
     }
 
     private void fetchConversations() {
@@ -167,7 +176,11 @@ public class ConversationsFragment extends Fragment {
                             getActivity().runOnUiThread(() -> {
                                 progressBar.setVisibility(View.GONE);
                                 if (conversationList.data != null) {
-                                    adapter.setData(conversationList.data);
+                                   adapter.setData(conversationList.data);
+                                  // 通知 HomeActivity 更新会话数量
+                                  if (getActivity() instanceof HomeActivity) {
+                                      ((HomeActivity) getActivity()).updateConversationCount(conversationList.data.size());
+                                  }
                                 }
                             });
                         }
@@ -195,6 +208,9 @@ public class ConversationsFragment extends Fragment {
         searchMode = true;
         searchBar.setVisibility(View.VISIBLE);
         searchDivider.setVisibility(View.VISIBLE);
+        if (getActivity() instanceof HomeActivity) {
+            ((HomeActivity) getActivity()).setConversationTabBarVisible(false);
+        }
         etSearch.requestFocus();
         InputMethodManager imm = (InputMethodManager) getContext().getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
         if (imm != null) imm.showSoftInput(etSearch, InputMethodManager.SHOW_IMPLICIT);
@@ -207,6 +223,9 @@ public class ConversationsFragment extends Fragment {
         searchMode = false;
         searchBar.setVisibility(View.GONE);
         searchDivider.setVisibility(View.GONE);
+        if (getActivity() instanceof HomeActivity) {
+            ((HomeActivity) getActivity()).setConversationTabBarVisible(true);
+        }
         etSearch.setText("");
         InputMethodManager imm = (InputMethodManager) getContext().getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
         if (imm != null) imm.hideSoftInputFromWindow(etSearch.getWindowToken(), 0);
@@ -229,9 +248,9 @@ public class ConversationsFragment extends Fragment {
 
         progressBar.setVisibility(View.VISIBLE);
 
-        String json = ApiClient.getGson().toJson(new HashMap<String, String>() {{
-            put("word", word);
-        }});
+        HashMap<String, String> params = new HashMap<>();
+        params.put("word", word);
+        String json = ApiClient.getGson().toJson(params);
 
         RequestBody body = RequestBody.create(
                 MediaType.parse("application/json; charset=utf-8"), json);
@@ -246,6 +265,7 @@ public class ConversationsFragment extends Fragment {
             @Override
             public void onFailure(Call call, IOException e) {
                 if (getActivity() != null) {
+                    Log.e("ConvSearch", "onFailure", e);
                     getActivity().runOnUiThread(() -> {
                         progressBar.setVisibility(View.GONE);
                         Toast.makeText(getContext(), R.string.search_failed, Toast.LENGTH_SHORT).show();
@@ -259,15 +279,18 @@ public class ConversationsFragment extends Fragment {
                 if (response.isSuccessful() && response.body() != null) {
                     try {
                         String respStr = response.body().string();
+                        Log.d("ConvSearch", "response: " + respStr);
                         final List<ConversationList.ConversationData> results = parseSearchResults(respStr);
                         getActivity().runOnUiThread(() -> {
                             progressBar.setVisibility(View.GONE);
                             adapter.setData(results);
+                            Log.d("ConvSearch", "results size=" + results.size());
                             if (results.isEmpty()) {
                                 Toast.makeText(getContext(), R.string.search_no_result, Toast.LENGTH_SHORT).show();
                             }
                         });
                     } catch (Exception e) {
+                        Log.e("ConvSearch", "parse error", e);
                         e.printStackTrace();
                         getActivity().runOnUiThread(() -> {
                             progressBar.setVisibility(View.GONE);
@@ -275,6 +298,7 @@ public class ConversationsFragment extends Fragment {
                         });
                     }
                 } else {
+                    Log.d("ConvSearch", "http code=" + response.code());
                     getActivity().runOnUiThread(() -> {
                         progressBar.setVisibility(View.GONE);
                         Toast.makeText(getContext(), R.string.search_failed, Toast.LENGTH_SHORT).show();
@@ -301,6 +325,16 @@ public class ConversationsFragment extends Fragment {
             JsonObject cat = catElem.getAsJsonObject();
             if (!cat.has("list") || cat.get("list").isJsonNull()) continue;
             JsonArray items = cat.getAsJsonArray("list");
+            if (items.size() == 0) continue;
+
+            // 插入分组标题项（chat_id 为空标记为标题）
+            String title = getJsonString(cat, "title");
+            ConversationList.ConversationData header = new ConversationList.ConversationData.Builder()
+                    .chat_id("")
+                    .name(title)
+                    .build();
+            results.add(header);
+
             for (JsonElement itemElem : items) {
                 JsonObject item = itemElem.getAsJsonObject();
                 String friendId = getJsonString(item, "friendId");

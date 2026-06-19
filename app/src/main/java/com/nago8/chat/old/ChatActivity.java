@@ -22,10 +22,13 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.nago8.chat.old.fragments.MessagesAdapter;
 import com.nago8.chat.old.model.MessageGroup;
 import com.nago8.chat.old.net.MessageRepository;
+import com.nago8.chat.old.net.ApiClient;
 import com.nago8.chat.old.proto.Msg;
 import com.nago8.chat.old.proto.send_message;
 import com.nago8.chat.old.proto.list_message;
 import com.nago8.chat.old.proto.list_message_by_seq;
+import com.nago8.chat.old.proto.group.info;
+import com.nago8.chat.old.proto.group.info_send;
 import com.nago8.chat.old.utils.PrefUtils;
 import com.nago8.chat.old.utils.LocaleHelper;
 import com.nago8.chat.old.utils.WsMsgConverter;
@@ -33,6 +36,7 @@ import com.nago8.chat.old.ws.WsClient;
 import com.nago8.chat.old.proto.chat_ws_go.WsMsg;
 
 
+import java.io.IOException;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.PrintWriter;
@@ -44,6 +48,11 @@ import java.util.List;
 import java.util.Set;
 
 import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.MediaType;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 
 public class ChatActivity extends AppCompatActivity {
     public static final String EXTRA_CHAT_ID = "chat_id";
@@ -64,6 +73,11 @@ public class ChatActivity extends AppCompatActivity {
     private boolean loadingOlder = false;
     private boolean noMoreOlder = false;
     private LinearLayout inputBar;
+    private TextView tvTitle;
+    private Call groupInfoCall;
+    private final Set<String> adminIds = new HashSet<>();
+    private String ownerId;
+    private WsClient.MessageListener wsListener;
     private AppCompatEditText etMessage;
     private AppCompatImageButton btnSend;
 
@@ -89,7 +103,7 @@ public class ChatActivity extends AppCompatActivity {
 
         AppCompatImageButton btnBack = findViewById(R.id.btnBack);
         AppCompatImageButton btnMore = findViewById(R.id.btnMore);
-        TextView tvTitle = findViewById(R.id.tvTitle);
+        tvTitle = findViewById(R.id.tvTitle);
         recyclerView = findViewById(R.id.recyclerViewMessages);
         progressBar = findViewById(R.id.progressBar);
         tvEmpty = findViewById(R.id.tvEmpty);
@@ -97,11 +111,24 @@ public class ChatActivity extends AppCompatActivity {
         if (chatName == null || chatName.length() == 0) chatName = chatId == null ? getString(R.string.chat_default_title) : chatId;
         tvTitle.setText(chatName);
 
+        // 群聊时请求群信息，在标题后追加 (人数)
+        if (chatType == 2) {
+            fetchGroupInfo();
+        }
+
         btnBack.setOnClickListener(v -> onBackPressed());
         btnMore.setOnClickListener(v -> {
             if (chatType == 1) {
                 Intent intent = new Intent(this, UserProfileActivity.class);
                 intent.putExtra(UserProfileActivity.EXTRA_USER_ID, chatId);
+                startActivity(intent);
+            } else if (chatType == 3) {
+                Intent intent = new Intent(this, BotProfileActivity.class);
+                intent.putExtra(BotProfileActivity.EXTRA_BOT_ID, chatId);
+                startActivity(intent);
+            } else if (chatType == 2) {
+                Intent intent = new Intent(this, GroupProfileActivity.class);
+                intent.putExtra(GroupProfileActivity.EXTRA_GROUP_ID, chatId);
                 startActivity(intent);
             } else {
                 Toast.makeText(this, R.string.action_more, Toast.LENGTH_SHORT).show();
@@ -115,10 +142,17 @@ public class ChatActivity extends AppCompatActivity {
         adapter = new MessagesAdapter();
         recyclerView.setAdapter(adapter);
 
-        adapter.setOnAvatarClickListener(senderId -> {
-            Intent intent = new Intent(this, UserProfileActivity.class);
-            intent.putExtra(UserProfileActivity.EXTRA_USER_ID, senderId);
-            startActivity(intent);
+        adapter.setOnAvatarClickListener((senderId, senderChatType) -> {
+            // 根据 sender 的 chat type 判断：机器人(3)跳机器人详情，其他跳用户详情
+            if (senderChatType == 3) {
+                Intent intent = new Intent(this, BotProfileActivity.class);
+                intent.putExtra(BotProfileActivity.EXTRA_BOT_ID, senderId);
+                startActivity(intent);
+            } else if (senderChatType == 1) {
+                Intent intent = new Intent(this, UserProfileActivity.class);
+                intent.putExtra(UserProfileActivity.EXTRA_USER_ID, senderId);
+                startActivity(intent);
+            }
         });
 
         setupComposeInput();
@@ -132,24 +166,29 @@ public class ChatActivity extends AppCompatActivity {
         if (runningCall != null) runningCall.cancel();
         if (olderCall != null) olderCall.cancel();
         if (sendCall != null) sendCall.cancel();
+        if (groupInfoCall != null) groupInfoCall.cancel();
         super.onDestroy();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        WsClient.getInstance().setMessageListener(new WsClient.MessageListener() {
+        wsListener = new WsClient.MessageListener() {
             @Override
             public void onPushMessage(WsMsg wsMsg) {
                 runOnUiThread(() -> handlePushMessage(wsMsg));
             }
-        });
+        };
+        WsClient.getInstance().addMessageListener(wsListener);
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        WsClient.getInstance().setMessageListener(null);
+        if (wsListener != null) {
+            WsClient.getInstance().removeMessageListener(wsListener);
+            wsListener = null;
+        }
     }
 
     private void handlePushMessage(WsMsg wsMsg) {
@@ -248,6 +287,66 @@ public class ChatActivity extends AppCompatActivity {
             @Override
             public void onError(Exception error) {
                 // 静默失败，依赖 WS 推送
+            }
+        });
+    }
+
+    private void fetchGroupInfo() {
+        String token = PrefUtils.getToken(this);
+        if (token == null) return;
+
+        info_send requestProto = new info_send.Builder()
+                .group_id(chatId)
+                .build();
+
+        RequestBody body = RequestBody.create(
+                MediaType.parse("application/x-protobuf"),
+                requestProto.encode()
+        );
+
+        Request request = new Request.Builder()
+                .url(ApiClient.BASE_URL + "/v1/group/info")
+                .header("token", token)
+                .post(body)
+                .build();
+
+        groupInfoCall = ApiClient.getClient().newCall(request);
+        groupInfoCall.enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                // 静默失败，标题保持原样
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                if (response.isSuccessful() && response.body() != null) {
+                    try {
+                        final info result = info.ADAPTER.decode(response.body().source());
+                        runOnUiThread(() -> {
+                            if (result != null && result.data != null) {
+                                // 保存管理员ID列表，用于消息列表显示管理员标签
+                                adminIds.clear();
+                                if (result.data.admin != null) {
+                                    adminIds.addAll(result.data.admin);
+                                }
+                                // 保存群主ID，用于消息列表显示群主标签
+                                ownerId = result.data.owner;
+                                // 群主也是管理员，加入 adminIds 以兼容逻辑
+                                if (ownerId != null && ownerId.length() > 0) {
+                                    adminIds.add(ownerId);
+                                }
+                                // 标题格式：群名 (人数)
+                                String displayName = result.data.name != null && result.data.name.length() > 0
+                                        ? result.data.name : chatName;
+                                tvTitle.setText(displayName + " (" + result.data.member + ")");
+                                // 刷新消息列表以应用管理员标签
+                                refreshMessages(false);
+                            }
+                        });
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
             }
         });
     }
@@ -361,6 +460,11 @@ public class ChatActivity extends AppCompatActivity {
     private void refreshMessages(boolean scrollToBottom) {
         sortMessagesOldToNew();
         List<MessageGroup> groups = MessageGroup.fromMessages(allMessages);
+        // 标记管理员消息
+        for (MessageGroup group : groups) {
+            group.isAdmin = group.senderId != null && adminIds.contains(group.senderId);
+            group.isOwner = ownerId != null && ownerId.length() > 0 && ownerId.equals(group.senderId);
+        }
         adapter.setData(groups);
         tvEmpty.setVisibility(groups.isEmpty() ? View.VISIBLE : View.GONE);
         if (scrollToBottom && !groups.isEmpty()) recyclerView.scrollToPosition(groups.size() - 1);

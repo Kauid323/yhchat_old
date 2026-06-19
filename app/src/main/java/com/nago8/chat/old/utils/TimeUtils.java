@@ -40,6 +40,19 @@ public class TimeUtils {
     }
 
     public static String formatMessageTime(long timestampMs) {
+        // 今天的消息显示"时:分"，其他日期显示"月日 时:分"
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTimeInMillis(timestampMs);
+        int year = calendar.get(Calendar.YEAR);
+        int dayOfYear = calendar.get(Calendar.DAY_OF_YEAR);
+
+        Calendar nowCalendar = Calendar.getInstance();
+        int nowYear = nowCalendar.get(Calendar.YEAR);
+        int nowDayOfYear = nowCalendar.get(Calendar.DAY_OF_YEAR);
+
+        if (nowYear == year && nowDayOfYear == dayOfYear) {
+            return new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(timestampMs));
+        }
         return new SimpleDateFormat("MM月dd日 HH:mm", Locale.getDefault()).format(new Date(timestampMs));
     }
 }

@@ -1,6 +1,8 @@
 package com.nago8.chat.old.ws;
 
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 
 import com.nago8.chat.old.net.ApiClient;
 import com.nago8.chat.old.proto.chat_ws_go.INFO;
@@ -12,6 +14,9 @@ import com.nago8.chat.old.proto.chat_ws_go.heartbeat_ack;
 import com.nago8.chat.old.proto.chat_ws_go.push_message;
 import com.nago8.chat.old.proto.chat_ws_go.stream_message;
 import com.nago8.chat.old.proto.chat_ws_go.WsMsg;
+
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -28,6 +33,8 @@ public class WsClient {
 
     private static final String WS_URL = "wss://chat-ws-go.jwzhd.com/ws";
     private static final long HEARTBEAT_INTERVAL_MS = 30 * 1000L;
+    private static final long RECONNECT_DELAY_MS = 5 * 1000L;
+    private static final int MAX_RECONNECT_DELAY_MS = 60 * 1000;
 
     private static WsClient instance;
 
@@ -39,14 +46,42 @@ public class WsClient {
     private boolean connected = false;
     private Thread heartbeatThread;
     private volatile boolean running = false;
-    private MessageListener messageListener;
 
+    // 多 listener 支持，后台/前台可同时监听
+    private final List<MessageListener> listeners = new CopyOnWriteArrayList<>();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+
+    // 重连相关
+    private volatile boolean shouldReconnect = false;
+    private int reconnectAttempt = 0;
+
+    /**
+     * 添加消息监听器（支持多个同时监听）
+     */
+    public void addMessageListener(MessageListener listener) {
+        if (listener != null && !listeners.contains(listener)) {
+            listeners.add(listener);
+        }
+    }
+
+    /**
+     * 移除消息监听器
+     */
+    public void removeMessageListener(MessageListener listener) {
+        listeners.remove(listener);
+    }
+
+    /**
+     * 兼容旧接口：设置单个监听器（会先清空再设）
+     */
     public void setMessageListener(MessageListener listener) {
-        this.messageListener = listener;
+        listeners.clear();
+        if (listener != null) {
+            listeners.add(listener);
+        }
     }
 
     private WsClient() {
-        // 复用 ApiClient 的 OkHttpClient（已配置 TLS 1.2 适配安卓4）
         client = ApiClient.getClient().newBuilder()
                 .readTimeout(0, java.util.concurrent.TimeUnit.MILLISECONDS)
                 .pingInterval(15, java.util.concurrent.TimeUnit.SECONDS)
@@ -68,7 +103,13 @@ public class WsClient {
         this.userId = userId;
         this.token = token;
         this.deviceId = "android_" + Build.MANUFACTURER + "_" + Build.MODEL;
+        this.shouldReconnect = true;
+        this.reconnectAttempt = 0;
 
+        doConnect();
+    }
+
+    private void doConnect() {
         WsLogManager.getInstance().logInfo("connecting to " + WS_URL);
 
         Request request = new Request.Builder()
@@ -80,6 +121,7 @@ public class WsClient {
             public void onOpen(WebSocket webSocket, Response response) {
                 WsClient.this.webSocket = webSocket;
                 connected = true;
+                reconnectAttempt = 0;
                 WsLogManager.getInstance().logInfo("WebSocket connected");
                 sendLogin();
                 startHeartbeat();
@@ -87,7 +129,6 @@ public class WsClient {
 
             @Override
             public void onMessage(WebSocket webSocket, String text) {
-                // 服务器可能把二进制 protobuf 当文本帧发送，尝试用 ISO-8859-1 恢复原始字节再解码
                 byte[] raw = text.getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
                 String parsed = tryDecodeMessage(raw);
                 if (parsed != null) {
@@ -112,6 +153,7 @@ public class WsClient {
                 connected = false;
                 stopHeartbeat();
                 WsLogManager.getInstance().logInfo("closed: " + code + " " + reason);
+                scheduleReconnect();
             }
 
             @Override
@@ -119,12 +161,31 @@ public class WsClient {
                 connected = false;
                 stopHeartbeat();
                 WsLogManager.getInstance().logError("failure: " + t.getMessage());
+                scheduleReconnect();
             }
         });
     }
 
+    /**
+     * 断线后自动重连，延迟递增（5s → 10s → 20s → 40s → 60s 封顶）
+     */
+    private void scheduleReconnect() {
+        if (!shouldReconnect) return;
+        reconnectAttempt++;
+        int delay = (int) Math.min(RECONNECT_DELAY_MS * (1L << (reconnectAttempt - 1)), MAX_RECONNECT_DELAY_MS);
+        WsLogManager.getInstance().logInfo("reconnect in " + delay + "ms (attempt " + reconnectAttempt + ")");
+
+        mainHandler.postDelayed(() -> {
+            if (shouldReconnect && !connected) {
+                doConnect();
+            }
+        }, delay);
+    }
+
     public void disconnect() {
+        shouldReconnect = false;
         stopHeartbeat();
+        mainHandler.removeCallbacksAndMessages(null);
         if (webSocket != null) {
             webSocket.close(1000, "user disconnect");
             webSocket = null;
@@ -184,9 +245,13 @@ public class WsClient {
         }
     }
 
+    private void notifyListeners(WsMsg msg) {
+        for (MessageListener l : listeners) {
+            l.onPushMessage(msg);
+        }
+    }
+
     private String tryDecodeMessage(byte[] raw) {
-        // 服务器返回的是完整消息（push_message / heartbeat_ack 等），不是裸 INFO
-        // 逐个尝试解码，取能成功且 info.cmd 有值的
         String result;
 
         result = tryDecode(raw, push_message.ADAPTER, "push_message");
@@ -222,9 +287,9 @@ public class WsClient {
                     String text = wm.content != null && wm.content.text != null ? wm.content.text : "";
                     detail = "from=" + senderName + " chat_id=" + wm.chat_id + " type=" + wm.content_type + " text=" + text;
                 }
-                // 通知监听器
-                if (messageListener != null && m.data != null && m.data.msg != null) {
-                    messageListener.onPushMessage(m.data.msg);
+                // 通知所有监听器
+                if (m.data != null && m.data.msg != null) {
+                    notifyListeners(m.data.msg);
                 }
                 return "[cmd=" + cmd + " seq=" + seq + "] push_message " + detail;
             } else if (msg instanceof heartbeat_ack) {
