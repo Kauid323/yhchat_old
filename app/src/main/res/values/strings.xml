@@ -20,6 +20,9 @@
     <string name="menu_community">社区</string>
     <string name="menu_discovery">发现</string>
     <string name="action_search">搜索</string>
+    <string name="search_hint">搜索用户、群组、机器人</string>
+    <string name="search_no_result">无搜索结果</string>
+    <string name="search_failed">搜索失败</string>
     <string name="fab_new_chat">新建会话</string>
     <string name="fab_new_group">新建群聊</string>
     <string name="action_back">返回</string>
@@ -33,6 +36,17 @@
     <string name="message_image">图片消息\n点击可查看</string>
     <string name="message_file">[文件] %1$s</string>
     <string name="message_sticker">[表情]</string>
+    <string name="preview_image">[图片]</string>
+    <string name="preview_file">[文件] %1$s</string>
+    <string name="preview_voice">[语音]</string>
+    <string name="preview_video">[视频]</string>
+    <string name="preview_sticker">[表情]</string>
+    <string name="preview_markdown">[文本]</string>
+    <string name="preview_html">[HTML]</string>
+    <string name="preview_form">[表单]</string>
+    <string name="preview_article">[文章]</string>
+    <string name="preview_call">[通话]</string>
+    <string name="preview_unknown">[消息]</string>
     <string name="fab_compose">发消息</string>
     <string name="hint_input_message">输入消息</string>
     <string name="btn_send">发送</string>

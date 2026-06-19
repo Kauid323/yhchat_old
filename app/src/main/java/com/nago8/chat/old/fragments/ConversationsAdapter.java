@@ -11,9 +11,13 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.nago8.chat.old.R;
+import com.nago8.chat.old.proto.chat_ws_go.WsMsg;
 import com.nago8.chat.old.proto.conversation.ConversationList;
 import com.nago8.chat.old.utils.ImageUtils;
 import com.nago8.chat.old.utils.TimeUtils;
+import com.nago8.chat.old.utils.WsMsgConverter;
+
+import android.content.Context;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -48,6 +52,48 @@ public class ConversationsAdapter extends RecyclerView.Adapter<ConversationsAdap
             dataList.set(position, newData);
             notifyItemChanged(position);
         }
+    }
+
+    /**
+     * 收到 WS 推送消息时调用：
+     * 根据 wsMsg.chat_id 找到对应会话，未读数 +1，
+     * 预览内容更新为 "{sender.name}:{preview}"，
+     * 并将该会话移到列表顶部。
+     */
+    public void onPushMessage(WsMsg wsMsg, Context ctx) {
+        if (wsMsg == null || wsMsg.chat_id == null || ctx == null) return;
+
+        String chatId = wsMsg.chat_id;
+        int foundIndex = -1;
+        for (int i = 0; i < dataList.size(); i++) {
+            if (chatId.equals(dataList.get(i).chat_id)) {
+                foundIndex = i;
+                break;
+            }
+        }
+
+        // 会话不存在于列表中，忽略（等下次拉取列表时会出现）
+        if (foundIndex < 0) return;
+
+        ConversationList.ConversationData oldData = dataList.get(foundIndex);
+
+        // 构建预览文本: "{sender.name}:{preview}"
+        String senderName = (wsMsg.sender != null && wsMsg.sender.name != null)
+                ? wsMsg.sender.name : "";
+        String preview = WsMsgConverter.toPreviewText(wsMsg, ctx);
+        String chatContent = senderName + ":" + preview;
+
+        // 更新会话数据：未读+1、预览内容、时间戳
+        ConversationList.ConversationData newData = oldData.newBuilder()
+                .unread_message(oldData.unread_message + 1)
+                .chat_content(chatContent)
+                .timestamp_ms(wsMsg.timestamp)
+                .build();
+
+        // 移到顶部
+        dataList.remove(foundIndex);
+        dataList.add(0, newData);
+        notifyDataSetChanged();
     }
 
     @NonNull

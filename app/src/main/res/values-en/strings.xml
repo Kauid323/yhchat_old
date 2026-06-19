@@ -20,6 +20,9 @@
     <string name="menu_community">Community</string>
     <string name="menu_discovery">Discovery</string>
     <string name="action_search">Search</string>
+    <string name="search_hint">Search users, groups, bots</string>
+    <string name="search_no_result">No results</string>
+    <string name="search_failed">Search failed</string>
     <string name="fab_new_chat">New Chat</string>
     <string name="fab_new_group">New Group</string>
     <string name="action_back">Back</string>
@@ -33,6 +36,17 @@
     <string name="message_image">Image message\nTap to view</string>
     <string name="message_file">[File] %1$s</string>
     <string name="message_sticker">[Sticker]</string>
+    <string name="preview_image">[Image]</string>
+    <string name="preview_file">[File] %1$s</string>
+    <string name="preview_voice">[Voice]</string>
+    <string name="preview_video">[Video]</string>
+    <string name="preview_sticker">[Sticker]</string>
+    <string name="preview_markdown">[Text]</string>
+    <string name="preview_html">[HTML]</string>
+    <string name="preview_form">[Form]</string>
+    <string name="preview_article">[Article]</string>
+    <string name="preview_call">[Call]</string>
+    <string name="preview_unknown">[Message]</string>
     <string name="fab_compose">Compose message</string>
     <string name="hint_input_message">Type a message</string>
     <string name="btn_send">Send</string>

@@ -56,6 +56,7 @@ public class HomeActivity extends AppCompatActivity {
     private DrawerLayout drawerLayout;
     private ImageView ivAvatar;
     private TextView tvUsername, tvUserId;
+    private Fragment currentFragment;
 
     @Override
     protected void attachBaseContext(Context newBase) {
@@ -141,6 +142,7 @@ public class HomeActivity extends AppCompatActivity {
     private void switchFragment(Fragment fragment, int titleRes) {
         FragmentManager fragmentManager = getSupportFragmentManager();
         fragmentManager.beginTransaction().replace(R.id.content_frame, fragment).commit();
+        currentFragment = fragment;
         if (getSupportActionBar() != null) getSupportActionBar().setTitle(titleRes);
         if (drawerLayout != null) drawerLayout.closeDrawer(GravityCompat.START);
     }
@@ -191,7 +193,11 @@ public class HomeActivity extends AppCompatActivity {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         if (item.getItemId() == R.id.action_search) {
-            Toast.makeText(this, R.string.action_search, Toast.LENGTH_SHORT).show();
+            if (currentFragment instanceof ConversationsFragment) {
+                ((ConversationsFragment) currentFragment).showSearch();
+            } else {
+                Toast.makeText(this, R.string.action_search, Toast.LENGTH_SHORT).show();
+            }
             return true;
         }
         return super.onOptionsItemSelected(item);

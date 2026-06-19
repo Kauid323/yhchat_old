@@ -12,8 +12,11 @@ wire = "6.4.0"
 okhttp = "3.12.13"
 gson = "2.8.9"
 glide = "4.12.0"
+markwon = "4.6.2"
 
 [libraries]
+markwon-core = { group = "io.noties.markwon", name = "core", version.ref = "markwon" }
+markwon-ext-strikethrough = { group = "io.noties.markwon", name = "ext-strikethrough", version.ref = "markwon" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }

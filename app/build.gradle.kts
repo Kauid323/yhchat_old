@@ -9,7 +9,7 @@ android {
 
     defaultConfig {
         applicationId = "com.nago8.chat.old"
-        minSdk = 14
+        minSdk = 16
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
@@ -40,6 +40,8 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.gson)
     implementation(libs.glide)
+    implementation(libs.markwon.core)
+    implementation(libs.markwon.ext.strikethrough)
     testImplementation(libs.junit)
     androidTestImplementation(libs.espresso.core)
     androidTestImplementation(libs.ext.junit)

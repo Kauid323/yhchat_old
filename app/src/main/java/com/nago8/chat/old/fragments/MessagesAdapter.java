@@ -26,6 +26,9 @@ import com.nago8.chat.old.utils.TimeUtils;
 
 import java.io.File;
 
+import io.noties.markwon.Markwon;
+import io.noties.markwon.ext.strikethrough.StrikethroughPlugin;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -178,7 +181,15 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                 return createFileBubble(group, msg, index, count);
             }
             TextView textView = new TextView(itemView.getContext());
-            textView.setText(getMessageText(msg));
+            // content_type=3 为 markdown 消息，用 Markwon 渲染
+            if (msg != null && msg.content_type == 3 && msg.content != null && msg.content.text != null && msg.content.text.length() > 0) {
+                Markwon markwon = Markwon.builder(itemView.getContext())
+                        .usePlugin(StrikethroughPlugin.create())
+                        .build();
+                markwon.setMarkdown(textView, msg.content.text);
+            } else {
+                textView.setText(getMessageText(msg));
+            }
             textView.setTextSize(15);
             textView.setTextColor(itemView.getResources().getColor(group.mine ? android.R.color.white : R.color.bubble_text_left));
             textView.setGravity(Gravity.LEFT);

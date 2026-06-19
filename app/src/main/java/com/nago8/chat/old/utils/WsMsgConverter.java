@@ -1,5 +1,8 @@
 package com.nago8.chat.old.utils;
 
+import android.content.Context;
+
+import com.nago8.chat.old.R;
 import com.nago8.chat.old.proto.Msg;
 import com.nago8.chat.old.proto.chat_ws_go.WsMsg;
 
@@ -62,5 +65,49 @@ public class WsMsgConverter {
                 .msg_seq(wsMsg.msg_seq)
                 .edit_time(wsMsg.edit_time)
                 .build();
+    }
+
+    /**
+     * 将 WsMsg 转为会话列表预览文本（不含发送者名）。
+     * 按 content_type 区分消息类型，便于一眼看出是什么类型的消息。
+     *
+     * content_type: 1-文本, 2-图片, 3-markdown, 4-文件, 5-表单,
+     *               6-文章, 7-表情, 8-html, 11-语音, 13-语音通话
+     */
+    public static String toPreviewText(WsMsg wsMsg, Context ctx) {
+        if (wsMsg == null || wsMsg.content == null) {
+            return ctx.getString(R.string.preview_unknown);
+        }
+
+        String text = wsMsg.content.text != null ? wsMsg.content.text : "";
+        String fileName = wsMsg.content.file_name != null ? wsMsg.content.file_name : "";
+
+        switch (wsMsg.content_type) {
+            case 1: // 文本
+                return text.length() > 0 ? text : ctx.getString(R.string.preview_unknown);
+            case 2: // 图片
+                return ctx.getString(R.string.preview_image);
+            case 3: // markdown
+                return ctx.getString(R.string.preview_markdown);
+            case 4: // 文件
+                return ctx.getString(R.string.preview_file, fileName);
+            case 5: // 表单
+                return ctx.getString(R.string.preview_form);
+            case 6: // 文章
+                return ctx.getString(R.string.preview_article);
+            case 7: // 表情
+                return ctx.getString(R.string.preview_sticker);
+            case 8: // html
+                return ctx.getString(R.string.preview_html);
+            case 11: // 语音
+                return ctx.getString(R.string.preview_voice);
+            case 13: // 语音通话
+                return ctx.getString(R.string.preview_call);
+            default:
+                if (wsMsg.content.video_url != null && wsMsg.content.video_url.length() > 0) {
+                    return ctx.getString(R.string.preview_video);
+                }
+                return text.length() > 0 ? text : ctx.getString(R.string.preview_unknown);
+        }
     }
 }
