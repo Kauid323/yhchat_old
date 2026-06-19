@@ -22,6 +22,10 @@ import okio.ByteString;
 
 public class WsClient {
 
+    public interface MessageListener {
+        void onPushMessage(WsMsg msg);
+    }
+
     private static final String WS_URL = "wss://chat-ws-go.jwzhd.com/ws";
     private static final long HEARTBEAT_INTERVAL_MS = 30 * 1000L;
 
@@ -35,6 +39,11 @@ public class WsClient {
     private boolean connected = false;
     private Thread heartbeatThread;
     private volatile boolean running = false;
+    private MessageListener messageListener;
+
+    public void setMessageListener(MessageListener listener) {
+        this.messageListener = listener;
+    }
 
     private WsClient() {
         // 复用 ApiClient 的 OkHttpClient（已配置 TLS 1.2 适配安卓4）
@@ -212,6 +221,10 @@ public class WsClient {
                     String senderName = wm.sender != null && wm.sender.name != null ? wm.sender.name : "";
                     String text = wm.content != null && wm.content.text != null ? wm.content.text : "";
                     detail = "from=" + senderName + " chat_id=" + wm.chat_id + " type=" + wm.content_type + " text=" + text;
+                }
+                // 通知监听器
+                if (messageListener != null && m.data != null && m.data.msg != null) {
+                    messageListener.onPushMessage(m.data.msg);
                 }
                 return "[cmd=" + cmd + " seq=" + seq + "] push_message " + detail;
             } else if (msg instanceof heartbeat_ack) {

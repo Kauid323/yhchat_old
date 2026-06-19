@@ -28,6 +28,9 @@ import com.nago8.chat.old.proto.list_message;
 import com.nago8.chat.old.proto.list_message_by_seq;
 import com.nago8.chat.old.utils.PrefUtils;
 import com.nago8.chat.old.utils.LocaleHelper;
+import com.nago8.chat.old.utils.WsMsgConverter;
+import com.nago8.chat.old.ws.WsClient;
+import com.nago8.chat.old.proto.chat_ws_go.WsMsg;
 
 
 import java.io.File;
@@ -132,6 +135,43 @@ public class ChatActivity extends AppCompatActivity {
         super.onDestroy();
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        WsClient.getInstance().setMessageListener(new WsClient.MessageListener() {
+            @Override
+            public void onPushMessage(WsMsg wsMsg) {
+                runOnUiThread(() -> handlePushMessage(wsMsg));
+            }
+        });
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        WsClient.getInstance().setMessageListener(null);
+    }
+
+    private void handlePushMessage(WsMsg wsMsg) {
+        if (wsMsg == null || wsMsg.chat_id == null) return;
+        // 只处理当前聊天界面的消息
+        if (!chatId.equals(wsMsg.chat_id)) return;
+
+        String myUserId = PrefUtils.getUserId(this);
+        Msg msg = WsMsgConverter.convert(wsMsg, myUserId);
+        if (msg == null) return;
+
+        // 去重
+        if (msg.msg_id != null && msg.msg_id.length() > 0) {
+            for (Msg existing : allMessages) {
+                if (existing != null && msg.msg_id.equals(existing.msg_id)) return;
+            }
+        }
+
+        allMessages.add(msg);
+        refreshMessages(true);
+    }
+
     private void setupComposeInput() {
         inputBar = findViewById(R.id.inputBar);
         etMessage = findViewById(R.id.etMessage);
@@ -172,7 +212,9 @@ public class ChatActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     etMessage.setText("");
                     btnSend.setEnabled(true);
-                    fetchMessages();
+                    // 发送成功后依赖 WS 推送自动插入消息到列表
+                    // 如果 WS 未推送，做一次增量拉取
+                    fetchLatestMessage();
                 });
             }
 
@@ -182,6 +224,30 @@ public class ChatActivity extends AppCompatActivity {
                     btnSend.setEnabled(true);
                     Toast.makeText(ChatActivity.this, R.string.send_failed, Toast.LENGTH_SHORT).show();
                 });
+            }
+        });
+    }
+
+    private void fetchLatestMessage() {
+        // 增量拉取最新消息（用最大 msg_seq + 1 作为起点）
+        long maxSeq = 0;
+        for (Msg msg : allMessages) {
+            if (msg != null && msg.msg_seq > maxSeq) maxSeq = msg.msg_seq;
+        }
+
+        String token = PrefUtils.getToken(this);
+        runningCall = repository.listMessageBySeq(token, chatId, chatType, maxSeq, new MessageRepository.MessageListCallback() {
+            @Override
+            public void onSuccess(list_message_by_seq response) {
+                runOnUiThread(() -> {
+                    int added = mergeMessages(response == null ? null : response.msg);
+                    if (added > 0) refreshMessages(true);
+                });
+            }
+
+            @Override
+            public void onError(Exception error) {
+                // 静默失败，依赖 WS 推送
             }
         });
     }
