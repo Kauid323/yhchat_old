@@ -68,4 +68,10 @@
     <string name="image_preview_save_permission_denied">需要存储权限才能保存</string>
     <string name="image_preview_load_failed">图片加载失败</string>
     <string name="image_preview_not_ready">图片尚未加载完成</string>
+    <string name="message_quote">引用</string>
+    <string name="message_file_download">下载</string>
+    <string name="message_file_downloading">下载中 %1$d%%</string>
+    <string name="message_file_cancel">取消</string>
+    <string name="message_file_open">打开</string>
+    <string name="message_file_failed">下载失败</string>
 </resources>

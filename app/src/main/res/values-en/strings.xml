@@ -68,4 +68,10 @@
     <string name="image_preview_save_permission_denied">Storage permission required</string>
     <string name="image_preview_load_failed">Failed to load image</string>
     <string name="image_preview_not_ready">Image not ready yet</string>
+    <string name="message_quote">Quote</string>
+    <string name="message_file_download">Download</string>
+    <string name="message_file_downloading">Downloading %1$d%%</string>
+    <string name="message_file_cancel">Cancel</string>
+    <string name="message_file_open">Open</string>
+    <string name="message_file_failed">Download failed</string>
 </resources>

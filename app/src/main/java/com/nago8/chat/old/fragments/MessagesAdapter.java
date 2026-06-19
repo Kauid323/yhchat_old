@@ -2,6 +2,7 @@ package com.nago8.chat.old.fragments;
 
 import android.content.Context;
 import android.content.Intent;
+import android.text.format.Formatter;
 import android.graphics.Color;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -9,6 +10,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -16,10 +18,13 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.nago8.chat.old.R;
 import com.nago8.chat.old.ImagePreviewActivity;
+import com.nago8.chat.old.net.FileDownloadManager;
 import com.nago8.chat.old.model.MessageGroup;
 import com.nago8.chat.old.proto.Msg;
 import com.nago8.chat.old.utils.ImageUtils;
 import com.nago8.chat.old.utils.TimeUtils;
+
+import java.io.File;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -169,21 +174,265 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             if (msg != null && msg.content != null && msg.content.image_url != null && msg.content.image_url.length() > 0) {
                 return createImageBubble(group, msg, index, count);
             }
+            if (msg != null && msg.content != null && msg.content.file_name != null && msg.content.file_name.length() > 0 && msg.content.file_url != null && msg.content.file_url.length() > 0) {
+                return createFileBubble(group, msg, index, count);
+            }
             TextView textView = new TextView(itemView.getContext());
             textView.setText(getMessageText(msg));
             textView.setTextSize(15);
             textView.setTextColor(itemView.getResources().getColor(group.mine ? android.R.color.white : R.color.bubble_text_left));
-            textView.setBackgroundResource(getBubbleBackground(group.mine, index, count));
-            textView.setPadding(dp(12), dp(8), dp(12), dp(8));
             textView.setGravity(Gravity.LEFT);
+
+            // 判断是否有引用消息
+            boolean hasQuote = msg != null && msg.content != null
+                    && msg.content.quote_msg_text != null && msg.content.quote_msg_text.length() > 0;
+
+            if (hasQuote) {
+                // 带引用的消息：垂直布局，引用块在上，消息文本在下
+                Context ctx = itemView.getContext();
+                LinearLayout container = new LinearLayout(ctx);
+                container.setOrientation(LinearLayout.VERTICAL);
+                container.setBackgroundResource(getBubbleBackground(group.mine, index, count));
+                container.setPadding(dp(12), dp(8), dp(12), dp(8));
+
+                // 引用块：水平布局，左侧竖线 + 引用文本
+                LinearLayout quoteBlock = new LinearLayout(ctx);
+                quoteBlock.setOrientation(LinearLayout.HORIZONTAL);
+                quoteBlock.setGravity(Gravity.CENTER_VERTICAL);
+
+                View quoteBar = new View(ctx);
+                int barW = dp(3);
+                int barH = dp(28);
+                LinearLayout.LayoutParams barParams = new LinearLayout.LayoutParams(barW, barH);
+                barParams.rightMargin = dp(8);
+                quoteBar.setLayoutParams(barParams);
+                quoteBar.setBackgroundColor(0x66888888);
+                quoteBlock.addView(quoteBar);
+
+                TextView quoteText = new TextView(ctx);
+                quoteText.setText(msg.content.quote_msg_text);
+                quoteText.setTextSize(13);
+                quoteText.setTextColor(0x99888888);
+                quoteText.setMaxLines(3);
+                quoteText.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                quoteBlock.addView(quoteText);
+
+                container.addView(quoteBlock);
+
+                LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                textParams.topMargin = dp(4);
+                textView.setLayoutParams(textParams);
+                container.addView(textView);
+
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                params.topMargin = dp(2);
+                params.leftMargin = group.mine ? dp(48) : 0;
+                params.rightMargin = group.mine ? 0 : dp(48);
+                params.gravity = group.mine ? Gravity.RIGHT : Gravity.LEFT;
+                container.setLayoutParams(params);
+                return container;
+            } else {
+                // 普通文本消息
+                textView.setBackgroundResource(getBubbleBackground(group.mine, index, count));
+                textView.setPadding(dp(12), dp(8), dp(12), dp(8));
+
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                params.topMargin = dp(2);
+                params.leftMargin = group.mine ? dp(48) : 0;
+                params.rightMargin = group.mine ? 0 : dp(48);
+                params.gravity = group.mine ? Gravity.RIGHT : Gravity.LEFT;
+                textView.setLayoutParams(params);
+                return textView;
+            }
+        }
+
+        private View createFileBubble(MessageGroup group, Msg msg, int index, int count) {
+            final Context ctx = itemView.getContext();
+            final String fileUrl = msg.content.file_url;
+            final String fileName = msg.content.file_name;
+            final long fileSize = msg.content.file_size;
+
+            final LinearLayout container = new LinearLayout(ctx);
+            container.setOrientation(LinearLayout.VERTICAL);
+            container.setBackgroundResource(getBubbleBackground(group.mine, index, count));
+            container.setPadding(dp(12), dp(8), dp(12), dp(8));
+
+            int textColor = itemView.getResources().getColor(group.mine ? android.R.color.white : R.color.bubble_text_left);
+
+            // 文件信息行：图标 + 文件名 + 大小
+            LinearLayout infoRow = new LinearLayout(ctx);
+            infoRow.setOrientation(LinearLayout.HORIZONTAL);
+            infoRow.setGravity(Gravity.CENTER_VERTICAL);
+
+            ImageView icon = new ImageView(ctx);
+            int iconSize = dp(20);
+            LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(iconSize, iconSize);
+            iconParams.rightMargin = dp(8);
+            icon.setLayoutParams(iconParams);
+            icon.setImageResource(R.drawable.ic_file);
+            icon.setColorFilter(textColor);
+            infoRow.addView(icon);
+
+            LinearLayout textCol = new LinearLayout(ctx);
+            textCol.setOrientation(LinearLayout.VERTICAL);
+
+            TextView tvName = new TextView(ctx);
+            tvName.setText(fileName);
+            tvName.setTextSize(15);
+            tvName.setTextColor(textColor);
+            tvName.setMaxWidth(dp(200));
+            tvName.setSingleLine(true);
+            tvName.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+            textCol.addView(tvName);
+
+            TextView tvSize = new TextView(ctx);
+            tvSize.setTextSize(12);
+            tvSize.setTextColor(textColor);
+            tvSize.setAlpha(0.7f);
+            if (fileSize > 0) {
+                tvSize.setText(Formatter.formatFileSize(ctx, fileSize));
+            } else {
+                tvSize.setText("");
+            }
+            textCol.addView(tvSize);
+
+            infoRow.addView(textCol);
+            container.addView(infoRow);
+
+            // 操作行：下载按钮 / 进度条+取消按钮 / 打开按钮
+            final LinearLayout actionRow = new LinearLayout(ctx);
+            actionRow.setOrientation(LinearLayout.HORIZONTAL);
+            actionRow.setGravity(Gravity.CENTER_VERTICAL);
+            actionRow.setPadding(0, dp(6), 0, 0);
+
+            final TextView btnAction = new TextView(ctx);
+            btnAction.setTextSize(13);
+            btnAction.setTextColor(textColor);
+            btnAction.setPadding(dp(8), dp(4), dp(8), dp(4));
+            btnAction.setBackgroundResource(0);
+
+            final ProgressBar progressBar = new ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal);
+            LinearLayout.LayoutParams pbParams = new LinearLayout.LayoutParams(0, dp(16));
+            pbParams.weight = 1;
+            pbParams.rightMargin = dp(8);
+            progressBar.setLayoutParams(pbParams);
+            progressBar.setMax(100);
+            progressBar.setVisibility(View.GONE);
+
+            final ImageView btnIcon = new ImageView(ctx);
+            int btnIconSize = dp(24);
+            LinearLayout.LayoutParams btnIconParams = new LinearLayout.LayoutParams(btnIconSize, btnIconSize);
+            btnIcon.setLayoutParams(btnIconParams);
+            btnIcon.setColorFilter(textColor);
+
+            actionRow.addView(progressBar);
+            actionRow.addView(btnAction);
+            actionRow.addView(btnIcon);
+            container.addView(actionRow);
+
+            // 状态管理
+            final FileDownloadManager dm = FileDownloadManager.getInstance();
+            final boolean[] isDownloading = {dm.isDownloading(fileUrl)};
+
+            Runnable updateUI = new Runnable() {
+                @Override
+                public void run() {
+                    if (isDownloading[0]) {
+                        btnAction.setVisibility(View.GONE);
+                        progressBar.setVisibility(View.VISIBLE);
+                        btnIcon.setVisibility(View.VISIBLE);
+                        btnIcon.setImageResource(R.drawable.ic_close);
+                        int p = dm.getProgress(fileUrl);
+                        if (p >= 0) progressBar.setProgress(p);
+                    } else {
+                        progressBar.setVisibility(View.GONE);
+                        btnAction.setVisibility(View.VISIBLE);
+                        btnIcon.setVisibility(View.VISIBLE);
+                        btnAction.setText(R.string.message_file_download);
+                        btnIcon.setImageResource(R.drawable.ic_download);
+                    }
+                }
+            };
+            updateUI.run();
+
+            View.OnClickListener clickListener = new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    if (isDownloading[0]) {
+                        // 取消下载
+                        dm.cancel(fileUrl);
+                        isDownloading[0] = false;
+                        updateUI.run();
+                    } else {
+                        // 开始下载
+                        isDownloading[0] = true;
+                        updateUI.run();
+                        dm.download(ctx, fileUrl, fileName, new FileDownloadManager.DownloadCallback() {
+                            @Override
+                            public void onProgress(int percent) {
+                                ((android.app.Activity) ctx).runOnUiThread(() -> {
+                                    progressBar.setProgress(percent);
+                                    btnAction.setVisibility(View.VISIBLE);
+                                    btnAction.setText(ctx.getString(R.string.message_file_downloading, percent));
+                                    btnAction.setAlpha(0.7f);
+                                });
+                            }
+
+                            @Override
+                            public void onComplete(File file) {
+                                ((android.app.Activity) ctx).runOnUiThread(() -> {
+                                    isDownloading[0] = false;
+                                    progressBar.setVisibility(View.GONE);
+                                    btnAction.setText(R.string.message_file_open);
+                                    btnAction.setAlpha(1f);
+                                    btnIcon.setImageResource(R.drawable.ic_file);
+                                    btnIcon.setTag(file);
+                                });
+                            }
+
+                            @Override
+                            public void onError(Exception error) {
+                                ((android.app.Activity) ctx).runOnUiThread(() -> {
+                                    isDownloading[0] = false;
+                                    updateUI.run();
+                                    btnAction.setText(R.string.message_file_failed);
+                                });
+                            }
+
+                            @Override
+                            public void onCancel() {
+                                ((android.app.Activity) ctx).runOnUiThread(() -> {
+                                    isDownloading[0] = false;
+                                    updateUI.run();
+                                });
+                            }
+                        });
+                    }
+                }
+            };
+
+            // 统一点击逻辑：下载中→取消，已下载→打开，未下载→开始下载
+            View.OnClickListener unifiedClickListener = new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                Object tag = btnIcon.getTag();
+                if (tag instanceof File) {
+                    FileDownloadManager.openFile(ctx, (File) tag);
+                } else {
+                    clickListener.onClick(v);
+                }
+                }
+            };
+            btnAction.setOnClickListener(unifiedClickListener);
+            btnIcon.setOnClickListener(unifiedClickListener);
 
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             params.topMargin = dp(2);
             params.leftMargin = group.mine ? dp(48) : 0;
             params.rightMargin = group.mine ? 0 : dp(48);
             params.gravity = group.mine ? Gravity.RIGHT : Gravity.LEFT;
-            textView.setLayoutParams(params);
-            return textView;
+            container.setLayoutParams(params);
+            return container;
         }
 
         private View createImageBubble(MessageGroup group, Msg msg, int index, int count) {
