@@ -45,6 +45,11 @@
     <string name="preview_html">[HTML]</string>
     <string name="preview_form">[表单]</string>
     <string name="preview_article">[文章]</string>
+    <string name="post_detail_title">文章详情</string>
+    <string name="post_load_failed">加载文章失败</string>
+    <string name="post_loading">加载中…</string>
+    <string name="post_author_format">作者: %1$s</string>
+    <string name="post_time_format">发布于 %1$s</string>
     <string name="preview_call">[通话]</string>
     <string name="preview_unknown">[消息]</string>
     <string name="fab_compose">发消息</string>

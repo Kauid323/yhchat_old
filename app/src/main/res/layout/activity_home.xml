@@ -37,44 +37,12 @@
                     app:navigationIcon="@drawable/ic_menu"
                     app:title="@string/app_name" />
 
+                <!-- 会话/置顶 Tab 栏 + 搜索框（集成在顶栏内） -->
+                <include
+                    android:id="@+id/toolbarExtra"
+                    layout="@layout/layout_toolbar_home" />
+
             </com.google.android.material.appbar.AppBarLayout>
-
-            <!-- 会话/置顶 Tab 栏 -->
-            <LinearLayout
-                android:id="@+id/conversationTabBar"
-                android:layout_width="match_parent"
-                android:layout_height="44dp"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:background="?attr/colorPrimary"
-                android:visibility="gone">
-
-                <TextView
-                    android:id="@+id/tabConversations"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1"
-                    android:gravity="center"
-                    android:textColor="@android:color/white"
-                    android:textSize="15sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/tabSticky"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1"
-                    android:gravity="center"
-                    android:textColor="#CCFFFFFF"
-                    android:textSize="15sp" />
-            </LinearLayout>
-
-            <View
-                android:id="@+id/conversationTabDivider"
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="#1A000000"
-                android:visibility="gone" />
 
             <!-- Fragment Container -->
             <FrameLayout

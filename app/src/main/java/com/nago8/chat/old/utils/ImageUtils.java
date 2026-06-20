@@ -21,10 +21,13 @@ public class ImageUtils {
 
         // 智能处理裁切参数
         String finalUrl = url;
-        if (finalUrl.contains("?")) {
-            finalUrl = finalUrl + "&" + AVATAR_RESIZE_PARAM;
-        } else {
-            finalUrl = finalUrl + "?" + AVATAR_RESIZE_PARAM;
+        // 默认头像（*.jwznb.com/default-avatars/*.*）不需要加缩略图参数
+        if (!finalUrl.contains("/default-avatars/")) {
+            if (finalUrl.contains("?")) {
+                finalUrl = finalUrl + "&" + AVATAR_RESIZE_PARAM;
+            } else {
+                finalUrl = finalUrl + "?" + AVATAR_RESIZE_PARAM;
+            }
         }
 
         GlideUrl glideUrl;

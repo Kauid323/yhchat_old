@@ -14,8 +14,10 @@ import android.provider.Settings;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.EditText;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
 import androidx.appcompat.widget.PopupMenu;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -23,6 +25,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
+import androidx.appcompat.widget.AppCompatImageView;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -61,10 +64,14 @@ public class HomeActivity extends AppCompatActivity {
     private ImageView ivAvatar;
     private TextView tvUsername, tvUserId;
     private Fragment currentFragment;
-    private View conversationTabBar;
-    private View conversationTabDivider;
+    private View tabContainer;
+    private View searchContainer;
     private TextView tabConversations;
     private TextView tabSticky;
+    private EditText etSearch;
+    private AppCompatImageView btnSearch;
+    private AppCompatImageView btnSearchBack;
+    private boolean searchMode = false;
     private boolean showingSticky = false;
     private int conversationCount = 0;
     private int stickyCount = 0;
@@ -163,24 +170,35 @@ public class HomeActivity extends AppCompatActivity {
         if (getSupportActionBar() != null) getSupportActionBar().setTitle(titleRes);
         if (drawerLayout != null) drawerLayout.closeDrawer(GravityCompat.START);
 
-        // 只有会话/置顶 Fragment 时显示 Tab 栏
+        // 只有会话/置顶 Fragment 且非搜索模式时显示 Tab 栏
         boolean isConversationTab = fragment instanceof ConversationsFragment
                 || fragment instanceof StickyConversationsFragment;
-        if (conversationTabBar != null) {
+        if (tabContainer != null && !searchMode) {
             boolean visible = isConversationTab && stickyCount > 0;
-            conversationTabBar.setVisibility(visible ? View.VISIBLE : View.GONE);
-            conversationTabDivider.setVisibility(visible ? View.VISIBLE : View.GONE);
+            tabContainer.setVisibility(visible ? View.VISIBLE : View.GONE);
         }
     }
 
     private void initConversationTabs() {
-        conversationTabBar = findViewById(R.id.conversationTabBar);
-        conversationTabDivider = findViewById(R.id.conversationTabDivider);
+        tabContainer = findViewById(R.id.tabContainer);
+        searchContainer = findViewById(R.id.searchContainer);
         tabConversations = findViewById(R.id.tabConversations);
         tabSticky = findViewById(R.id.tabSticky);
+        etSearch = findViewById(R.id.etSearch);
+        btnSearch = findViewById(R.id.btnSearch);
+        btnSearchBack = findViewById(R.id.btnSearchBack);
 
         tabConversations.setOnClickListener(v -> switchConversationTab(false));
         tabSticky.setOnClickListener(v -> switchConversationTab(true));
+        btnSearch.setOnClickListener(v -> doSearch());
+        btnSearchBack.setOnClickListener(v -> hideSearch());
+        etSearch.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+                doSearch();
+                return true;
+            }
+            return false;
+        });
 
         updateTabTexts();
     }
@@ -217,13 +235,11 @@ public class HomeActivity extends AppCompatActivity {
         tabConversations.setText(getString(R.string.tab_conversations_format, conversationCount));
         tabSticky.setText(getString(R.string.tab_sticky_format, stickyCount));
 
-        // 有置顶会话时显示 tab 栏
-        if (stickyCount > 0) {
-            conversationTabBar.setVisibility(View.VISIBLE);
-            conversationTabDivider.setVisibility(View.VISIBLE);
+        // 有置顶会话且非搜索模式时显示 tab 栏
+        if (stickyCount > 0 && !searchMode) {
+            tabContainer.setVisibility(View.VISIBLE);
         } else {
-            conversationTabBar.setVisibility(View.GONE);
-            conversationTabDivider.setVisibility(View.GONE);
+            tabContainer.setVisibility(View.GONE);
             // 无置顶时切回会话列表
             if (showingSticky) {
                 switchConversationTab(false);
@@ -239,15 +255,66 @@ public class HomeActivity extends AppCompatActivity {
         updateTabTexts();
     }
 
+    // ==================== 顶栏搜索 ====================
+
     /**
-     * 供 ConversationsFragment 控制会话 Tab 栏显隐（搜索时隐藏）。
+     * 展开顶栏搜索框：隐藏 Tab 栏，显示搜索输入框。
      */
-    public void setConversationTabBarVisible(boolean visible) {
-        if (conversationTabBar == null) return;
-        // 仅在有置顶会话时才允许显示
-        boolean show = visible && stickyCount > 0;
-        conversationTabBar.setVisibility(show ? View.VISIBLE : View.GONE);
-        conversationTabDivider.setVisibility(show ? View.VISIBLE : View.GONE);
+    public void showSearch() {
+        if (searchMode) return;
+        // 搜索时强制切到会话列表 Fragment（只有它实现了 SearchHost）
+        if (showingSticky) {
+            showingSticky = false;
+            switchFragment(new ConversationsFragment(), R.string.menu_conversations);
+            updateTabSelection();
+        }
+        searchMode = true;
+        if (tabContainer != null) tabContainer.setVisibility(View.GONE);
+        if (searchContainer != null) searchContainer.setVisibility(View.VISIBLE);
+        if (etSearch != null) {
+            etSearch.setText("");
+            etSearch.requestFocus();
+        }
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null && etSearch != null) imm.showSoftInput(etSearch, InputMethodManager.SHOW_IMPLICIT);
+    }
+
+    /**
+     * 收起顶栏搜索框：隐藏搜索框，恢复 Tab 栏，通知 Fragment 重新加载会话列表。
+     */
+    public void hideSearch() {
+        if (!searchMode) return;
+        searchMode = false;
+        if (searchContainer != null) searchContainer.setVisibility(View.GONE);
+        if (etSearch != null) etSearch.setText("");
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null && etSearch != null) imm.hideSoftInputFromWindow(etSearch.getWindowToken(), 0);
+        // 恢复 Tab 栏显隐
+        boolean isConversationTab = currentFragment instanceof ConversationsFragment
+                || currentFragment instanceof StickyConversationsFragment;
+        if (tabContainer != null) {
+            tabContainer.setVisibility(isConversationTab && stickyCount > 0 ? View.VISIBLE : View.GONE);
+        }
+        // 通知 Fragment 搜索已关闭，重新加载会话列表
+        if (currentFragment instanceof SearchHost) {
+            ((SearchHost) currentFragment).onSearchClosed();
+        }
+    }
+
+    /**
+     * 执行搜索：获取输入词，通过 SearchHost 接口传给当前 Fragment 执行搜索。
+     */
+    private void doSearch() {
+        if (etSearch == null) return;
+        String word = etSearch.getText().toString().trim();
+        if (word.length() == 0) return;
+        // 收起键盘
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null) imm.hideSoftInputFromWindow(etSearch.getWindowToken(), 0);
+        // 通过接口让 Fragment 执行搜索
+        if (currentFragment instanceof SearchHost) {
+            ((SearchHost) currentFragment).onSearch(word);
+        }
     }
 
     private void fetchStickyCount() {
@@ -336,11 +403,8 @@ public class HomeActivity extends AppCompatActivity {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         if (item.getItemId() == R.id.action_search) {
-            if (currentFragment instanceof ConversationsFragment) {
-                ((ConversationsFragment) currentFragment).showSearch();
-            } else {
-                Toast.makeText(this, R.string.action_search, Toast.LENGTH_SHORT).show();
-            }
+            // 搜索框已集成在顶栏，直接展开
+            showSearch();
             return true;
         }
         return super.onOptionsItemSelected(item);

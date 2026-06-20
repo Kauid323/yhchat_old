@@ -208,7 +208,20 @@ public class ChatActivity extends AppCompatActivity {
         }
 
         allMessages.add(msg);
-        refreshMessages(true);
+        // 只有用户当前在底部附近时才滚动到最新消息，否则保持当前位置
+        refreshMessages(isAtBottom());
+    }
+
+    /**
+     * 判断用户是否在消息列表底部附近（最后一条可见）。
+     */
+    private boolean isAtBottom() {
+        if (layoutManager == null || adapter == null) return true;
+        int total = adapter.getItemCount();
+        if (total == 0) return true;
+        int lastVisible = layoutManager.findLastCompletelyVisibleItemPosition();
+        // 允许差 1 条的容差（最后一条可能只是部分可见）
+        return lastVisible >= total - 2;
     }
 
     private void setupComposeInput() {
@@ -462,8 +475,9 @@ public class ChatActivity extends AppCompatActivity {
         List<MessageGroup> groups = MessageGroup.fromMessages(allMessages);
         // 标记管理员消息
         for (MessageGroup group : groups) {
-            group.isAdmin = group.senderId != null && adminIds.contains(group.senderId);
             group.isOwner = ownerId != null && ownerId.length() > 0 && ownerId.equals(group.senderId);
+            // 群主不显示管理员标签，只显示群主标签
+            group.isAdmin = !group.isOwner && group.senderId != null && adminIds.contains(group.senderId);
         }
         adapter.setData(groups);
         tvEmpty.setVisibility(groups.isEmpty() ? View.VISIBLE : View.GONE);

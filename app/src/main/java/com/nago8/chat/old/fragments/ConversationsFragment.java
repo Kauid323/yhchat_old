@@ -6,15 +6,11 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.inputmethod.EditorInfo;
-import android.view.inputmethod.InputMethodManager;
-import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.widget.AppCompatImageView;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -25,6 +21,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.nago8.chat.old.ChatActivity;
 import com.nago8.chat.old.HomeActivity;
+import com.nago8.chat.old.SearchHost;
 import com.nago8.chat.old.R;
 import com.nago8.chat.old.net.ApiClient;
 import com.nago8.chat.old.proto.chat_ws_go.WsMsg;
@@ -45,17 +42,12 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 
-public class ConversationsFragment extends Fragment {
+public class ConversationsFragment extends Fragment implements SearchHost {
 
     private RecyclerView recyclerView;
     private ProgressBar progressBar;
     private ConversationsAdapter adapter;
     private WsClient.MessageListener wsListener;
-    private View searchBar;
-    private View searchDivider;
-    private EditText etSearch;
-    private AppCompatImageView btnSearch;
-    private AppCompatImageView btnSearchClose;
     private boolean searchMode = false;
 
     @Nullable
@@ -64,11 +56,6 @@ public class ConversationsFragment extends Fragment {
         View view = inflater.inflate(R.layout.fragment_conversations, container, false);
         recyclerView = view.findViewById(R.id.recyclerView);
         progressBar = view.findViewById(R.id.progressBar);
-        searchBar = view.findViewById(R.id.searchBar);
-        searchDivider = view.findViewById(R.id.searchDivider);
-        etSearch = view.findViewById(R.id.etSearch);
-        btnSearch = view.findViewById(R.id.btnSearch);
-        btnSearchClose = view.findViewById(R.id.btnSearchClose);
 
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         adapter = new ConversationsAdapter();
@@ -83,16 +70,6 @@ public class ConversationsFragment extends Fragment {
             } else {
                 openChat(data, position);
             }
-        });
-
-        btnSearch.setOnClickListener(v -> doSearch());
-        btnSearchClose.setOnClickListener(v -> hideSearch());
-        etSearch.setOnEditorActionListener((v, actionId, event) -> {
-            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
-                doSearch();
-                return true;
-            }
-            return false;
         });
 
         return view;
@@ -199,52 +176,18 @@ public class ConversationsFragment extends Fragment {
         });
     }
 
-    // ==================== 搜索 ====================
+    // ==================== 搜索（SearchHost 接口实现）====================
 
     /**
-     * 展开搜索栏，由 HomeActivity 顶栏搜索图标触发。
+     * HomeActivity 顶栏搜索框输入后回调，执行搜索请求。
      */
-    public void showSearch() {
-        searchMode = true;
-        searchBar.setVisibility(View.VISIBLE);
-        searchDivider.setVisibility(View.VISIBLE);
-        if (getActivity() instanceof HomeActivity) {
-            ((HomeActivity) getActivity()).setConversationTabBarVisible(false);
-        }
-        etSearch.requestFocus();
-        InputMethodManager imm = (InputMethodManager) getContext().getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
-        if (imm != null) imm.showSoftInput(etSearch, InputMethodManager.SHOW_IMPLICIT);
-    }
-
-    /**
-     * 收起搜索栏，恢复会话列表。
-     */
-    public void hideSearch() {
-        searchMode = false;
-        searchBar.setVisibility(View.GONE);
-        searchDivider.setVisibility(View.GONE);
-        if (getActivity() instanceof HomeActivity) {
-            ((HomeActivity) getActivity()).setConversationTabBarVisible(true);
-        }
-        etSearch.setText("");
-        InputMethodManager imm = (InputMethodManager) getContext().getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
-        if (imm != null) imm.hideSoftInputFromWindow(etSearch.getWindowToken(), 0);
-        fetchConversations();
-    }
-
-    /**
-     * 执行搜索，调用 /v1/search/home-search，结果复用会话 item 渲染。
-     */
-    private void doSearch() {
-        String word = etSearch.getText().toString().trim();
+    @Override
+    public void onSearch(String word) {
         if (word.length() == 0) return;
+        searchMode = true;
 
         String token = PrefUtils.getToken(getContext());
         if (token == null) return;
-
-        // 收起键盘
-        InputMethodManager imm = (InputMethodManager) getContext().getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
-        if (imm != null) imm.hideSoftInputFromWindow(etSearch.getWindowToken(), 0);
 
         progressBar.setVisibility(View.VISIBLE);
 
@@ -306,6 +249,15 @@ public class ConversationsFragment extends Fragment {
                 }
             }
         });
+    }
+
+    /**
+     * HomeActivity 顶栏搜索框关闭后回调，退出搜索模式并重新加载会话列表。
+     */
+    @Override
+    public void onSearchClosed() {
+        searchMode = false;
+        fetchConversations();
     }
 
     /**

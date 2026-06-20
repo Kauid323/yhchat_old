@@ -45,6 +45,11 @@
     <string name="preview_html">[HTML]</string>
     <string name="preview_form">[Form]</string>
     <string name="preview_article">[Article]</string>
+    <string name="post_detail_title">Article Detail</string>
+    <string name="post_load_failed">Failed to load article</string>
+    <string name="post_loading">Loading…</string>
+    <string name="post_author_format">Author: %1$s</string>
+    <string name="post_time_format">Published %1$s</string>
     <string name="preview_call">[Call]</string>
     <string name="preview_unknown">[Message]</string>
     <string name="fab_compose">Compose message</string>

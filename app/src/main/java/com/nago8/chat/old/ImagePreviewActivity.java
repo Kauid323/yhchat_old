@@ -25,6 +25,7 @@ import androidx.core.content.ContextCompat;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
+import com.bumptech.glide.load.resource.gif.GifDrawable;
 import com.bumptech.glide.load.model.GlideUrl;
 import com.bumptech.glide.load.model.LazyHeaders;
 import com.bumptech.glide.request.target.CustomTarget;
@@ -106,14 +107,35 @@ public class ImagePreviewActivity extends AppCompatActivity {
                     public void onResourceReady(@NonNull Drawable resource, @Nullable Transition<? super Drawable> transition) {
                         progressBar.setVisibility(View.GONE);
                         imageLoaded = true;
+                        // GIF 需要手动启动动画播放
+                        if (resource instanceof GifDrawable) {
+                            GifDrawable gif = (GifDrawable) resource;
+                            gif.setLoopCount(GifDrawable.LOOP_INTRINSIC);
+                            gif.start();
+                        }
                         zoomableImage.setImageDrawable(resource);
                         zoomableImage.resetZoom();
                     }
 
                     @Override
                     public void onLoadCleared(@Nullable Drawable placeholder) {
+                        // 清理时停止 GIF 动画
+                        stopGifIfRunning();
                     }
                 });
+    }
+
+    private void stopGifIfRunning() {
+        Drawable d = zoomableImage.getDrawable();
+        if (d instanceof GifDrawable) {
+            ((GifDrawable) d).stop();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        stopGifIfRunning();
+        super.onDestroy();
     }
 
     private void attemptSaveImage() {

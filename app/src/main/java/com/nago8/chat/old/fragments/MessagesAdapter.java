@@ -18,6 +18,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.nago8.chat.old.R;
 import com.nago8.chat.old.ImagePreviewActivity;
+import com.nago8.chat.old.PostDetailActivity;
 import com.nago8.chat.old.net.FileDownloadManager;
 import com.nago8.chat.old.model.MessageGroup;
 import com.nago8.chat.old.proto.Msg;
@@ -196,6 +197,10 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             if (msg != null && msg.content != null && msg.content.file_name != null && msg.content.file_name.length() > 0 && msg.content.file_url != null && msg.content.file_url.length() > 0) {
                 return createFileBubble(group, msg, index, count);
             }
+            // content_type=6 为文章消息
+            if (msg != null && msg.content_type == 6 && msg.content != null && msg.content.post_id != null && msg.content.post_id.length() > 0) {
+                return createPostBubble(group, msg, index, count);
+            }
             TextView textView = new TextView(itemView.getContext());
             // content_type=3 为 markdown 消息，用 Markwon 渲染
             if (msg != null && msg.content_type == 3 && msg.content != null && msg.content.text != null && msg.content.text.length() > 0) {
@@ -271,6 +276,62 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                 textView.setLayoutParams(params);
                 return textView;
             }
+        }
+
+        /**
+         * 文章消息气泡：文章图标 + 标题，点击进入文章详情。
+         */
+        private View createPostBubble(MessageGroup group, Msg msg, int index, int count) {
+            final Context ctx = itemView.getContext();
+            final String postId = msg.content.post_id;
+            final String postTitle = msg.content.post_title != null ? msg.content.post_title : "";
+
+            int textColor = itemView.getResources().getColor(group.mine ? android.R.color.white : R.color.bubble_text_left);
+
+            LinearLayout container = new LinearLayout(ctx);
+            container.setOrientation(LinearLayout.HORIZONTAL);
+            container.setGravity(Gravity.CENTER_VERTICAL);
+            container.setBackgroundResource(getBubbleBackground(group.mine, index, count));
+            container.setPadding(dp(12), dp(10), dp(12), dp(10));
+            container.setClickable(true);
+            container.setFocusable(true);
+
+            // 文章图标
+            ImageView icon = new ImageView(ctx);
+            int iconSize = dp(22);
+            LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(iconSize, iconSize);
+            iconParams.rightMargin = dp(8);
+            icon.setLayoutParams(iconParams);
+            icon.setImageResource(R.drawable.ic_article);
+            icon.setColorFilter(textColor);
+            container.addView(icon);
+
+            // 文章标题
+            TextView tvTitle = new TextView(ctx);
+            tvTitle.setText(postTitle.length() > 0 ? postTitle : ctx.getString(R.string.preview_article));
+            tvTitle.setTextSize(15);
+            tvTitle.setTextColor(textColor);
+            tvTitle.setMaxWidth(dp(220));
+            tvTitle.setSingleLine(true);
+            tvTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            container.addView(tvTitle);
+
+            // 点击跳转文章详情
+            container.setOnClickListener(v -> {
+                Intent intent = new Intent(ctx, PostDetailActivity.class);
+                intent.putExtra(PostDetailActivity.EXTRA_POST_ID, postId);
+                intent.putExtra(PostDetailActivity.EXTRA_POST_TITLE, postTitle);
+                ctx.startActivity(intent);
+            });
+
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            params.topMargin = dp(2);
+            params.leftMargin = group.mine ? dp(48) : 0;
+            params.rightMargin = group.mine ? 0 : dp(48);
+            params.gravity = group.mine ? Gravity.RIGHT : Gravity.LEFT;
+            container.setLayoutParams(params);
+
+            return container;
         }
 
         private View createFileBubble(MessageGroup group, Msg msg, int index, int count) {

@@ -81,6 +81,7 @@ public class WsMsgConverter {
 
         String text = wsMsg.content.text != null ? wsMsg.content.text : "";
         String fileName = wsMsg.content.file_name != null ? wsMsg.content.file_name : "";
+        String postTitle = wsMsg.content.post_title != null ? wsMsg.content.post_title : "";
 
         switch (wsMsg.content_type) {
             case 1: // 文本
@@ -94,7 +95,7 @@ public class WsMsgConverter {
             case 5: // 表单
                 return ctx.getString(R.string.preview_form);
             case 6: // 文章
-                return ctx.getString(R.string.preview_article);
+                return postTitle.length() > 0 ? postTitle : ctx.getString(R.string.preview_article);
             case 7: // 表情
                 return ctx.getString(R.string.preview_sticker);
             case 8: // html
