@@ -150,4 +150,6 @@
     <string name="message_file_cancel">取消</string>
     <string name="message_file_open">打开</string>
     <string name="message_file_failed">下载失败</string>
+    <string name="group_profile_update_failed">更新群信息失败</string>
+    <string name="group_profile_community_readonly">关联分区当前仅展示，仓库文档里还没找到可修改接口</string>
 </resources>

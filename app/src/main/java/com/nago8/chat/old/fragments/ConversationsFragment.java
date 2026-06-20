@@ -165,6 +165,8 @@ public class ConversationsFragment extends Fragment implements SearchHost {
                                           }
                                       }
                                       ((HomeActivity) getActivity()).updateDoNotDisturbSet(dndIds);
+                                      // 更新会话信息缓存（名称+头像），供通知使用
+                                      ((HomeActivity) getActivity()).updateConvInfoCache(conversationList.data);
                                   }
                                 }
                             });

@@ -1,5 +1,6 @@
 package com.nago8.chat.old.utils;
 
+import android.os.Build;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.content.res.Resources;
@@ -14,13 +15,20 @@ public class LocaleHelper {
 
         Locale.setDefault(locale);
 
-        Resources res = context.getResources();
-        Configuration config = new Configuration(res.getConfiguration());
-        config.locale = locale;
-        DisplayMetrics dm = res.getDisplayMetrics();
-        res.updateConfiguration(config, dm);
-
-        return context;
+        // Android 17+ 用 createConfigurationContext（高版本 updateConfiguration 已废弃）
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            Configuration config = new Configuration(context.getResources().getConfiguration());
+            config.setLocale(locale);
+            return context.createConfigurationContext(config);
+        } else {
+            // Android 14-16 用 updateConfiguration
+            Resources res = context.getResources();
+            Configuration config = new Configuration(res.getConfiguration());
+            config.locale = locale;
+            DisplayMetrics dm = res.getDisplayMetrics();
+            res.updateConfiguration(config, dm);
+            return context;
+        }
     }
 
     public static void applyToApplication(Context appContext) {
@@ -28,11 +36,19 @@ public class LocaleHelper {
 
         Locale.setDefault(locale);
 
-        Resources res = appContext.getResources();
-        Configuration config = new Configuration(res.getConfiguration());
-        config.locale = locale;
-        DisplayMetrics dm = res.getDisplayMetrics();
-        res.updateConfiguration(config, dm);
+        // Android 17+ 用 createConfigurationContext 更新 Application 资源
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            Configuration config = new Configuration(appContext.getResources().getConfiguration());
+            config.setLocale(locale);
+            appContext.getResources().updateConfiguration(config,
+                    appContext.getResources().getDisplayMetrics());
+        } else {
+            Resources res = appContext.getResources();
+            Configuration config = new Configuration(res.getConfiguration());
+            config.locale = locale;
+            DisplayMetrics dm = res.getDisplayMetrics();
+            res.updateConfiguration(config, dm);
+        }
     }
 
     /**

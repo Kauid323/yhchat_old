@@ -22,6 +22,7 @@ import com.nago8.chat.old.PostDetailActivity;
 import com.nago8.chat.old.net.FileDownloadManager;
 import com.nago8.chat.old.model.MessageGroup;
 import com.nago8.chat.old.proto.Msg;
+import com.nago8.chat.old.utils.FengEmojiRenderer;
 import com.nago8.chat.old.utils.ImageUtils;
 import com.nago8.chat.old.utils.TimeUtils;
 
@@ -202,14 +203,12 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                 return createPostBubble(group, msg, index, count);
             }
             TextView textView = new TextView(itemView.getContext());
-            // content_type=3 为 markdown 消息，用 Markwon 渲染
-            if (msg != null && msg.content_type == 3 && msg.content != null && msg.content.text != null && msg.content.text.length() > 0) {
-                Markwon markwon = Markwon.builder(itemView.getContext())
-                        .usePlugin(StrikethroughPlugin.create())
-                        .build();
-                markwon.setMarkdown(textView, msg.content.text);
+            int emojiSize = dp(22);
+            CharSequence displayText = FengEmojiRenderer.apply(itemView.getContext(), getMessageText(msg), emojiSize);
+            if (msg != null && msg.content_type == 3) {
+                textView.setText(displayText, TextView.BufferType.SPANNABLE);
             } else {
-                textView.setText(getMessageText(msg));
+                textView.setText(displayText, TextView.BufferType.SPANNABLE);
             }
             textView.setTextSize(15);
             textView.setTextColor(itemView.getResources().getColor(group.mine ? android.R.color.white : R.color.bubble_text_left));
@@ -242,7 +241,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                 quoteBlock.addView(quoteBar);
 
                 TextView quoteText = new TextView(ctx);
-                quoteText.setText(msg.content.quote_msg_text);
+                quoteText.setText(FengEmojiRenderer.apply(ctx, msg.content.quote_msg_text, dp(18)), TextView.BufferType.SPANNABLE);
                 quoteText.setTextSize(13);
                 quoteText.setTextColor(ctx.getResources().getColor(R.color.text_secondary));
                 quoteText.setMaxLines(3);

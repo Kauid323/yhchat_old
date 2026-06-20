@@ -50,6 +50,8 @@ import com.nago8.chat.old.ws.WsLogManager;
 
 import java.io.IOException;
 import java.util.HashSet;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.Set;
 
@@ -79,6 +81,8 @@ public class HomeActivity extends AppCompatActivity {
     private int conversationCount = 0;
     private int stickyCount = 0;
     private final Set<String> doNotDisturbChatIds = new HashSet<>();
+    // 会话信息缓存：chatId → [name, avatarUrl]，供 WsClient 通知使用
+    private final Map<String, String[]> convInfoCache = new HashMap<>();
 
     @Override
     protected void attachBaseContext(Context newBase) {
@@ -93,6 +97,12 @@ public class HomeActivity extends AppCompatActivity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQUEST_STORAGE_PERMISSION);
+            }
+        }
+        // Android 13+ 请求通知权限
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (ContextCompat.checkSelfPermission(this, "android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{"android.permission.POST_NOTIFICATIONS"}, 3001);
             }
         }
 
@@ -128,6 +138,13 @@ public class HomeActivity extends AppCompatActivity {
         initConversationTabs();
         WsClient.getInstance().setAppContext(this);
         WsClient.getInstance().setDndChecker(this::isDoNotDisturb);
+        WsClient.getInstance().setConvInfoProvider(new WsClient.ConvInfoProvider() {
+            @Override
+            public String getConvName(String chatId) { return HomeActivity.this.getConvName(chatId); }
+            @Override
+            public String getConvAvatar(String chatId) { return HomeActivity.this.getConvAvatar(chatId); }
+        });
+        com.nago8.chat.old.utils.NotificationHelper.createChannel(this);
         fetchUserInfo();
 
         if (savedInstanceState == null) {
@@ -142,6 +159,20 @@ public class HomeActivity extends AppCompatActivity {
         if (requestCode == REQUEST_STORAGE_PERMISSION) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 fetchUserInfo();
+            }
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // 从后台回到前台时，如果 WS 未连接则强制重连
+        if (!WsClient.getInstance().isConnected()) {
+            String userId = PrefUtils.getUserId(this);
+            String token = PrefUtils.getToken(this);
+            if (userId != null && userId.length() > 0 && token != null && token.length() > 0) {
+                WsLogManager.getInstance().logInfo("resuming: reconnecting WebSocket");
+                WsClient.getInstance().reconnect();
             }
         }
     }
@@ -514,6 +545,7 @@ public class HomeActivity extends AppCompatActivity {
     }
 
     private void clearLocalDataAndGoToLogin() {
+        WsClient.getInstance().disconnect();
         PrefUtils.clearToken(this);
         Intent intent = new Intent(this, MainActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
@@ -532,7 +564,9 @@ public class HomeActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
-        WsClient.getInstance().disconnect();
+        // 不在 onDestroy 断开 WS，WS 是全局单例，生命周期跟随 Application。
+        // 从后台回到前台时 onResume 会检查并重连。
+        // 只有退出登录时才调用 disconnect()。
         super.onDestroy();
     }
 
@@ -544,6 +578,34 @@ public class HomeActivity extends AppCompatActivity {
         if (chatIds != null) {
             doNotDisturbChatIds.addAll(chatIds);
         }
+    }
+
+    /**
+     * 供 ConversationsFragment 回调更新会话信息缓存。
+     */
+    public void updateConvInfoCache(java.util.List<com.nago8.chat.old.proto.conversation.ConversationList.ConversationData> data) {
+        convInfoCache.clear();
+        if (data != null) {
+            for (com.nago8.chat.old.proto.conversation.ConversationList.ConversationData cd : data) {
+                convInfoCache.put(cd.chat_id, new String[]{cd.name, cd.avatar_url});
+            }
+        }
+    }
+
+    /**
+     * 查询会话名称，供 WsClient 通知使用。
+     */
+    public String getConvName(String chatId) {
+        String[] info = chatId != null ? convInfoCache.get(chatId) : null;
+        return info != null && info[0] != null && info[0].length() > 0 ? info[0] : null;
+    }
+
+    /**
+     * 查询会话头像 URL，供 WsClient 通知使用。
+     */
+    public String getConvAvatar(String chatId) {
+        String[] info = chatId != null ? convInfoCache.get(chatId) : null;
+        return info != null && info[1] != null && info[1].length() > 0 ? info[1] : null;
     }
 
     /**

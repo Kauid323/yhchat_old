@@ -54,6 +54,16 @@ public class WsClient {
     }
     private DndChecker dndChecker;
 
+    /**
+     * 会话信息提供接口，由 HomeActivity 实现。
+     * 用于通知时获取会话名称和头像。
+     */
+    public interface ConvInfoProvider {
+        String getConvName(String chatId);
+        String getConvAvatar(String chatId);
+    }
+    private ConvInfoProvider convInfoProvider;
+
     private OkHttpClient client;
     private WebSocket webSocket;
     private String userId;
@@ -126,6 +136,13 @@ public class WsClient {
     }
 
     /**
+     * 设置会话信息提供器（由 HomeActivity 实现）。
+     */
+    public void setConvInfoProvider(ConvInfoProvider provider) {
+        this.convInfoProvider = provider;
+    }
+
+    /**
      * 设置当前正在聊天的会话 ID，该会话不发通知。
      */
     public void setActiveChatId(String chatId) {
@@ -143,6 +160,24 @@ public class WsClient {
         this.shouldReconnect = true;
         this.reconnectAttempt = 0;
 
+        doConnect();
+    }
+
+    /**
+     * 强制重连：先断开旧连接再重新连接。
+     * 用于从后台回到前台时，WS 可能处于"假连接"状态。
+     */
+    public void reconnect() {
+        if (userId == null || token == null) return;
+        // 先清理旧连接
+        stopHeartbeat();
+        if (webSocket != null) {
+            webSocket.cancel();
+            webSocket = null;
+        }
+        connected = false;
+        shouldReconnect = true;
+        reconnectAttempt = 0;
         doConnect();
     }
 
@@ -208,15 +243,13 @@ public class WsClient {
      */
     private void scheduleReconnect() {
         if (!shouldReconnect) return;
-        reconnectAttempt++;
-        int delay = (int) Math.min(RECONNECT_DELAY_MS * (1L << (reconnectAttempt - 1)), MAX_RECONNECT_DELAY_MS);
-        WsLogManager.getInstance().logInfo("reconnect in " + delay + "ms (attempt " + reconnectAttempt + ")");
+        WsLogManager.getInstance().logInfo("reconnect in " + RECONNECT_DELAY_MS + "ms");
 
         mainHandler.postDelayed(() -> {
             if (shouldReconnect && !connected) {
                 doConnect();
             }
-        }, delay);
+        }, RECONNECT_DELAY_MS);
     }
 
     public void disconnect() {
@@ -305,10 +338,20 @@ public class WsClient {
         // 构建通知内容
         String senderName = (msg.sender != null && msg.sender.name != null) ? msg.sender.name : "";
         String preview = WsMsgConverter.toPreviewText(msg, appContext);
-        String content = senderName.length() > 0 ? senderName + ": " + preview : preview;
-        int chatType = (msg.sender != null) ? msg.sender.chat_type : 1;
-        String title = senderName.length() > 0 ? senderName : appContext.getString(R.string.notification_new_message);
-        NotificationHelper.showMessageNotification(appContext, msg.chat_id, chatType, title, content);
+        // 群聊消息内容格式：发送者名: 消息预览；单聊直接显示消息预览
+        String content = (msg.chat_type == 2 && senderName.length() > 0)
+                ? senderName + ": " + preview : preview;
+        // 用会话类型（msg.chat_type），不是发送者类型
+        int chatType = msg.chat_type;
+        // 通知标题用会话名称，头像用会话头像
+        String title = appContext.getString(R.string.notification_new_message);
+        String avatarUrl = null;
+        if (convInfoProvider != null) {
+            String convName = convInfoProvider.getConvName(msg.chat_id);
+            if (convName != null) title = convName;
+            avatarUrl = convInfoProvider.getConvAvatar(msg.chat_id);
+        }
+        NotificationHelper.showMessageNotification(appContext, msg.chat_id, chatType, title, content, avatarUrl);
     }
 
     private String tryDecodeMessage(byte[] raw) {

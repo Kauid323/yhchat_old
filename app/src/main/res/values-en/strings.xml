@@ -150,4 +150,6 @@
     <string name="message_file_cancel">Cancel</string>
     <string name="message_file_open">Open</string>
     <string name="message_file_failed">Download failed</string>
+    <string name="group_profile_update_failed">Failed to update group info</string>
+    <string name="group_profile_community_readonly">Community is currently read-only because no edit API was found in the repository docs</string>
 </resources>
