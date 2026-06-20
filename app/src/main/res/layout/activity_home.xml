@@ -60,7 +60,7 @@
             android:layout_gravity="bottom|end"
             android:layout_margin="16dp"
             app:srcCompat="@drawable/ic_add"
-            app:tint="@android:color/white" />
+            app:tint="@color/text_white" />
 
     </androidx.coordinatorlayout.widget.CoordinatorLayout>
 
@@ -96,7 +96,7 @@
                 android:scaleType="centerCrop"
                 app:shapeAppearanceOverlay="@style/ShapeAppearance.Circle"
                 app:srcCompat="@android:drawable/sym_def_app_icon"
-                app:strokeColor="@android:color/white"
+                app:strokeColor="@color/text_white"
                 app:strokeWidth="2dp" />
 
             <LinearLayout
@@ -111,7 +111,7 @@
                     android:id="@+id/tvUsername"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="@android:color/white"
+                    android:textColor="@color/text_white"
                     android:textSize="18sp"
                     android:textStyle="bold"
                     tools:text="Username" />
@@ -121,7 +121,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:textColor="#CCFFFFFF"
+                    android:textColor="@color/text_white_secondary"
                     android:textSize="12sp"
                     tools:text="ID: 12345" />
             </LinearLayout>
@@ -161,7 +161,7 @@
             </LinearLayout>
         </ScrollView>
 
-        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#DDDDDD" />
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider_color" />
 
         <!-- Bottom Menu Items -->
         <LinearLayout android:id="@+id/menu_settings" style="@style/MenuButtonStyle">

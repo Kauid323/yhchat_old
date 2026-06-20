@@ -21,7 +21,7 @@
         android:contentDescription="@string/action_back"
         android:padding="12dp"
         app:srcCompat="@drawable/ic_back"
-        app:tint="@android:color/white" />
+        app:tint="@color/text_white" />
 
     <androidx.appcompat.widget.AppCompatImageButton
         android:id="@+id/btnSave"
@@ -33,7 +33,7 @@
         android:contentDescription="@string/image_preview_save"
         android:padding="12dp"
         app:srcCompat="@drawable/ic_more"
-        app:tint="@android:color/white" />
+        app:tint="@color/text_white" />
 
     <ProgressBar
         android:id="@+id/progressBar"

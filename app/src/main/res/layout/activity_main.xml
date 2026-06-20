@@ -134,7 +134,7 @@
                     android:layout_height="match_parent"
                     android:layout_marginStart="12dp"
                     android:layout_marginLeft="12dp"
-                    android:background="#EEEEEE"
+                    android:background="@color/divider_color"
                     android:scaleType="centerInside"
                     android:contentDescription="Verification Code"
                     android:src="@android:drawable/ic_menu_report_image" />

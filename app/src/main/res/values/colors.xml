@@ -7,4 +7,11 @@
     <color name="chat_background">#F7F7F7</color>
     <color name="bubble_left">#F0F0F0</color>
     <color name="bubble_text_left">#212121</color>
+    <color name="card_background">#FFFFFFFF</color>
+    <color name="divider_color">#E0E0E0</color>
+    <color name="text_primary">#212121</color>
+    <color name="text_secondary">#888888</color>
+    <color name="text_white">#FFFFFFFF</color>
+    <color name="text_white_secondary">#CCFFFFFF</color>
+    <color name="bubble_divider">#1A000000</color>
 </resources>

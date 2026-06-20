@@ -21,7 +21,7 @@
             android:contentDescription="@string/action_back"
             android:padding="12dp"
             app:srcCompat="@drawable/ic_back"
-            app:tint="@android:color/white" />
+            app:tint="@color/text_white" />
 
         <TextView
             android:layout_width="0dp"
@@ -29,7 +29,7 @@
             android:layout_weight="1"
             android:singleLine="true"
             android:text="@string/settings_ws_log"
-            android:textColor="@android:color/white"
+            android:textColor="@color/text_white"
             android:textSize="18sp"
             android:textStyle="bold" />
 
@@ -41,7 +41,7 @@
             android:contentDescription="@string/ws_log_clear"
             android:padding="12dp"
             app:srcCompat="@drawable/ic_more"
-            app:tint="@android:color/white" />
+            app:tint="@color/text_white" />
     </LinearLayout>
 
     <FrameLayout

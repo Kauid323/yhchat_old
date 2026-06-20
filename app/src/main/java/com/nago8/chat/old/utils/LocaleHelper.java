@@ -10,15 +10,7 @@ import java.util.Locale;
 public class LocaleHelper {
 
     public static Context wrap(Context context) {
-        String lang = PrefUtils.getLanguage(context);
-        Locale locale;
-        if (PrefUtils.LANG_EN.equals(lang)) {
-            locale = Locale.ENGLISH;
-        } else if (PrefUtils.LANG_ZH.equals(lang)) {
-            locale = Locale.SIMPLIFIED_CHINESE;
-        } else {
-            return context;
-        }
+        Locale locale = getLocale(context);
 
         Locale.setDefault(locale);
 
@@ -32,15 +24,7 @@ public class LocaleHelper {
     }
 
     public static void applyToApplication(Context appContext) {
-        String lang = PrefUtils.getLanguage(appContext);
-        Locale locale;
-        if (PrefUtils.LANG_EN.equals(lang)) {
-            locale = Locale.ENGLISH;
-        } else if (PrefUtils.LANG_ZH.equals(lang)) {
-            locale = Locale.SIMPLIFIED_CHINESE;
-        } else {
-            locale = Resources.getSystem().getConfiguration().locale;
-        }
+        Locale locale = getLocale(appContext);
 
         Locale.setDefault(locale);
 
@@ -49,5 +33,23 @@ public class LocaleHelper {
         config.locale = locale;
         DisplayMetrics dm = res.getDisplayMetrics();
         res.updateConfiguration(config, dm);
+    }
+
+    /**
+     * 根据保存的语言偏好获取 Locale。
+     * - LANG_EN → English
+     * - LANG_ZH → 简体中文
+     * - LANG_SYSTEM → 系统当前 Locale
+     */
+    private static Locale getLocale(Context context) {
+        String lang = PrefUtils.getLanguage(context);
+        if (PrefUtils.LANG_EN.equals(lang)) {
+            return Locale.ENGLISH;
+        } else if (PrefUtils.LANG_ZH.equals(lang)) {
+            return Locale.SIMPLIFIED_CHINESE;
+        } else {
+            // 跟随系统：用系统当前 locale，而非之前可能被覆盖的 Application locale
+            return Resources.getSystem().getConfiguration().locale;
+        }
     }
 }

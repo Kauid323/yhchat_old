@@ -22,7 +22,7 @@
             android:contentDescription="@string/action_back"
             android:padding="12dp"
             app:srcCompat="@drawable/ic_back"
-            app:tint="@android:color/white" />
+            app:tint="@color/text_white" />
 
         <TextView
             android:id="@+id/tvTitle"
@@ -31,7 +31,7 @@
             android:layout_weight="1"
             android:ellipsize="end"
             android:singleLine="true"
-            android:textColor="@android:color/white"
+            android:textColor="@color/text_white"
             android:textSize="18sp"
             android:textStyle="bold" />
 
@@ -43,7 +43,7 @@
             android:contentDescription="@string/action_more"
             android:padding="12dp"
             app:srcCompat="@drawable/ic_more"
-            app:tint="@android:color/white" />
+            app:tint="@color/text_white" />
     </LinearLayout>
 
     <FrameLayout
@@ -82,7 +82,7 @@
         android:id="@+id/inputBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@android:color/white"
+        android:background="@color/card_background"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:padding="8dp">

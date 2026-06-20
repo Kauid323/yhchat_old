@@ -157,6 +157,14 @@ public class ConversationsFragment extends Fragment implements SearchHost {
                                   // 通知 HomeActivity 更新会话数量
                                   if (getActivity() instanceof HomeActivity) {
                                       ((HomeActivity) getActivity()).updateConversationCount(conversationList.data.size());
+                                      // 提取免打扰会话 ID 传给 HomeActivity
+                                      java.util.List<String> dndIds = new java.util.ArrayList<>();
+                                      for (ConversationList.ConversationData cd : conversationList.data) {
+                                          if (cd.do_not_disturb == 1) {
+                                              dndIds.add(cd.chat_id);
+                                          }
+                                      }
+                                      ((HomeActivity) getActivity()).updateDoNotDisturbSet(dndIds);
                                   }
                                 }
                             });

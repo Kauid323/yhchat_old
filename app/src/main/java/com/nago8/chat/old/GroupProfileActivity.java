@@ -1,6 +1,7 @@
 package com.nago8.chat.old;
 
 import android.content.Context;
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.ProgressBar;
@@ -12,6 +13,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.AppCompatImageButton;
 import androidx.appcompat.widget.AppCompatImageView;
+import androidx.appcompat.widget.SwitchCompat;
 
 import com.nago8.chat.old.net.ApiClient;
 import com.nago8.chat.old.proto.group.info;
@@ -37,12 +39,21 @@ public class GroupProfileActivity extends AppCompatActivity {
     private TextView tvName;
     private TextView tvGroupId;
     private TextView tvIntroduction;
-    private TextView tvMember;
+    private TextView tvMemberCount;
     private TextView tvCreateBy;
     private TextView tvCategory;
-    private TextView tvPrivate;
+    private TextView tvGroupCode;
+    private TextView tvMyNickname;
+    private TextView tvCommunity;
+    private View rowCommunity;
+    private View rowBanReason;
+    private TextView tvBanReason;
+    private SwitchCompat swDoNotDisturb;
+    private SwitchCompat swTop;
     private ProgressBar progressBar;
     private Call runningCall;
+
+    private String groupId;
 
     @Override
     protected void attachBaseContext(Context newBase) {
@@ -55,20 +66,36 @@ public class GroupProfileActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_group_profile);
 
-        String groupId = getIntent().getStringExtra(EXTRA_GROUP_ID);
+        groupId = getIntent().getStringExtra(EXTRA_GROUP_ID);
 
         AppCompatImageButton btnBack = findViewById(R.id.btnBack);
         ivAvatar = findViewById(R.id.ivAvatar);
         tvName = findViewById(R.id.tvName);
         tvGroupId = findViewById(R.id.tvGroupId);
         tvIntroduction = findViewById(R.id.tvIntroduction);
-        tvMember = findViewById(R.id.tvMember);
+        tvMemberCount = findViewById(R.id.tvMemberCount);
         tvCreateBy = findViewById(R.id.tvCreateBy);
         tvCategory = findViewById(R.id.tvCategory);
-        tvPrivate = findViewById(R.id.tvPrivate);
+        tvGroupCode = findViewById(R.id.tvGroupCode);
+        tvMyNickname = findViewById(R.id.tvMyNickname);
+        tvCommunity = findViewById(R.id.tvCommunity);
+        rowCommunity = findViewById(R.id.rowCommunity);
+        rowBanReason = findViewById(R.id.rowBanReason);
+        tvBanReason = findViewById(R.id.tvBanReason);
+        swDoNotDisturb = findViewById(R.id.swDoNotDisturb);
+        swTop = findViewById(R.id.swTop);
         progressBar = findViewById(R.id.progressBar);
 
         btnBack.setOnClickListener(v -> onBackPressed());
+
+        // 群成员点击进入成员列表
+        findViewById(R.id.rowMembers).setOnClickListener(v -> {
+            if (groupId != null && groupId.length() > 0) {
+                Intent intent = new Intent(this, GroupMembersActivity.class);
+                intent.putExtra(GroupMembersActivity.EXTRA_GROUP_ID, groupId);
+                startActivity(intent);
+            }
+        });
 
         fetchGroupInfo(groupId);
     }
@@ -154,17 +181,45 @@ public class GroupProfileActivity extends AppCompatActivity {
         tvGroupId.setText("ID: " + data.group_id);
         ImageUtils.loadAvatar(this, data.avatar_url, ivAvatar);
 
-        String intro = data.introduction != null && data.introduction.length() > 0 ? data.introduction : "";
-        tvIntroduction.setText(getString(R.string.group_profile_introduction, intro));
+        String intro = data.introduction != null && data.introduction.length() > 0 ? data.introduction : getString(R.string.group_profile_no_ban);
+        tvIntroduction.setText(intro);
 
-        tvMember.setText(getString(R.string.group_profile_member, String.valueOf(data.member)));
+        tvMemberCount.setText(getString(R.string.group_profile_members_format, data.member));
 
         String createBy = data.create_by != null && data.create_by.length() > 0 ? data.create_by : "";
-        tvCreateBy.setText(getString(R.string.group_profile_create_by, createBy));
+        tvCreateBy.setText(createBy);
 
         String category = data.category_name != null && data.category_name.length() > 0 ? data.category_name : "";
-        tvCategory.setText(getString(R.string.group_profile_category, category));
+        tvCategory.setText(category);
 
-        tvPrivate.setText(getString(R.string.group_profile_private, getString(data.private_ == 1 ? R.string.group_profile_private_yes : R.string.group_profile_private_no)));
+        // 群号码
+        if (data.group_code != null && data.group_code.length() > 0) {
+            tvGroupCode.setText(data.group_code);
+        }
+
+        // 我的群昵称
+        if (data.my_group_nickname != null && data.my_group_nickname.length() > 0) {
+            tvMyNickname.setText(data.my_group_nickname);
+        }
+
+        // 关联分区
+        if (data.community_name != null && data.community_name.length() > 0) {
+            tvCommunity.setText(data.community_name);
+            rowCommunity.setVisibility(View.VISIBLE);
+        } else {
+            rowCommunity.setVisibility(View.GONE);
+        }
+
+        // 禁言原因
+        if (data.ban_reason != null && data.ban_reason.length() > 0) {
+            tvBanReason.setText(data.ban_reason);
+            rowBanReason.setVisibility(View.VISIBLE);
+        } else {
+            rowBanReason.setVisibility(View.GONE);
+        }
+
+        // 开关项
+        swDoNotDisturb.setChecked(data.do_not_disturb == 1);
+        swTop.setChecked(data.top == 1);
     }
 }

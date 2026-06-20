@@ -238,13 +238,13 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                 LinearLayout.LayoutParams barParams = new LinearLayout.LayoutParams(barW, barH);
                 barParams.rightMargin = dp(8);
                 quoteBar.setLayoutParams(barParams);
-                quoteBar.setBackgroundColor(0x66888888);
+                quoteBar.setBackgroundColor(ctx.getResources().getColor(R.color.divider_color));
                 quoteBlock.addView(quoteBar);
 
                 TextView quoteText = new TextView(ctx);
                 quoteText.setText(msg.content.quote_msg_text);
                 quoteText.setTextSize(13);
-                quoteText.setTextColor(0x99888888);
+                quoteText.setTextColor(ctx.getResources().getColor(R.color.text_secondary));
                 quoteText.setMaxLines(3);
                 quoteText.setEllipsize(android.text.TextUtils.TruncateAt.END);
                 quoteBlock.addView(quoteText);

@@ -49,6 +49,9 @@ import com.nago8.chat.old.ws.WsClient;
 import com.nago8.chat.old.ws.WsLogManager;
 
 import java.io.IOException;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -75,6 +78,7 @@ public class HomeActivity extends AppCompatActivity {
     private boolean showingSticky = false;
     private int conversationCount = 0;
     private int stickyCount = 0;
+    private final Set<String> doNotDisturbChatIds = new HashSet<>();
 
     @Override
     protected void attachBaseContext(Context newBase) {
@@ -122,6 +126,8 @@ public class HomeActivity extends AppCompatActivity {
 
         setupMenuClickListeners();
         initConversationTabs();
+        WsClient.getInstance().setAppContext(this);
+        WsClient.getInstance().setDndChecker(this::isDoNotDisturb);
         fetchUserInfo();
 
         if (savedInstanceState == null) {
@@ -383,9 +389,15 @@ public class HomeActivity extends AppCompatActivity {
                     String selected = codes[which];
                     if (!selected.equals(current)) {
                         PrefUtils.setLanguage(this, selected);
-                        LocaleHelper.applyToApplication(getApplicationContext());
                         dialog.dismiss();
-                        recreate();
+                        // 先更新 Application locale，再重建 Activity
+                        LocaleHelper.applyToApplication(getApplicationContext());
+                        // recreate() 在部分旧系统上不触发 attachBaseContext，
+                        // 用 finish+startActivity 重建确保 locale 生效
+                        Intent intent = new Intent(this, HomeActivity.class);
+                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                        finish();
+                        startActivity(intent);
                     } else {
                         dialog.dismiss();
                     }
@@ -522,5 +534,22 @@ public class HomeActivity extends AppCompatActivity {
     protected void onDestroy() {
         WsClient.getInstance().disconnect();
         super.onDestroy();
+    }
+
+    /**
+     * 免打扰判断：供 WsClient 查询某会话是否免打扰。
+     */
+    public void updateDoNotDisturbSet(java.util.List<String> chatIds) {
+        doNotDisturbChatIds.clear();
+        if (chatIds != null) {
+            doNotDisturbChatIds.addAll(chatIds);
+        }
+    }
+
+    /**
+     * 查询某会话是否免打扰，供 WsClient 调用。
+     */
+    public boolean isDoNotDisturb(String chatId) {
+        return chatId != null && doNotDisturbChatIds.contains(chatId);
     }
 }

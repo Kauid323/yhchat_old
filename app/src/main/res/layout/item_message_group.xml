@@ -55,7 +55,7 @@
                     android:layout_height="wrap_content"
                     android:background="@drawable/bg_admin_tag"
                     android:text="@string/message_admin_tag"
-                    android:textColor="@android:color/white"
+                    android:textColor="@color/text_white"
                     android:textSize="11sp"
                     android:visibility="gone" />
 
@@ -65,7 +65,7 @@
                     android:layout_height="wrap_content"
                     android:background="@drawable/bg_owner_tag"
                     android:text="@string/message_owner_tag"
-                    android:textColor="@android:color/white"
+                    android:textColor="@color/text_white"
                     android:textSize="11sp"
                     android:visibility="gone" />
 

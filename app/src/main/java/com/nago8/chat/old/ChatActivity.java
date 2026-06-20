@@ -173,6 +173,10 @@ public class ChatActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        // 设置当前聊天会话，WsClient 据此跳过通知
+        com.nago8.chat.old.ws.WsClient.getInstance().setActiveChatId(chatId);
+        // 取消当前会话的通知
+        com.nago8.chat.old.utils.NotificationHelper.cancelNotification(this, chatId);
         wsListener = new WsClient.MessageListener() {
             @Override
             public void onPushMessage(WsMsg wsMsg) {
@@ -185,6 +189,7 @@ public class ChatActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
+        com.nago8.chat.old.ws.WsClient.getInstance().setActiveChatId(null);
         if (wsListener != null) {
             WsClient.getInstance().removeMessageListener(wsListener);
             wsListener = null;

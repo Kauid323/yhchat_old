@@ -6,6 +6,9 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
 import android.webkit.MimeTypeMap;
+import android.widget.Toast;
+
+import androidx.core.content.FileProvider;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -169,11 +172,22 @@ public class FileDownloadManager {
         try {
             Intent intent = new Intent(Intent.ACTION_VIEW);
             String mime = getMimeType(file.getName());
-            intent.setDataAndType(Uri.fromFile(file), mime);
+            Uri uri;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                // Android 7.0+ 必须用 FileProvider，不能直接 file://
+                uri = FileProvider.getUriForFile(context,
+                        context.getPackageName() + ".fileprovider", file);
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            } else {
+                // Android 4-6 可以直接用 file://
+                uri = Uri.fromFile(file);
+            }
+            intent.setDataAndType(uri, mime);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             context.startActivity(intent);
         } catch (Exception e) {
             // 没有能打开此文件的应用
+            Toast.makeText(context, "无法打开此文件", Toast.LENGTH_SHORT).show();
         }
     }
 

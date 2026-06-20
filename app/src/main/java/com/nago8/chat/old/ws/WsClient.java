@@ -1,9 +1,13 @@
 package com.nago8.chat.old.ws;
 
+import android.content.Context;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 
+import com.nago8.chat.old.R;
+import com.nago8.chat.old.utils.NotificationHelper;
+import com.nago8.chat.old.utils.WsMsgConverter;
 import com.nago8.chat.old.net.ApiClient;
 import com.nago8.chat.old.proto.chat_ws_go.INFO;
 import com.nago8.chat.old.proto.chat_ws_go.bot_board_message;
@@ -37,6 +41,18 @@ public class WsClient {
     private static final int MAX_RECONNECT_DELAY_MS = 60 * 1000;
 
     private static WsClient instance;
+
+    // 通知相关
+    private Context appContext;
+    private String activeChatId = null;
+
+    /**
+     * 免打扰判断接口，由 HomeActivity 实现。
+     */
+    public interface DndChecker {
+        boolean isDoNotDisturb(String chatId);
+    }
+    private DndChecker dndChecker;
 
     private OkHttpClient client;
     private WebSocket webSocket;
@@ -93,6 +109,27 @@ public class WsClient {
             instance = new WsClient();
         }
         return instance;
+    }
+
+    /**
+     * 设置 ApplicationContext 用于发通知。
+     */
+    public void setAppContext(Context ctx) {
+        this.appContext = ctx != null ? ctx.getApplicationContext() : null;
+    }
+
+    /**
+     * 设置免打扰判断器（由 HomeActivity 实现）。
+     */
+    public void setDndChecker(DndChecker checker) {
+        this.dndChecker = checker;
+    }
+
+    /**
+     * 设置当前正在聊天的会话 ID，该会话不发通知。
+     */
+    public void setActiveChatId(String chatId) {
+        this.activeChatId = chatId;
     }
 
     public void connect(String userId, String token) {
@@ -246,9 +283,32 @@ public class WsClient {
     }
 
     private void notifyListeners(WsMsg msg) {
+        // 通知逻辑：非当前聊天、非免打扰的会话发系统通知
+        handleNotification(msg);
+        // 通知所有监听器
         for (MessageListener l : listeners) {
             l.onPushMessage(msg);
         }
+    }
+
+    /**
+     * 通知逻辑：收到消息时判断是否需要发系统通知。
+     * - 当前正在聊天的会话不发
+     * - 免打扰会话不发
+     */
+    private void handleNotification(WsMsg msg) {
+        if (appContext == null || msg == null || msg.chat_id == null) return;
+        // 正在聊天的会话不通知
+        if (msg.chat_id.equals(activeChatId)) return;
+        // 免打扰会话不通知
+        if (dndChecker != null && dndChecker.isDoNotDisturb(msg.chat_id)) return;
+        // 构建通知内容
+        String senderName = (msg.sender != null && msg.sender.name != null) ? msg.sender.name : "";
+        String preview = WsMsgConverter.toPreviewText(msg, appContext);
+        String content = senderName.length() > 0 ? senderName + ": " + preview : preview;
+        int chatType = (msg.sender != null) ? msg.sender.chat_type : 1;
+        String title = senderName.length() > 0 ? senderName : appContext.getString(R.string.notification_new_message);
+        NotificationHelper.showMessageNotification(appContext, msg.chat_id, chatType, title, content);
     }
 
     private String tryDecodeMessage(byte[] raw) {

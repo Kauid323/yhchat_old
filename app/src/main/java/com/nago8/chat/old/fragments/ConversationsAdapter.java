@@ -142,9 +142,21 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
         }
         ImageUtils.loadAvatar(h.itemView.getContext(), data.avatar_url, h.ivAvatar);
 
+        // 免打扰标识
+        if (data.do_not_disturb == 1) {
+            h.ivDnd.setVisibility(View.VISIBLE);
+        } else {
+            h.ivDnd.setVisibility(View.GONE);
+        }
+
         if (data.unread_message > 0) {
-            h.tvUnreadCount.setVisibility(View.VISIBLE);
-            h.tvUnreadCount.setText(String.valueOf(data.unread_message));
+            // 免打扰会话不显示未读数字，只显示小圆点
+            if (data.do_not_disturb == 1) {
+                h.tvUnreadCount.setVisibility(View.GONE);
+            } else {
+                h.tvUnreadCount.setVisibility(View.VISIBLE);
+                h.tvUnreadCount.setText(String.valueOf(data.unread_message));
+            }
         } else {
             h.tvUnreadCount.setVisibility(View.GONE);
         }
@@ -185,6 +197,7 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
     static class ItemViewHolder extends RecyclerView.ViewHolder {
         ImageView ivAvatar;
         TextView tvName, tvContent, tvTime, tvUnreadCount;
+        androidx.appcompat.widget.AppCompatImageView ivDnd;
 
         public ItemViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -193,6 +206,7 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
             tvContent = itemView.findViewById(R.id.tvContent);
             tvTime = itemView.findViewById(R.id.tvTime);
             tvUnreadCount = itemView.findViewById(R.id.tvUnreadCount);
+            ivDnd = itemView.findViewById(R.id.ivDnd);
         }
     }
 }
