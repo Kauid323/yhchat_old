@@ -57,6 +57,12 @@ public class GroupProfileActivity extends AppCompatActivity {
     private TextView tvGroupCode;
     private TextView tvMyNickname;
     private TextView tvCommunity;
+    private TextView tvPrivate;
+    private TextView tvDirectJoin;
+    private TextView tvHistoryMsg;
+    private TextView tvHideMembers;
+    private TextView tvAutoDelete;
+    private TextView tvDenyUpload;
     private View rowCategory;
     private View rowGroupCode;
     private View rowMyNickname;
@@ -105,6 +111,12 @@ public class GroupProfileActivity extends AppCompatActivity {
         tvGroupCode = findViewById(R.id.tvGroupCode);
         tvMyNickname = findViewById(R.id.tvMyNickname);
         tvCommunity = findViewById(R.id.tvCommunity);
+        tvPrivate = findViewById(R.id.tvPrivate);
+        tvDirectJoin = findViewById(R.id.tvDirectJoin);
+        tvHistoryMsg = findViewById(R.id.tvHistoryMsg);
+        tvHideMembers = findViewById(R.id.tvHideMembers);
+        tvAutoDelete = findViewById(R.id.tvAutoDelete);
+        tvDenyUpload = findViewById(R.id.tvDenyUpload);
         rowCategory = findViewById(R.id.rowCategory);
         rowGroupCode = findViewById(R.id.rowGroupCode);
         rowMyNickname = findViewById(R.id.rowMyNickname);
@@ -230,6 +242,12 @@ public class GroupProfileActivity extends AppCompatActivity {
 
         String category = data.category_name != null && data.category_name.length() > 0 ? data.category_name : "";
         tvCategory.setText(category);
+        tvPrivate.setText(formatYesNo(data.private_ == 1));
+        tvDirectJoin.setText(formatYesNo(data.direct_join == 1));
+        tvHistoryMsg.setText(formatYesNo(data.history_msg == 1));
+        tvHideMembers.setText(formatYesNo(data.hide_group_members == 1));
+        tvDenyUpload.setText(formatYesNo(data.deny_members_upload_to_group_disk == 1));
+        tvAutoDelete.setText(formatAutoDelete(data.auto_delete_message));
 
         // 群号码
         tvGroupCode.setText(data.group_code != null ? data.group_code : "");
@@ -559,6 +577,21 @@ public class GroupProfileActivity extends AppCompatActivity {
     private long getJsonLong(JsonObject obj, String key) {
         if (obj.has(key) && !obj.get(key).isJsonNull()) return obj.get(key).getAsLong();
         return 0L;
+    }
+
+    private String formatYesNo(boolean enabled) {
+        return getString(enabled ? R.string.group_profile_private_yes : R.string.group_profile_private_no);
+    }
+
+    private String formatAutoDelete(long seconds) {
+        if (seconds <= 0) return getString(R.string.group_profile_off);
+        long days = seconds / 86400;
+        if (days > 0 && seconds % 86400 == 0) return days + "天";
+        long hours = seconds / 3600;
+        if (hours > 0 && seconds % 3600 == 0) return hours + "小时";
+        long minutes = seconds / 60;
+        if (minutes > 0 && seconds % 60 == 0) return minutes + "分钟";
+        return seconds + "秒";
     }
 
     private interface OnTextSubmitListener {

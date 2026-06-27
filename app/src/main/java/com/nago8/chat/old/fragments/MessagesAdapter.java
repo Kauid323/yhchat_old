@@ -37,6 +37,7 @@ import java.util.List;
 public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHolder> {
     private final List<MessageGroup> groups = new ArrayList<>();
     private OnAvatarClickListener avatarClickListener;
+    private Markwon markwon;
 
     private static final int HEADER_ORDER_LEFT = 1;
     private static final int HEADER_ORDER_RIGHT = 2;
@@ -60,6 +61,11 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_message_group, parent, false);
         return new ViewHolder(view);
+    }
+
+    private Markwon getMarkwon(Context context) {
+        if (markwon == null) markwon = Markwon.builder(context).usePlugin(StrikethroughPlugin.create()).build();
+        return markwon;
     }
 
     @Override
@@ -205,8 +211,9 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             TextView textView = new TextView(itemView.getContext());
             int emojiSize = dp(22);
             CharSequence displayText = FengEmojiRenderer.apply(itemView.getContext(), getMessageText(msg), emojiSize);
+            boolean isMarkdown = msg != null && msg.content_type == 3;
             if (msg != null && msg.content_type == 3) {
-                textView.setText(displayText, TextView.BufferType.SPANNABLE);
+                getMarkwon(itemView.getContext()).setMarkdown(textView, getMessageText(msg));
             } else {
                 textView.setText(displayText, TextView.BufferType.SPANNABLE);
             }
@@ -252,6 +259,9 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
 
                 LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 textParams.topMargin = dp(4);
+                if (isMarkdown) {
+                    textParams.width = dp(220);
+                }
                 textView.setLayoutParams(textParams);
                 container.addView(textView);
 
@@ -271,6 +281,9 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                 params.topMargin = dp(2);
                 params.leftMargin = group.mine ? dp(48) : 0;
                 params.rightMargin = group.mine ? 0 : dp(48);
+                if (isMarkdown) {
+                    params.width = dp(220);
+                }
                 params.gravity = group.mine ? Gravity.RIGHT : Gravity.LEFT;
                 textView.setLayoutParams(params);
                 return textView;

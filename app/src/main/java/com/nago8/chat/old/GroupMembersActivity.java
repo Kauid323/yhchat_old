@@ -20,6 +20,8 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.nago8.chat.old.proto.group.User;
+import com.nago8.chat.old.proto.group.info;
+import com.nago8.chat.old.proto.group.info_send;
 import com.nago8.chat.old.proto.group.list_member;
 import com.nago8.chat.old.proto.group.list_member_send;
 import com.nago8.chat.old.net.ApiClient;
@@ -29,7 +31,9 @@ import com.nago8.chat.old.utils.PrefUtils;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -44,10 +48,12 @@ public class GroupMembersActivity extends AppCompatActivity {
 
     private RecyclerView recyclerView;
     private ProgressBar progressBar;
- private MemberAdapter adapter;
+    private MemberAdapter adapter;
     private Call runningCall;
+    private Call infoCall;
     private String groupId;
     private String ownerId;
+    private final Set<String> adminIds = new HashSet<>();
 
     @Override
     protected void attachBaseContext(Context newBase) {
@@ -72,13 +78,58 @@ public class GroupMembersActivity extends AppCompatActivity {
         adapter = new MemberAdapter();
         recyclerView.setAdapter(adapter);
 
+        fetchGroupRoleInfo();
         fetchMembers();
     }
 
     @Override
     protected void onDestroy() {
         if (runningCall != null) runningCall.cancel();
+        if (infoCall != null) infoCall.cancel();
         super.onDestroy();
+    }
+
+    private void fetchGroupRoleInfo() {
+        if (groupId == null || groupId.length() == 0) return;
+
+        String token = PrefUtils.getToken(this);
+        if (token == null) return;
+
+        info_send requestProto = new info_send.Builder()
+                .group_id(groupId)
+                .build();
+
+        RequestBody body = RequestBody.create(
+                MediaType.parse("application/x-protobuf"),
+                requestProto.encode()
+        );
+
+        Request request = new Request.Builder()
+                .url(ApiClient.BASE_URL + "/v1/group/info")
+                .header("token", token)
+                .post(body)
+                .build();
+
+        infoCall = ApiClient.getClient().newCall(request);
+        infoCall.enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                if (!response.isSuccessful() || response.body() == null) return;
+                try {
+                    final info result = info.ADAPTER.decode(response.body().source());
+                    if (result == null || result.data == null) return;
+                    ownerId = result.data.owner != null ? result.data.owner : "";
+                    adminIds.clear();
+                    if (result.data.admin != null) adminIds.addAll(result.data.admin);
+                    runOnUiThread(() -> adapter.notifyDataSetChanged());
+                } catch (Exception ignored) {
+                }
+            }
+        });
     }
 
     private void fetchMembers() {
@@ -183,11 +234,21 @@ public class GroupMembersActivity extends AppCompatActivity {
             holder.tvName.setText(name);
             ImageUtils.loadAvatar(holder.itemView.getContext(), avatarUrl, holder.ivAvatar);
 
+            boolean isOwner = userId.length() > 0 && ownerId != null && ownerId.length() > 0 && ownerId.equals(userId);
+            boolean isAdmin = !isOwner && userId.length() > 0 && adminIds.contains(userId);
+            if (!isOwner && !isAdmin) {
+                if (member.permission_level == 2) {
+                    isOwner = true;
+                } else if (member.permission_level == 1) {
+                    isAdmin = true;
+                }
+            }
+
             // 权限标签
             String tag = "";
-            if (member.permission_level == 2) {
+            if (isOwner) {
                 tag = getString(R.string.group_member_owner);
-            } else if (member.permission_level == 1) {
+            } else if (isAdmin) {
                 tag = getString(R.string.group_member_admin);
             }
             if (member.is_gag == 1) {
