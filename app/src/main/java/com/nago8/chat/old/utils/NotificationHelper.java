@@ -84,6 +84,8 @@ public class NotificationHelper {
      */
     public static void showMessageNotification(Context ctx, String chatId, int chatType,
                                                 String title, String content, String avatarUrl) {
+        if (ctx == null || chatId == null || chatId.isEmpty()) return;
+        if (content == null || content.trim().isEmpty()) return;
         if (App.isAppInForeground()) return;
         // Android 13+ 没有通知权限就不发
         if (!hasNotificationPermission(ctx)) return;

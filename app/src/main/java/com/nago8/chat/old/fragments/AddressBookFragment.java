@@ -1,10 +1,10 @@
 package com.nago8.chat.old.fragments;
 
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.Menu;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ProgressBar;
@@ -13,6 +13,7 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.widget.PopupMenu;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -23,7 +24,6 @@ import com.nago8.chat.old.R;
 import com.nago8.chat.old.adapter.AddressBookAdapter;
 import com.nago8.chat.old.cache.AddressBookCache;
 import com.nago8.chat.old.model.AddressBookItem;
-import com.nago8.chat.old.net.ApiClient;
 import com.nago8.chat.old.repository.FriendRepository;
 import com.nago8.chat.old.proto.user.ChatType;
 import com.nago8.chat.old.proto.user.address_book_list;
@@ -43,8 +43,6 @@ import okhttp3.Call;
 public class AddressBookFragment extends Fragment {
 
     private static final String TAG = "AddressBookFragment";
-    private static final String PREF_ADDRESS_BOOK = "pref_address_book";
-    private static final String KEY_CACHED_DATA_JSON = "cached_data_json";
 
     private TabLayout tabLayout;
     private RecyclerView recyclerView;
@@ -53,17 +51,31 @@ public class AddressBookFragment extends Fragment {
     private TextView tvEmpty;
     private SwipeRefreshLayout swipeRefreshLayout;
 
+    private View btnFilterMenu;
+    private TextView tvFilterTitle;
+
     private LinearLayoutManager layoutManager;
     private AddressBookAdapter adapter;
     private FriendRepository friendRepository;
     private Call addressBookCall;
 
-    // Categorized lists for the 3 tabs: 0: Friends, 1: Groups, 2: Bots
+    // Raw parsed data lists for local filtering
+    private final List<address_book_list.Data.Data_list> rawFriendsData = new ArrayList<>();
+    private final List<address_book_list.Data.Data_list> rawGroupsData = new ArrayList<>();
+    private final List<address_book_list.Data.Data_list> rawBotsData = new ArrayList<>();
+
+    // Categorized display lists for the 3 tabs: 0: Friends, 1: Groups, 2: Bots
     private final List<AddressBookItem> friendsList = new ArrayList<>();
     private final List<AddressBookItem> groupsList = new ArrayList<>();
     private final List<AddressBookItem> botsList = new ArrayList<>();
 
     private int currentTabPosition = 0;
+
+    // Filter states:
+    // 群聊: 0 = 默认排序, 1 = 我创建的群聊, 2 = 我管理的群聊
+    // 机器人: 0 = 默认排序, 1 = 我创建的机器人
+    private int currentGroupFilter = 0;
+    private int currentBotFilter = 0;
 
     @Nullable
     @Override
@@ -81,6 +93,13 @@ public class AddressBookFragment extends Fragment {
         progressBar = view.findViewById(R.id.progressBar);
         tvEmpty = view.findViewById(R.id.tvEmpty);
         swipeRefreshLayout = view.findViewById(R.id.swipeRefreshLayout);
+
+        btnFilterMenu = view.findViewById(R.id.btnFilterMenu);
+        tvFilterTitle = view.findViewById(R.id.tvFilterTitle);
+
+        if (btnFilterMenu != null) {
+            btnFilterMenu.setOnClickListener(this::showFilterPopupMenu);
+        }
 
         if (swipeRefreshLayout != null) {
             swipeRefreshLayout.setOnRefreshListener(() -> refreshData());
@@ -105,7 +124,7 @@ public class AddressBookFragment extends Fragment {
         // 1. First, load local cache for instant display
         boolean hasCache = loadLocalCache();
 
-        // 2. Fetch fresh data from network (silent if cache loaded, or showing loading spinner if no cache)
+        // 2. Fetch fresh data from network
         fetchAddressBook(hasCache, false);
     }
 
@@ -119,6 +138,7 @@ public class AddressBookFragment extends Fragment {
             @Override
             public void onTabSelected(TabLayout.Tab tab) {
                 currentTabPosition = tab.getPosition();
+                updateFilterButtonVisibility();
                 updateDisplayList();
             }
 
@@ -130,9 +150,66 @@ public class AddressBookFragment extends Fragment {
         });
     }
 
-    /**
-     * Public refresh trigger invoked when clicking the top toolbar refresh button.
-     */
+    private void showFilterPopupMenu(View anchorView) {
+        if (getContext() == null) return;
+        PopupMenu popup = new PopupMenu(requireContext(), anchorView);
+        Menu menu = popup.getMenu();
+
+        if (currentTabPosition == 1) { // 群聊
+            menu.add(0, 0, 0, "默认排序");
+            menu.add(0, 1, 1, "我创建的群聊");
+            menu.add(0, 2, 2, "我管理的群聊");
+
+            popup.setOnMenuItemClickListener(item -> {
+                currentGroupFilter = item.getItemId();
+                applyFiltersAndUpdateList();
+                return true;
+            });
+        } else if (currentTabPosition == 2) { // 机器人
+            menu.add(0, 0, 0, "默认排序");
+            menu.add(0, 1, 1, "我创建的机器人");
+
+            popup.setOnMenuItemClickListener(item -> {
+                currentBotFilter = item.getItemId();
+                applyFiltersAndUpdateList();
+                return true;
+            });
+        }
+        popup.show();
+    }
+
+    private void updateFilterButtonVisibility() {
+        if (btnFilterMenu == null) return;
+        if (currentTabPosition == 1) { // 群聊
+            btnFilterMenu.setVisibility(View.VISIBLE);
+            switch (currentGroupFilter) {
+                case 1:
+                    if (tvFilterTitle != null) tvFilterTitle.setText("我创建的群聊");
+                    break;
+                case 2:
+                    if (tvFilterTitle != null) tvFilterTitle.setText("我管理的群聊");
+                    break;
+                case 0:
+                default:
+                    if (tvFilterTitle != null) tvFilterTitle.setText("默认排序");
+                    break;
+            }
+        } else if (currentTabPosition == 2) { // 机器人
+            btnFilterMenu.setVisibility(View.VISIBLE);
+            switch (currentBotFilter) {
+                case 1:
+                    if (tvFilterTitle != null) tvFilterTitle.setText("我创建的机器人");
+                    break;
+                case 0:
+                default:
+                    if (tvFilterTitle != null) tvFilterTitle.setText("默认排序");
+                    break;
+            }
+        } else {
+            btnFilterMenu.setVisibility(View.GONE);
+        }
+    }
+
     public void refreshData() {
         if (getContext() == null) return;
         progressBar.setVisibility(View.VISIBLE);
@@ -155,8 +232,6 @@ public class AddressBookFragment extends Fragment {
             addressBookCall.cancel();
         }
 
-        Log.d(TAG, "Requesting address book list from network...");
-
         addressBookCall = friendRepository.getAddressBook(token, "", new FriendRepository.AddressBookCallback() {
             @Override
             public void onSuccess(address_book_list response) {
@@ -166,14 +241,8 @@ public class AddressBookFragment extends Fragment {
                     if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
 
                     if (response != null && response.data != null) {
-                        Log.d(TAG, "Address book response received, data size=" + response.data.size());
-
-                        // Save new data to local cache (overwriting old cache)
                         saveLocalCache(response.data);
-
                         processAddressBookData(response.data);
-                        updateDisplayList();
-
                         if (isManualRefresh) {
                             Toast.makeText(getContext(), R.string.address_book_refreshed, Toast.LENGTH_SHORT).show();
                         }
@@ -210,9 +279,9 @@ public class AddressBookFragment extends Fragment {
     }
 
     private void processAddressBookData(List<address_book_list.Data> dataList) {
-        List<address_book_list.Data.Data_list> rawFriends = new ArrayList<>();
-        List<address_book_list.Data.Data_list> rawGroups = new ArrayList<>();
-        List<address_book_list.Data.Data_list> rawBots = new ArrayList<>();
+        rawFriendsData.clear();
+        rawGroupsData.clear();
+        rawBotsData.clear();
 
         for (address_book_list.Data categoryData : dataList) {
             if (categoryData == null || categoryData.data == null) continue;
@@ -221,26 +290,56 @@ public class AddressBookFragment extends Fragment {
             String listName = categoryData.list_name != null ? categoryData.list_name : "";
 
             if (cType == ChatType.group || (cType != null && cType.getValue() == 2) || listName.contains("群")) {
-                rawGroups.addAll(categoryData.data);
+                rawGroupsData.addAll(categoryData.data);
             } else if (cType == ChatType.bot || (cType != null && cType.getValue() == 3) || listName.contains("机器人") || listName.toLowerCase(Locale.US).contains("bot")) {
-                rawBots.addAll(categoryData.data);
+                rawBotsData.addAll(categoryData.data);
             } else {
-                // Default to Friends / Users
-                rawFriends.addAll(categoryData.data);
+                rawFriendsData.addAll(categoryData.data);
             }
         }
 
-        Log.d(TAG, "Parsed contacts total: friends=" + rawFriends.size() + ", groups=" + rawGroups.size() + ", bots=" + rawBots.size());
+        applyFiltersAndUpdateList();
+    }
 
-        // Sort and build sections for each category
+    private void applyFiltersAndUpdateList() {
+        // Filter Groups
+        List<address_book_list.Data.Data_list> filteredGroups = new ArrayList<>();
+        for (address_book_list.Data.Data_list item : rawGroupsData) {
+            if (item == null) continue;
+            int level = item.permisson_level;
+            if (currentGroupFilter == 1) { // 我创建的群聊 (permisson_level == 100)
+                if (level == 100) filteredGroups.add(item);
+            } else if (currentGroupFilter == 2) { // 我管理的群聊 (permisson_level == 100 || level == 2 || level > 0)
+                if (level == 100 || level == 2 || level > 0) filteredGroups.add(item);
+            } else {
+                filteredGroups.add(item);
+            }
+        }
+
+        // Filter Bots
+        List<address_book_list.Data.Data_list> filteredBots = new ArrayList<>();
+        for (address_book_list.Data.Data_list item : rawBotsData) {
+            if (item == null) continue;
+            int level = item.permisson_level;
+            if (currentBotFilter == 1) { // 我创建的机器人 (permisson_level == 100 || level > 0)
+                if (level == 100 || level > 0) filteredBots.add(item);
+            } else {
+                filteredBots.add(item);
+            }
+        }
+
+        // Build sorted sections
         friendsList.clear();
-        friendsList.addAll(buildSortedSections(rawFriends, 1));
+        friendsList.addAll(buildSortedSections(rawFriendsData, 1));
 
         groupsList.clear();
-        groupsList.addAll(buildSortedSections(rawGroups, 2));
+        groupsList.addAll(buildSortedSections(filteredGroups, 2));
 
         botsList.clear();
-        botsList.addAll(buildSortedSections(rawBots, 3));
+        botsList.addAll(buildSortedSections(filteredBots, 3));
+
+        updateFilterButtonVisibility();
+        updateDisplayList();
     }
 
     private List<AddressBookItem> buildSortedSections(List<address_book_list.Data.Data_list> items, int chatType) {
@@ -249,7 +348,6 @@ public class AddressBookFragment extends Fragment {
             return result;
         }
 
-        // Group items by initial sort letter ('A'-'Z' or '#')
         Map<String, List<address_book_list.Data.Data_list>> letterMap = new HashMap<>();
 
         for (address_book_list.Data.Data_list item : items) {
@@ -262,7 +360,6 @@ public class AddressBookFragment extends Fragment {
             letterMap.get(letter).add(item);
         }
 
-        // Sort letters: 'A'-'Z' first, '#' last
         List<String> sortedLetters = new ArrayList<>(letterMap.keySet());
         Collator collator = Collator.getInstance(Locale.CHINA);
 
@@ -272,17 +369,13 @@ public class AddressBookFragment extends Fragment {
             return l1.compareTo(l2);
         });
 
-        // For each letter group, sort items by display name and add to final result
         for (String letter : sortedLetters) {
             List<address_book_list.Data.Data_list> groupItems = letterMap.get(letter);
             if (groupItems == null || groupItems.isEmpty()) continue;
 
             Collections.sort(groupItems, (o1, o2) -> collator.compare(getDisplayName(o1), getDisplayName(o2)));
 
-            // Add Header
             result.add(new AddressBookItem(letter));
-
-            // Add Entry Items
             for (address_book_list.Data.Data_list dataItem : groupItems) {
                 result.add(new AddressBookItem(dataItem, chatType));
             }
@@ -392,8 +485,6 @@ public class AddressBookFragment extends Fragment {
         }
     }
 
-    // ==================== Local Cache Delegation ====================
-
     private void saveLocalCache(List<address_book_list.Data> dataList) {
         AddressBookCache.saveCache(getContext(), dataList);
     }
@@ -401,9 +492,7 @@ public class AddressBookFragment extends Fragment {
     private boolean loadLocalCache() {
         List<address_book_list.Data> cachedData = AddressBookCache.loadCache(getContext());
         if (cachedData != null && !cachedData.isEmpty()) {
-            Log.d(TAG, "Local cache loaded successfully.");
             processAddressBookData(cachedData);
-            updateDisplayList();
             return true;
         }
         return false;

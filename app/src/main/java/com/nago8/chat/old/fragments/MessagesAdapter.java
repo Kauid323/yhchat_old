@@ -222,8 +222,8 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             textView.setGravity(Gravity.LEFT);
 
             // 判断是否有引用消息
-            boolean hasQuote = msg != null && msg.content != null
-                    && msg.content.quote_msg_text != null && msg.content.quote_msg_text.length() > 0;
+            String quoteTextStr = getQuoteText(msg);
+            boolean hasQuote = quoteTextStr != null && quoteTextStr.length() > 0;
 
             if (hasQuote) {
                 // 带引用的消息：垂直布局，气泡宽度由引用内容与消息内容共同自适应决定
@@ -233,32 +233,10 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                 container.setBackgroundResource(getBubbleBackground(group.mine, index, count));
                 container.setPadding(dp(12), dp(8), dp(12), dp(8));
 
-                // 引用块：水平布局，左侧竖线 + 引用文本，宽度随引用内容自适应
-                LinearLayout quoteBlock = new LinearLayout(ctx);
-                quoteBlock.setOrientation(LinearLayout.HORIZONTAL);
-                quoteBlock.setGravity(Gravity.CENTER_VERTICAL);
-                LinearLayout.LayoutParams quoteBlockParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                quoteBlock.setLayoutParams(quoteBlockParams);
-
-                View quoteBar = new View(ctx);
-                int barW = dp(3);
-                int barH = dp(26);
-                LinearLayout.LayoutParams barParams = new LinearLayout.LayoutParams(barW, barH);
-                barParams.rightMargin = dp(8);
-                quoteBar.setLayoutParams(barParams);
-                quoteBar.setBackgroundColor(ctx.getResources().getColor(R.color.divider_color));
-                quoteBlock.addView(quoteBar);
-
-                TextView quoteText = new TextView(ctx);
-                quoteText.setText(FengEmojiRenderer.apply(ctx, msg.content.quote_msg_text, dp(18)), TextView.BufferType.SPANNABLE);
-                quoteText.setTextSize(13);
-                quoteText.setTextColor(ctx.getResources().getColor(R.color.text_secondary));
-                quoteText.setMaxLines(3);
-                quoteText.setMaxWidth(dp(220));
-                quoteText.setEllipsize(android.text.TextUtils.TruncateAt.END);
-                quoteBlock.addView(quoteText);
-
-                container.addView(quoteBlock);
+                View quoteView = createQuoteView(ctx, quoteTextStr);
+                if (quoteView != null) {
+                    container.addView(quoteView);
+                }
 
                 LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 textParams.topMargin = dp(4);
@@ -538,16 +516,74 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             return container;
         }
 
+        private String getQuoteText(Msg msg) {
+            if (msg == null || msg.content == null) return null;
+            if (msg.content.quote_msg_text != null && msg.content.quote_msg_text.length() > 0) {
+                return msg.content.quote_msg_text;
+            }
+            if (msg.content.quote_image_url != null && msg.content.quote_image_url.length() > 0) {
+                if (msg.content.quote_image_name != null && msg.content.quote_image_name.length() > 0) {
+                    return "[图片] " + msg.content.quote_image_name;
+                }
+                return "[图片]";
+            }
+            if (msg.content.quote_video_url != null && msg.content.quote_video_url.length() > 0) {
+                return "[视频]";
+            }
+            return null;
+        }
+
+        private View createQuoteView(Context ctx, String quoteMsgText) {
+            if (quoteMsgText == null || quoteMsgText.trim().isEmpty()) return null;
+
+            LinearLayout quoteBlock = new LinearLayout(ctx);
+            quoteBlock.setOrientation(LinearLayout.HORIZONTAL);
+            quoteBlock.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout.LayoutParams quoteBlockParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            quoteBlockParams.bottomMargin = dp(4);
+            quoteBlock.setLayoutParams(quoteBlockParams);
+
+            View quoteBar = new View(ctx);
+            int barW = dp(3);
+            int barH = dp(26);
+            LinearLayout.LayoutParams barParams = new LinearLayout.LayoutParams(barW, barH);
+            barParams.rightMargin = dp(8);
+            quoteBar.setLayoutParams(barParams);
+            quoteBar.setBackgroundColor(ctx.getResources().getColor(R.color.divider_color));
+            quoteBlock.addView(quoteBar);
+
+            TextView quoteText = new TextView(ctx);
+            quoteText.setText(FengEmojiRenderer.apply(ctx, quoteMsgText, dp(18)), TextView.BufferType.SPANNABLE);
+            quoteText.setTextSize(13);
+            quoteText.setTextColor(ctx.getResources().getColor(R.color.text_secondary));
+            quoteText.setMaxLines(3);
+            quoteText.setMaxWidth(dp(220));
+            quoteText.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            quoteBlock.addView(quoteText);
+
+            return quoteBlock;
+        }
+
         private View createImageBubble(MessageGroup group, Msg msg, int index, int count) {
             Context ctx = itemView.getContext();
-            String url = msg.content.image_url;
+            String url = msg != null && msg.content != null ? msg.content.image_url : null;
 
             LinearLayout container = new LinearLayout(ctx);
-            container.setOrientation(LinearLayout.HORIZONTAL);
-            container.setGravity(Gravity.CENTER_VERTICAL);
+            container.setOrientation(LinearLayout.VERTICAL);
             container.setBackgroundResource(getBubbleBackground(group.mine, index, count));
             container.setPadding(dp(12), dp(8), dp(12), dp(8));
             container.setClickable(true);
+
+            // 解析并展示被引用的消息（如果存在）
+            String quoteTextStr = getQuoteText(msg);
+            View quoteView = createQuoteView(ctx, quoteTextStr);
+            if (quoteView != null) {
+                container.addView(quoteView);
+            }
+
+            LinearLayout imageRow = new LinearLayout(ctx);
+            imageRow.setOrientation(LinearLayout.HORIZONTAL);
+            imageRow.setGravity(Gravity.CENTER_VERTICAL);
 
             ImageView icon = new ImageView(ctx);
             int iconSize = dp(20);
@@ -556,13 +592,15 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             icon.setLayoutParams(iconParams);
             icon.setImageResource(R.drawable.ic_image);
             icon.setColorFilter(itemView.getResources().getColor(group.mine ? android.R.color.white : R.color.bubble_text_left));
-            container.addView(icon);
+            imageRow.addView(icon);
 
             TextView text = new TextView(ctx);
             text.setText(R.string.message_image);
             text.setTextSize(15);
             text.setTextColor(itemView.getResources().getColor(group.mine ? android.R.color.white : R.color.bubble_text_left));
-            container.addView(text);
+            imageRow.addView(text);
+
+            container.addView(imageRow);
 
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             params.topMargin = dp(2);
@@ -572,9 +610,11 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             container.setLayoutParams(params);
 
             container.setOnClickListener(v -> {
-                Intent intent = new Intent(ctx, ImagePreviewActivity.class);
-                intent.putExtra(ImagePreviewActivity.EXTRA_IMAGE_URL, url);
-                ctx.startActivity(intent);
+                if (url != null && url.length() > 0) {
+                    Intent intent = new Intent(ctx, ImagePreviewActivity.class);
+                    intent.putExtra(ImagePreviewActivity.EXTRA_IMAGE_URL, url);
+                    ctx.startActivity(intent);
+                }
             });
 
             return container;

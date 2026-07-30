@@ -7,6 +7,7 @@ import android.os.Looper;
 
 import com.nago8.chat.old.R;
 import com.nago8.chat.old.utils.NotificationHelper;
+import com.nago8.chat.old.utils.PrefUtils;
 import com.nago8.chat.old.utils.WsMsgConverter;
 import com.nago8.chat.old.net.ApiClient;
 import com.nago8.chat.old.proto.chat_ws_go.INFO;
@@ -346,29 +347,67 @@ public class WsClient {
      * - 当前正在聊天的会话不发
      * - 免打扰会话不发
      */
+    private boolean isMyMessage(WsMsg msg, String currentUserId) {
+        if (msg == null) return true;
+        if (currentUserId == null || currentUserId.isEmpty()) return false;
+
+        // 1. 明确的发送者 ID 等于当前用户 ID
+        if (msg.sender != null && msg.sender.chat_id != null && !msg.sender.chat_id.isEmpty()) {
+            if (msg.sender.chat_id.equals(currentUserId)) {
+                return true;
+            }
+        }
+
+        // 2. 如果 sender 为空或 sender.chat_id 为空：单聊/群聊推送中的自发回显消息
+        if (msg.sender == null || msg.sender.chat_id == null || msg.sender.chat_id.isEmpty()) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * 通知逻辑：收到消息时判断是否需要发系统通知。
+     * - 当前正在聊天的会话不发
+     * - 免打扰会话不发
+     * - 自己发送的消息/回显消息不发
+     * - 内容为空的消息绝对不发
+     */
     private void handleNotification(WsMsg msg) {
-        if (appContext == null || msg == null || msg.chat_id == null) return;
+        if (appContext == null || msg == null || msg.chat_id == null || msg.chat_id.isEmpty()) return;
         if (isBlockedMessage(msg)) return;
+
+        // 自己发送的消息 / 无发送者的回显消息，一律过滤
+        String currentUserId = userId != null ? userId : PrefUtils.getUserId(appContext);
+        if (isMyMessage(msg, currentUserId)) return;
+
         // 正在聊天的会话不通知
         if (msg.chat_id.equals(activeChatId)) return;
+
         // 免打扰会话不通知
         if (dndChecker != null && dndChecker.isDoNotDisturb(msg.chat_id)) return;
+
         // 构建通知内容
-        String senderName = (msg.sender != null && msg.sender.name != null) ? msg.sender.name : "";
         String preview = WsMsgConverter.toPreviewText(msg, appContext);
+        // 如果预览内容为空（例如空指令、空草稿、系统回执），绝对不发空通知
+        if (preview == null || preview.trim().isEmpty()) {
+            return;
+        }
+
+        String senderName = (msg.sender != null && msg.sender.name != null) ? msg.sender.name : "";
         // 群聊消息内容格式：发送者名: 消息预览；单聊直接显示消息预览
         String content = (msg.chat_type == 2 && senderName.length() > 0)
                 ? senderName + ": " + preview : preview;
-        // 用会话类型（msg.chat_type），不是发送者类型
+
         int chatType = msg.chat_type;
-        // 通知标题用会话名称，头像用会话头像
         String title = appContext.getString(R.string.notification_new_message);
         String avatarUrl = null;
         if (convInfoProvider != null) {
             String convName = convInfoProvider.getConvName(msg.chat_id);
-            if (convName != null) title = convName;
+            if (convName != null && !convName.isEmpty()) title = convName;
             avatarUrl = convInfoProvider.getConvAvatar(msg.chat_id);
         }
+
         NotificationHelper.showMessageNotification(appContext, msg.chat_id, chatType, title, content, avatarUrl);
     }
 
