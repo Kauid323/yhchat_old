@@ -1,5 +1,6 @@
-package com.nago8.chat.old.net;
+package com.nago8.chat.old.repository;
 
+import com.nago8.chat.old.net.ApiClient;
 import com.nago8.chat.old.proto.user.get_user;
 import com.nago8.chat.old.proto.user.get_user_send;
 

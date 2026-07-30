@@ -79,7 +79,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
         return groups.size();
     }
 
-    static class ViewHolder extends RecyclerView.ViewHolder {
+    class ViewHolder extends RecyclerView.ViewHolder {
         LinearLayout root;
         LinearLayout groupContainer;
         LinearLayout headerRow;
@@ -226,21 +226,23 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                     && msg.content.quote_msg_text != null && msg.content.quote_msg_text.length() > 0;
 
             if (hasQuote) {
-                // 带引用的消息：垂直布局，引用块在上，消息文本在下
+                // 带引用的消息：垂直布局，气泡宽度由引用内容与消息内容共同自适应决定
                 Context ctx = itemView.getContext();
                 LinearLayout container = new LinearLayout(ctx);
                 container.setOrientation(LinearLayout.VERTICAL);
                 container.setBackgroundResource(getBubbleBackground(group.mine, index, count));
                 container.setPadding(dp(12), dp(8), dp(12), dp(8));
 
-                // 引用块：水平布局，左侧竖线 + 引用文本
+                // 引用块：水平布局，左侧竖线 + 引用文本，宽度随引用内容自适应
                 LinearLayout quoteBlock = new LinearLayout(ctx);
                 quoteBlock.setOrientation(LinearLayout.HORIZONTAL);
                 quoteBlock.setGravity(Gravity.CENTER_VERTICAL);
+                LinearLayout.LayoutParams quoteBlockParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                quoteBlock.setLayoutParams(quoteBlockParams);
 
                 View quoteBar = new View(ctx);
                 int barW = dp(3);
-                int barH = dp(28);
+                int barH = dp(26);
                 LinearLayout.LayoutParams barParams = new LinearLayout.LayoutParams(barW, barH);
                 barParams.rightMargin = dp(8);
                 quoteBar.setLayoutParams(barParams);
@@ -252,6 +254,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                 quoteText.setTextSize(13);
                 quoteText.setTextColor(ctx.getResources().getColor(R.color.text_secondary));
                 quoteText.setMaxLines(3);
+                quoteText.setMaxWidth(dp(220));
                 quoteText.setEllipsize(android.text.TextUtils.TruncateAt.END);
                 quoteBlock.addView(quoteText);
 
@@ -273,7 +276,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                 container.setLayoutParams(params);
                 return container;
             } else {
-                // 普通文本消息
+                // 普通文本消息：气泡宽度严格根据消息内容文本长度自适应包裹
                 textView.setBackgroundResource(getBubbleBackground(group.mine, index, count));
                 textView.setPadding(dp(12), dp(8), dp(12), dp(8));
 

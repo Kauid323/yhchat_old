@@ -42,10 +42,13 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+
 public class ConversationsFragment extends Fragment implements SearchHost {
 
     private RecyclerView recyclerView;
     private ProgressBar progressBar;
+    private SwipeRefreshLayout swipeRefreshLayout;
     private ConversationsAdapter adapter;
     private WsClient.MessageListener wsListener;
     private boolean searchMode = false;
@@ -56,8 +59,14 @@ public class ConversationsFragment extends Fragment implements SearchHost {
         View view = inflater.inflate(R.layout.fragment_conversations, container, false);
         recyclerView = view.findViewById(R.id.recyclerView);
         progressBar = view.findViewById(R.id.progressBar);
+        swipeRefreshLayout = view.findViewById(R.id.swipeRefreshLayout);
+
+        if (swipeRefreshLayout != null) {
+            swipeRefreshLayout.setOnRefreshListener(() -> refreshData());
+        }
 
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        recyclerView.setItemAnimator(null);
         adapter = new ConversationsAdapter();
         recyclerView.setAdapter(adapter);
 
@@ -78,12 +87,13 @@ public class ConversationsFragment extends Fragment implements SearchHost {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        fetchConversations();
+        loadConversationsData();
     }
 
     @Override
     public void onResume() {
         super.onResume();
+        loadConversationsData();
         // 如果 listener 还没注册（首次 onResume），则注册
         if (wsListener == null) {
             wsListener = new WsClient.MessageListener() {
@@ -91,8 +101,12 @@ public class ConversationsFragment extends Fragment implements SearchHost {
                 public void onPushMessage(WsMsg msg) {
                     if (getActivity() != null) {
                         getActivity().runOnUiThread(() -> {
-                            if (adapter != null) {
-                                adapter.onPushMessage(msg, getContext());
+                            if (getActivity() instanceof HomeActivity) {
+                                HomeActivity home = (HomeActivity) getActivity();
+                                home.onPushMessageInMemory(msg, getContext());
+                                if (adapter != null) {
+                                    adapter.setData(home.getCachedConversationList());
+                                }
                             }
                         });
                     }
@@ -100,6 +114,19 @@ public class ConversationsFragment extends Fragment implements SearchHost {
             };
             WsClient.getInstance().addMessageListener(wsListener);
         }
+    }
+
+    private void loadConversationsData() {
+        if (getActivity() instanceof HomeActivity) {
+            HomeActivity home = (HomeActivity) getActivity();
+            List<ConversationList.ConversationData> cached = home.getCachedConversationList();
+            if (cached != null && !cached.isEmpty()) {
+                progressBar.setVisibility(View.GONE);
+                adapter.setData(cached);
+                return;
+            }
+        }
+        fetchConversations();
     }
 
     @Override
@@ -112,11 +139,23 @@ public class ConversationsFragment extends Fragment implements SearchHost {
         super.onDestroyView();
     }
 
+    public void refreshData() {
+        if (getContext() == null) return;
+        progressBar.setVisibility(View.VISIBLE);
+        fetchConversations(true);
+    }
+
     private void fetchConversations() {
+        fetchConversations(false);
+    }
+
+    private void fetchConversations(boolean isManualRefresh) {
         String token = PrefUtils.getToken(getContext());
         if (token == null) return;
 
-        progressBar.setVisibility(View.VISIBLE);
+        if (!isManualRefresh && (adapter == null || adapter.getItemCount() == 0)) {
+            progressBar.setVisibility(View.VISIBLE);
+        }
 
         ConversationListRequest listRequest = new ConversationListRequest.Builder()
                 .md5("")
@@ -139,6 +178,7 @@ public class ConversationsFragment extends Fragment implements SearchHost {
                 if (getActivity() != null) {
                     getActivity().runOnUiThread(() -> {
                         progressBar.setVisibility(View.GONE);
+                        if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
                         Toast.makeText(getContext(), "获取会话失败", Toast.LENGTH_SHORT).show();
                     });
                 }
@@ -146,40 +186,39 @@ public class ConversationsFragment extends Fragment implements SearchHost {
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        progressBar.setVisibility(View.GONE);
+                        if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
+                    });
+                }
                 if (response.isSuccessful() && response.body() != null) {
                     try {
                         final ConversationList conversationList = ConversationList.ADAPTER.decode(response.body().source());
                         if (getActivity() != null) {
                             getActivity().runOnUiThread(() -> {
-                                progressBar.setVisibility(View.GONE);
                                 if (conversationList.data != null) {
-                                   adapter.setData(conversationList.data);
-                                  // 通知 HomeActivity 更新会话数量
-                                  if (getActivity() instanceof HomeActivity) {
-                                      ((HomeActivity) getActivity()).updateConversationCount(conversationList.data.size());
-                                      // 提取免打扰会话 ID 传给 HomeActivity
-                                      java.util.List<String> dndIds = new java.util.ArrayList<>();
-                                      for (ConversationList.ConversationData cd : conversationList.data) {
-                                          if (cd.do_not_disturb == 1) {
-                                              dndIds.add(cd.chat_id);
-                                          }
-                                      }
-                                      ((HomeActivity) getActivity()).updateDoNotDisturbSet(dndIds);
-                                      // 更新会话信息缓存（名称+头像），供通知使用
-                                      ((HomeActivity) getActivity()).updateConvInfoCache(conversationList.data);
-                                  }
+                                    adapter.setData(conversationList.data);
+                                    if (getActivity() instanceof HomeActivity) {
+                                        HomeActivity home = (HomeActivity) getActivity();
+                                        home.updateConversationDataList(conversationList.data);
+                                        java.util.List<String> dndIds = new java.util.ArrayList<>();
+                                        for (ConversationList.ConversationData cd : conversationList.data) {
+                                            if (cd.do_not_disturb != 0) {
+                                                dndIds.add(cd.chat_id);
+                                            }
+                                        }
+                                        home.updateDoNotDisturbSet(dndIds);
+                                        home.updateConvInfoCache(conversationList.data);
+                                    }
+                                }
+                                if (isManualRefresh) {
+                                    Toast.makeText(getContext(), R.string.conversations_refreshed, Toast.LENGTH_SHORT).show();
                                 }
                             });
                         }
                     } catch (Exception e) {
                         e.printStackTrace();
-                        if (getActivity() != null) {
-                            getActivity().runOnUiThread(() -> progressBar.setVisibility(View.GONE));
-                        }
-                    }
-                } else {
-                    if (getActivity() != null) {
-                        getActivity().runOnUiThread(() -> progressBar.setVisibility(View.GONE));
                     }
                 }
             }
@@ -389,6 +428,9 @@ public class ConversationsFragment extends Fragment implements SearchHost {
                 if (getActivity() != null) {
                     getActivity().runOnUiThread(() -> {
                         Toast.makeText(getContext(), "气泡：啊~我没了", Toast.LENGTH_SHORT).show();
+                        if (getActivity() instanceof HomeActivity) {
+                            ((HomeActivity) getActivity()).markConversationReadInMemory(chatId);
+                        }
                         adapter.markAsRead(position);
                     });
                 }

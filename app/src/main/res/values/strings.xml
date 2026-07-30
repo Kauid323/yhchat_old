@@ -156,4 +156,24 @@
     <string name="message_file_failed">下载失败</string>
     <string name="group_profile_update_failed">更新群信息失败</string>
     <string name="group_profile_community_readonly">关联分区当前仅展示，仓库文档里还没找到可修改接口</string>
+    <string name="tab_address_book_friends">好友</string>
+    <string name="tab_address_book_groups">群聊</string>
+    <string name="tab_address_book_bots">机器人</string>
+    <string name="address_book_empty">暂无联系人</string>
+    <string name="address_book_not_logged_in">未登录</string>
+    <string name="address_book_load_failed">网络加载失败: %1$s</string>
+    <string name="address_book_fetch_failed">获取通讯录失败</string>
+    <string name="action_refresh">刷新</string>
+    <string name="address_book_refreshed">通讯录已刷新</string>
+    <string name="conversations_refreshed">会话列表已刷新</string>
+    <string name="sticky_refreshed">置顶列表已刷新</string>
+    <string name="action_report">举报</string>
+    <string name="action_add_friend">添加</string>
+    <string name="action_enter_chat">进入聊天</string>
+    <string name="report_submitted">已提交举报，系统将在24小时内处理</string>
+    <string name="friend_request_sent">好友申请已发送</string>
+    <string name="settings_clear_all_cache">清除所有缓存</string>
+    <string name="settings_cache_cleared">已清除所有缓存</string>
+    <string name="settings_cache_size_format">缓存大小：%1$s</string>
+    <string name="user_id_format">ID: %1$s</string>
 </resources>

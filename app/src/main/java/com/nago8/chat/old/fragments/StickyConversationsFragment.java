@@ -2,6 +2,7 @@ package com.nago8.chat.old.fragments;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -19,17 +20,20 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.nago8.chat.old.ChatActivity;
+import com.nago8.chat.old.HomeActivity;
 import com.nago8.chat.old.R;
 import com.nago8.chat.old.net.ApiClient;
+import com.nago8.chat.old.proto.chat_ws_go.WsMsg;
 import com.nago8.chat.old.proto.conversation.ConversationList;
 import com.nago8.chat.old.proto.conversation.ConversationListRequest;
 import com.nago8.chat.old.utils.PrefUtils;
+import com.nago8.chat.old.ws.WsClient;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Map;
 import java.util.List;
+import java.util.Map;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -38,11 +42,16 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+
 public class StickyConversationsFragment extends Fragment {
 
+    private static final String TAG = "StickyConvFragment";
     private RecyclerView recyclerView;
     private ProgressBar progressBar;
+    private SwipeRefreshLayout swipeRefreshLayout;
     private ConversationsAdapter adapter;
+    private WsClient.MessageListener wsListener;
 
     @Nullable
     @Override
@@ -50,8 +59,14 @@ public class StickyConversationsFragment extends Fragment {
         View view = inflater.inflate(R.layout.fragment_sticky_conversations, container, false);
         recyclerView = view.findViewById(R.id.recyclerView);
         progressBar = view.findViewById(R.id.progressBar);
+        swipeRefreshLayout = view.findViewById(R.id.swipeRefreshLayout);
+
+        if (swipeRefreshLayout != null) {
+            swipeRefreshLayout.setOnRefreshListener(() -> refreshData());
+        }
 
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        recyclerView.setItemAnimator(null);
         adapter = new ConversationsAdapter();
         recyclerView.setAdapter(adapter);
 
@@ -64,6 +79,8 @@ public class StickyConversationsFragment extends Fragment {
             intent.putExtra(ChatActivity.EXTRA_CHAT_NAME, data.name);
             intent.putExtra(ChatActivity.EXTRA_CHAT_AVATAR, data.avatar_url);
             startActivity(intent);
+
+            dismissNotification(data.chat_id, position);
         });
 
         return view;
@@ -72,20 +89,79 @@ public class StickyConversationsFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
+        loadStickyData();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        loadStickyData();
+        if (wsListener == null) {
+            wsListener = new WsClient.MessageListener() {
+                @Override
+                public void onPushMessage(WsMsg msg) {
+                    if (getActivity() != null) {
+                        getActivity().runOnUiThread(() -> {
+                            if (getActivity() instanceof HomeActivity) {
+                                HomeActivity home = (HomeActivity) getActivity();
+                                home.onPushMessageInMemory(msg, getContext());
+                                if (adapter != null) {
+                                    adapter.setData(home.getStickyConversationDataList());
+                                }
+                            }
+                        });
+                    }
+                }
+            };
+            WsClient.getInstance().addMessageListener(wsListener);
+        }
+    }
+
+    @Override
+    public void onDestroyView() {
+        if (wsListener != null) {
+            WsClient.getInstance().removeMessageListener(wsListener);
+            wsListener = null;
+        }
+        super.onDestroyView();
+    }
+
+    private void loadStickyData() {
+        if (getActivity() instanceof HomeActivity) {
+            HomeActivity home = (HomeActivity) getActivity();
+            List<ConversationList.ConversationData> stickyData = home.getStickyConversationDataList();
+            if (stickyData != null && !stickyData.isEmpty()) {
+                progressBar.setVisibility(View.GONE);
+                adapter.setData(stickyData);
+                return;
+            }
+        }
+        // 若本地暂无置顶数据，则联网拉取
         fetchStickyList();
     }
 
-    /**
-     * 先请求会话列表（含完整信息），再请求置顶列表，
-     * 用 chatId 匹配，从会话列表中取对应会话的完整信息（最后消息、未读数、时间戳等）。
-     */
+    public void refreshData() {
+        if (getContext() == null) return;
+        progressBar.setVisibility(View.VISIBLE);
+        fetchStickyList(true);
+    }
+
     private void fetchStickyList() {
+        fetchStickyList(false);
+    }
+
+    private void fetchStickyList(boolean isManualRefresh) {
         String token = PrefUtils.getToken(getContext());
         if (token == null) return;
 
-        progressBar.setVisibility(View.VISIBLE);
+        if (!isManualRefresh && (adapter == null || adapter.getItemCount() == 0)) {
+            progressBar.setVisibility(View.VISIBLE);
+        }
 
-        // 第一步：请求会话列表
+        if (getActivity() instanceof HomeActivity) {
+            ((HomeActivity) getActivity()).fetchStickyCount();
+        }
+
         ConversationListRequest listRequest = new ConversationListRequest.Builder()
                 .md5("")
                 .build();
@@ -101,164 +177,83 @@ public class StickyConversationsFragment extends Fragment {
 
         ApiClient.getClient().newCall(convRequest).enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 if (getActivity() != null) {
                     getActivity().runOnUiThread(() -> {
                         progressBar.setVisibility(View.GONE);
+                        if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
                         Toast.makeText(getContext(), R.string.sticky_load_failed, Toast.LENGTH_SHORT).show();
                     });
                 }
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                if (getActivity() == null) return;
-                if (!response.isSuccessful() || response.body() == null) {
-                    getActivity().runOnUiThread(() -> progressBar.setVisibility(View.GONE));
-                    return;
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        progressBar.setVisibility(View.GONE);
+                        if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
+                    });
                 }
-                try {
-                    // 解析会话列表，建立 chatId -> ConversationData 映射
-                    final ConversationList conversationList = ConversationList.ADAPTER.decode(response.body().source());
-                    final Map<String, ConversationList.ConversationData> convMap = new HashMap<>();
-                    if (conversationList.data != null) {
-                        for (ConversationList.ConversationData cd : conversationList.data) {
-                            convMap.put(cd.chat_id, cd);
+                if (response.isSuccessful() && response.body() != null) {
+                    try {
+                        final ConversationList conversationList = ConversationList.ADAPTER.decode(response.body().source());
+                        if (conversationList.data != null && getActivity() instanceof HomeActivity) {
+                            getActivity().runOnUiThread(() -> {
+                                HomeActivity home = (HomeActivity) getActivity();
+                                home.updateConversationDataList(conversationList.data);
+                                List<ConversationList.ConversationData> stickyData = home.getStickyConversationDataList();
+                                adapter.setData(stickyData);
+                                if (isManualRefresh) {
+                                    Toast.makeText(getContext(), R.string.sticky_refreshed, Toast.LENGTH_SHORT).show();
+                                }
+                            });
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "fetchStickyList error", e);
+                    } finally {
+                        if (response.body() != null) {
+                            response.body().close();
                         }
                     }
-                    // 第二步：请求置顶列表，用 chatId 匹配取完整信息
-                    fetchStickyListWithConvMap(token, convMap);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    getActivity().runOnUiThread(() -> progressBar.setVisibility(View.GONE));
                 }
             }
         });
     }
 
-    /**
-     * 请求置顶列表，用会话列表映射补全每项的完整信息。
-     */
-    private void fetchStickyListWithConvMap(String token, Map<String, ConversationList.ConversationData> convMap) {
+    private void dismissNotification(String chatId, int position) {
+        String token = PrefUtils.getToken(getContext());
+        if (token == null) return;
+
+        if (getActivity() instanceof HomeActivity) {
+            ((HomeActivity) getActivity()).markConversationReadInMemory(chatId);
+            loadStickyData();
+        }
+
+        String json = "{\"chatId\":\"" + chatId + "\"}";
+        RequestBody body = RequestBody.create(
+                MediaType.parse("application/json; charset=utf-8"),
+                json
+        );
+
         Request request = new Request.Builder()
-                .url(ApiClient.BASE_URL + "/v1/sticky/list")
+                .url(ApiClient.BASE_URL + "/v1/conversation/dismiss-notification")
                 .header("token", token)
-                .post(RequestBody.create(MediaType.parse("application/json; charset=utf-8"), "{}"))
+                .post(body)
                 .build();
 
         ApiClient.getClient().newCall(request).enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
-                if (getActivity() != null) {
-                    getActivity().runOnUiThread(() -> {
-                        progressBar.setVisibility(View.GONE);
-                        Toast.makeText(getContext(), R.string.sticky_load_failed, Toast.LENGTH_SHORT).show();
-                    });
-                }
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                Log.e(TAG, "dismissNotification failed", e);
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                if (response.isSuccessful() && response.body() != null) {
-                    try {
-                        String respStr = response.body().string();
-                        final List<ConversationList.ConversationData> stickyList = parseStickyList(respStr, convMap);
-                        if (getActivity() != null) {
-                            getActivity().runOnUiThread(() -> {
-                                progressBar.setVisibility(View.GONE);
-                                adapter.setData(stickyList);
-                            });
-                        }
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        if (getActivity() != null) {
-                            getActivity().runOnUiThread(() -> progressBar.setVisibility(View.GONE));
-                        }
-                    }
-                } else {
-                    if (getActivity() != null) {
-                        getActivity().runOnUiThread(() -> progressBar.setVisibility(View.GONE));
-                    }
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
+                if (response.body() != null) {
+                    response.body().close();
                 }
             }
         });
-    }
-
-    private List<ConversationList.ConversationData> parseStickyList(String json, Map<String, ConversationList.ConversationData> convMap) {
-        List<ConversationList.ConversationData> results = new ArrayList<>();
-        try {
-            JsonObject root = JsonParser.parseString(json).getAsJsonObject();
-            if (!root.has("data")) return results;
-            JsonObject data = root.getAsJsonObject("data");
-            if (!data.has("sticky") || data.get("sticky").isJsonNull()) return results;
-            JsonArray stickyArray = data.getAsJsonArray("sticky");
-
-            for (JsonElement elem : stickyArray) {
-                JsonObject item = elem.getAsJsonObject();
-                String chatId = getJsonString(item, "chatId");
-                int chatType = getJsonInt(item, "chatType", 1);
-                String chatName = getJsonString(item, "chatName");
-                String avatarUrl = getJsonString(item, "avatarUrl");
-                long sort = getJsonLong(item, "sort");
-
-                // 优先从会话列表中取完整信息，匹配不到则用置顶 API 返回的数据
-                ConversationList.ConversationData conv = convMap.get(chatId);
-                ConversationList.ConversationData cd;
-                if (conv != null) {
-                    // 用会话列表的完整数据，保留置顶的 sort 作为排序时间
-                    cd = new ConversationList.ConversationData.Builder()
-                            .chat_id(conv.chat_id)
-                            .chat_type(conv.chat_type)
-                            .remark(conv.remark)
-                            .chat_content(conv.chat_content)
-                            .timestamp_ms(conv.timestamp_ms)
-                            .unread_message(conv.unread_message)
-                            .at(conv.at)
-                            .avatar_id(conv.avatar_id)
-                            .avatar_url(conv.avatar_url)
-                            .do_not_disturb(conv.do_not_disturb)
-                            .send_timestamp(conv.send_timestamp)
-                            .at_data(conv.at_data)
-                            .name(conv.name)
-                            .certification_level(conv.certification_level)
-                            .build();
-                } else {
-                    cd = new ConversationList.ConversationData.Builder()
-                            .chat_id(chatId)
-                            .chat_type(chatType)
-                            .name(chatName)
-                            .avatar_url(avatarUrl)
-                            .chat_content("")
-                            .unread_message(0)
-                            .timestamp_ms(sort)
-                            .build();
-                }
-                results.add(cd);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return results;
-    }
-
-    private String getJsonString(JsonObject obj, String key) {
-        if (obj.has(key) && !obj.get(key).isJsonNull()) {
-            return obj.get(key).getAsString();
-        }
-        return "";
-    }
-
-    private int getJsonInt(JsonObject obj, String key, int def) {
-        if (obj.has(key) && !obj.get(key).isJsonNull()) {
-            return obj.get(key).getAsInt();
-        }
-        return def;
-    }
-
-    private long getJsonLong(JsonObject obj, String key) {
-        if (obj.has(key) && !obj.get(key).isJsonNull()) {
-            return obj.get(key).getAsLong();
-        }
-        return 0;
     }
 }

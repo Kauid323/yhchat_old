@@ -1,31 +1,31 @@
 package com.nago8.chat.old;
 
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-
 import android.Manifest;
 import android.content.Context;
-import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.widget.EditText;
-import android.widget.ImageView;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
-import androidx.appcompat.widget.PopupMenu;
+import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.AppCompatImageView;
+import androidx.appcompat.widget.PopupMenu;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -34,25 +34,35 @@ import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.nago8.chat.old.cache.ConversationCache;
 import com.nago8.chat.old.fragments.AddressBookFragment;
 import com.nago8.chat.old.fragments.CommunityFragment;
 import com.nago8.chat.old.fragments.ConversationsFragment;
-import com.nago8.chat.old.fragments.StickyConversationsFragment;
 import com.nago8.chat.old.fragments.DiscoveryFragment;
+import com.nago8.chat.old.fragments.StickyConversationsFragment;
 import com.nago8.chat.old.model.UserModels;
 import com.nago8.chat.old.net.ApiClient;
+import com.nago8.chat.old.proto.chat_ws_go.WsMsg;
+import com.nago8.chat.old.proto.conversation.ConversationList;
 import com.nago8.chat.old.proto.user.info;
 import com.nago8.chat.old.utils.ImageUtils;
 import com.nago8.chat.old.utils.LocaleHelper;
+import com.nago8.chat.old.utils.NotificationHelper;
 import com.nago8.chat.old.utils.PrefUtils;
+import com.nago8.chat.old.utils.WsMsgConverter;
 import com.nago8.chat.old.ws.WsClient;
 import com.nago8.chat.old.ws.WsLogManager;
 
 import java.io.IOException;
-import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Map;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import okhttp3.Call;
@@ -64,52 +74,62 @@ import okhttp3.Response;
 
 public class HomeActivity extends AppCompatActivity {
 
+    private static final String TAG = "HomeActivity";
     private static final int REQUEST_STORAGE_PERMISSION = 1001;
+    private static final int REQUEST_NOTIFICATION_PERMISSION = 3001;
+
     private DrawerLayout drawerLayout;
     private ImageView ivAvatar;
-    private TextView tvUsername, tvUserId;
+    private TextView tvUsername;
+    private TextView tvUserId;
     private Fragment currentFragment;
+
     private View tabContainer;
     private View searchContainer;
     private TextView tabConversations;
     private TextView tabSticky;
     private EditText etSearch;
-    private AppCompatImageView btnSearch;
-    private AppCompatImageView btnSearchBack;
+
     private boolean searchMode = false;
     private boolean showingSticky = false;
     private int conversationCount = 0;
     private int stickyCount = 0;
+
     private final Set<String> doNotDisturbChatIds = new HashSet<>();
-    // 会话信息缓存：chatId → [name, avatarUrl]，供 WsClient 通知使用
     private final Map<String, String[]> convInfoCache = new HashMap<>();
 
+    public interface SearchHost {
+        void onSearch(String keyword);
+        void onSearchClosed();
+    }
+
     @Override
-    protected void attachBaseContext(Context newBase) {
+    protected void attachBaseContext(@NonNull Context newBase) {
         super.attachBaseContext(LocaleHelper.wrap(newBase));
     }
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
         AppCompatDelegate.setCompatVectorFromResourcesEnabled(true);
         super.onCreate(savedInstanceState);
 
+        // Android 6.0+ (API 23+) Dynamic Storage Permission
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQUEST_STORAGE_PERMISSION);
             }
         }
-        // Android 13+ 请求通知权限
+        // Android 13+ (API 33+) Notification Permission
         if (Build.VERSION.SDK_INT >= 33) {
             if (ContextCompat.checkSelfPermission(this, "android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this, new String[]{"android.permission.POST_NOTIFICATIONS"}, 3001);
+                ActivityCompat.requestPermissions(this, new String[]{"android.permission.POST_NOTIFICATIONS"}, REQUEST_NOTIFICATION_PERMISSION);
             }
         }
 
         try {
             setContentView(R.layout.activity_home);
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.e(TAG, "Error in setContentView", e);
             finish();
             return;
         }
@@ -131,8 +151,15 @@ public class HomeActivity extends AppCompatActivity {
             });
         }
 
-        View fabAdd = findViewById(R.id.fabAdd);
-        if (fabAdd != null) fabAdd.setOnClickListener(this::showFabMenu);
+        setupSpeedDialFab();
+
+        ConversationCache.getInstance().setOnUnreadCountChangeListener((totalUnread, stickyUnread) -> {
+            runOnUiThread(() -> {
+                this.conversationCount = totalUnread;
+                this.stickyCount = stickyUnread;
+                updateTabTexts();
+            });
+        });
 
         setupMenuClickListeners();
         initConversationTabs();
@@ -144,8 +171,9 @@ public class HomeActivity extends AppCompatActivity {
             @Override
             public String getConvAvatar(String chatId) { return HomeActivity.this.getConvAvatar(chatId); }
         });
-        com.nago8.chat.old.utils.NotificationHelper.createChannel(this);
+        NotificationHelper.createChannel(this);
         fetchUserInfo();
+        fetchStickyCount();
 
         if (savedInstanceState == null) {
             switchFragment(new ConversationsFragment(), R.string.menu_conversations);
@@ -166,11 +194,10 @@ public class HomeActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        // 从后台回到前台时，如果 WS 未连接则强制重连
         if (!WsClient.getInstance().isConnected()) {
             String userId = PrefUtils.getUserId(this);
             String token = PrefUtils.getToken(this);
-            if (userId != null && userId.length() > 0 && token != null && token.length() > 0) {
+            if (userId != null && !userId.isEmpty() && token != null && !token.isEmpty()) {
                 WsLogManager.getInstance().logInfo("resuming: reconnecting WebSocket");
                 WsClient.getInstance().reconnect();
             }
@@ -207,12 +234,12 @@ public class HomeActivity extends AppCompatActivity {
         if (getSupportActionBar() != null) getSupportActionBar().setTitle(titleRes);
         if (drawerLayout != null) drawerLayout.closeDrawer(GravityCompat.START);
 
-        // 只有会话/置顶 Fragment 且非搜索模式时显示 Tab 栏
+        invalidateOptionsMenu();
+
         boolean isConversationTab = fragment instanceof ConversationsFragment
                 || fragment instanceof StickyConversationsFragment;
         if (tabContainer != null && !searchMode) {
-            boolean visible = isConversationTab && stickyCount > 0;
-            tabContainer.setVisibility(visible ? View.VISIBLE : View.GONE);
+            tabContainer.setVisibility(isConversationTab ? View.VISIBLE : View.GONE);
         }
     }
 
@@ -222,20 +249,22 @@ public class HomeActivity extends AppCompatActivity {
         tabConversations = findViewById(R.id.tabConversations);
         tabSticky = findViewById(R.id.tabSticky);
         etSearch = findViewById(R.id.etSearch);
-        btnSearch = findViewById(R.id.btnSearch);
-        btnSearchBack = findViewById(R.id.btnSearchBack);
+        AppCompatImageView btnSearch = findViewById(R.id.btnSearch);
+        AppCompatImageView btnSearchBack = findViewById(R.id.btnSearchBack);
 
-        tabConversations.setOnClickListener(v -> switchConversationTab(false));
-        tabSticky.setOnClickListener(v -> switchConversationTab(true));
-        btnSearch.setOnClickListener(v -> doSearch());
-        btnSearchBack.setOnClickListener(v -> hideSearch());
-        etSearch.setOnEditorActionListener((v, actionId, event) -> {
-            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
-                doSearch();
-                return true;
-            }
-            return false;
-        });
+        if (tabConversations != null) tabConversations.setOnClickListener(v -> switchConversationTab(false));
+        if (tabSticky != null) tabSticky.setOnClickListener(v -> switchConversationTab(true));
+        if (btnSearch != null) btnSearch.setOnClickListener(v -> doSearch());
+        if (btnSearchBack != null) btnSearchBack.setOnClickListener(v -> hideSearch());
+        if (etSearch != null) {
+            etSearch.setOnEditorActionListener((v, actionId, event) -> {
+                if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+                    doSearch();
+                    return true;
+                }
+                return false;
+            });
+        }
 
         updateTabTexts();
     }
@@ -254,16 +283,17 @@ public class HomeActivity extends AppCompatActivity {
 
     private void updateTabSelection() {
         if (tabConversations == null || tabSticky == null) return;
+        int whiteColor = ContextCompat.getColor(this, android.R.color.white);
         if (showingSticky) {
             tabConversations.setTextColor(0xCCFFFFFF);
-            tabConversations.setTypeface(null, android.graphics.Typeface.NORMAL);
-            tabSticky.setTextColor(getResources().getColor(android.R.color.white));
-            tabSticky.setTypeface(null, android.graphics.Typeface.BOLD);
+            tabConversations.setTypeface(null, Typeface.NORMAL);
+            tabSticky.setTextColor(whiteColor);
+            tabSticky.setTypeface(null, Typeface.BOLD);
         } else {
-            tabConversations.setTextColor(getResources().getColor(android.R.color.white));
-            tabConversations.setTypeface(null, android.graphics.Typeface.BOLD);
+            tabConversations.setTextColor(whiteColor);
+            tabConversations.setTypeface(null, Typeface.BOLD);
             tabSticky.setTextColor(0xCCFFFFFF);
-            tabSticky.setTypeface(null, android.graphics.Typeface.NORMAL);
+            tabSticky.setTypeface(null, Typeface.NORMAL);
         }
     }
 
@@ -272,34 +302,22 @@ public class HomeActivity extends AppCompatActivity {
         tabConversations.setText(getString(R.string.tab_conversations_format, conversationCount));
         tabSticky.setText(getString(R.string.tab_sticky_format, stickyCount));
 
-        // 有置顶会话且非搜索模式时显示 tab 栏
-        if (stickyCount > 0 && !searchMode) {
-            tabContainer.setVisibility(View.VISIBLE);
-        } else {
-            tabContainer.setVisibility(View.GONE);
-            // 无置顶时切回会话列表
-            if (showingSticky) {
-                switchConversationTab(false);
-            }
+        boolean isConversationTab = currentFragment instanceof ConversationsFragment
+                || currentFragment instanceof StickyConversationsFragment;
+        if (tabContainer != null && !searchMode) {
+            tabContainer.setVisibility(isConversationTab ? View.VISIBLE : View.GONE);
         }
     }
 
-    /**
-     * 供 ConversationsFragment 回调更新会话数量。
-     */
     public void updateConversationCount(int count) {
         conversationCount = count;
         updateTabTexts();
     }
 
-    // ==================== 顶栏搜索 ====================
+    // ==================== Top Toolbar Search ====================
 
-    /**
-     * 展开顶栏搜索框：隐藏 Tab 栏，显示搜索输入框。
-     */
     public void showSearch() {
         if (searchMode) return;
-        // 搜索时强制切到会话列表 Fragment（只有它实现了 SearchHost）
         if (showingSticky) {
             showingSticky = false;
             switchFragment(new ConversationsFragment(), R.string.menu_conversations);
@@ -316,9 +334,6 @@ public class HomeActivity extends AppCompatActivity {
         if (imm != null && etSearch != null) imm.showSoftInput(etSearch, InputMethodManager.SHOW_IMPLICIT);
     }
 
-    /**
-     * 收起顶栏搜索框：隐藏搜索框，恢复 Tab 栏，通知 Fragment 重新加载会话列表。
-     */
     public void hideSearch() {
         if (!searchMode) return;
         searchMode = false;
@@ -326,37 +341,33 @@ public class HomeActivity extends AppCompatActivity {
         if (etSearch != null) etSearch.setText("");
         InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
         if (imm != null && etSearch != null) imm.hideSoftInputFromWindow(etSearch.getWindowToken(), 0);
-        // 恢复 Tab 栏显隐
+
         boolean isConversationTab = currentFragment instanceof ConversationsFragment
                 || currentFragment instanceof StickyConversationsFragment;
         if (tabContainer != null) {
-            tabContainer.setVisibility(isConversationTab && stickyCount > 0 ? View.VISIBLE : View.GONE);
+            tabContainer.setVisibility(isConversationTab ? View.VISIBLE : View.GONE);
         }
-        // 通知 Fragment 搜索已关闭，重新加载会话列表
         if (currentFragment instanceof SearchHost) {
             ((SearchHost) currentFragment).onSearchClosed();
         }
     }
 
-    /**
-     * 执行搜索：获取输入词，通过 SearchHost 接口传给当前 Fragment 执行搜索。
-     */
     private void doSearch() {
         if (etSearch == null) return;
         String word = etSearch.getText().toString().trim();
-        if (word.length() == 0) return;
-        // 收起键盘
+        if (word.isEmpty()) return;
+
         InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
         if (imm != null) imm.hideSoftInputFromWindow(etSearch.getWindowToken(), 0);
-        // 通过接口让 Fragment 执行搜索
+
         if (currentFragment instanceof SearchHost) {
             ((SearchHost) currentFragment).onSearch(word);
         }
     }
 
-    private void fetchStickyCount() {
+    public void fetchStickyCount() {
         String token = PrefUtils.getToken(this);
-        if (token == null) return;
+        if (token == null || token.isEmpty()) return;
 
         Request request = new Request.Builder()
                 .url(ApiClient.BASE_URL + "/v1/sticky/list")
@@ -366,37 +377,66 @@ public class HomeActivity extends AppCompatActivity {
 
         ApiClient.getClient().newCall(request).enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {}
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                Log.e(TAG, "fetchStickyCount failed", e);
+            }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 if (response.isSuccessful() && response.body() != null) {
                     try {
                         String respStr = response.body().string();
                         JsonObject root = JsonParser.parseString(respStr).getAsJsonObject();
-                        int count = 0;
+                        List<ConversationCache.StickyInfo> list = new ArrayList<>();
                         if (root.has("data") && !root.get("data").isJsonNull()) {
                             JsonObject data = root.getAsJsonObject("data");
                             if (data.has("sticky") && !data.get("sticky").isJsonNull()) {
-                                count = data.getAsJsonArray("sticky").size();
+                                JsonArray arr = data.getAsJsonArray("sticky");
+                                for (JsonElement elem : arr) {
+                                    JsonObject item = elem.getAsJsonObject();
+                                    ConversationCache.StickyInfo info = new ConversationCache.StickyInfo();
+                                    info.chatId = item.has("chatId") && !item.get("chatId").isJsonNull() ? item.get("chatId").getAsString() : "";
+                                    info.chatType = item.has("chatType") && !item.get("chatType").isJsonNull() ? item.get("chatType").getAsInt() : 1;
+                                    info.chatName = item.has("chatName") && !item.get("chatName").isJsonNull() ? item.get("chatName").getAsString() : "";
+                                    info.avatarUrl = item.has("avatarUrl") && !item.get("avatarUrl").isJsonNull() ? item.get("avatarUrl").getAsString() : "";
+                                    info.sort = item.has("sort") && !item.get("sort").isJsonNull() ? item.get("sort").getAsLong() : 0;
+                                    list.add(info);
+                                }
                             }
                         }
-                        final int finalCount = count;
-                        runOnUiThread(() -> {
-                            stickyCount = finalCount;
-                            updateTabTexts();
-                        });
+                        runOnUiThread(() -> ConversationCache.getInstance().updateStickyList(list));
                     } catch (Exception e) {
-                        e.printStackTrace();
+                        Log.e(TAG, "fetchStickyCount response parse error", e);
+                    } finally {
+                        response.body().close();
                     }
                 }
             }
         });
     }
 
-    private void handleSimpleMenuClick(int stringRes) {
-        Toast.makeText(this, stringRes, Toast.LENGTH_SHORT).show();
-        if (drawerLayout != null) drawerLayout.closeDrawer(GravityCompat.START);
+    public void updateConversationDataList(List<ConversationList.ConversationData> list) {
+        ConversationCache.getInstance().updateConversationList(list);
+    }
+
+    public void updateStickyList(List<ConversationCache.StickyInfo> stickyList) {
+        ConversationCache.getInstance().updateStickyList(stickyList);
+    }
+
+    public List<ConversationList.ConversationData> getCachedConversationList() {
+        return ConversationCache.getInstance().getConversationList();
+    }
+
+    public List<ConversationList.ConversationData> getStickyConversationDataList() {
+        return ConversationCache.getInstance().getStickyConversationDataList();
+    }
+
+    public void markConversationReadInMemory(String chatId) {
+        ConversationCache.getInstance().markAsRead(chatId);
+    }
+
+    public void onPushMessageInMemory(WsMsg wsMsg, Context ctx) {
+        ConversationCache.getInstance().onPushMessage(wsMsg, ctx);
     }
 
     private void showLanguageDialog() {
@@ -421,10 +461,7 @@ public class HomeActivity extends AppCompatActivity {
                     if (!selected.equals(current)) {
                         PrefUtils.setLanguage(this, selected);
                         dialog.dismiss();
-                        // 先更新 Application locale，再重建 Activity
                         LocaleHelper.applyToApplication(getApplicationContext());
-                        // recreate() 在部分旧系统上不触发 attachBaseContext，
-                        // 用 finish+startActivity 重建确保 locale 生效
                         Intent intent = new Intent(this, HomeActivity.class);
                         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
                         finish();
@@ -444,34 +481,135 @@ public class HomeActivity extends AppCompatActivity {
     }
 
     @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
+    public boolean onPrepareOptionsMenu(Menu menu) {
+        MenuItem actionItem = menu.findItem(R.id.action_search);
+        if (actionItem != null) {
+            if (currentFragment instanceof AddressBookFragment) {
+                actionItem.setIcon(R.drawable.ic_refresh);
+                actionItem.setTitle(R.string.action_refresh);
+            } else {
+                actionItem.setIcon(R.drawable.ic_search);
+                actionItem.setTitle(R.string.action_search);
+            }
+        }
+        return super.onPrepareOptionsMenu(menu);
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
         if (item.getItemId() == R.id.action_search) {
-            // 搜索框已集成在顶栏，直接展开
-            showSearch();
+            if (currentFragment instanceof AddressBookFragment) {
+                ((AddressBookFragment) currentFragment).refreshData();
+            } else {
+                showSearch();
+            }
             return true;
         }
         return super.onOptionsItemSelected(item);
     }
 
-    private void showFabMenu(View view) {
-        PopupMenu popup = new PopupMenu(this, view);
-        popup.getMenuInflater().inflate(R.menu.fab_menu, popup.getMenu());
-        popup.setOnMenuItemClickListener(item -> {
-            if (item.getItemId() == R.id.fab_chat) {
+    private com.google.android.material.floatingactionbutton.FloatingActionButton fabAdd;
+    private View fabOverlay;
+    private View layoutSubNewGroup;
+    private View layoutSubNewChat;
+    private com.google.android.material.floatingactionbutton.FloatingActionButton fabSubNewGroup;
+    private com.google.android.material.floatingactionbutton.FloatingActionButton fabSubNewChat;
+    private boolean isFabExpanded = false;
+
+    private void setupSpeedDialFab() {
+        fabAdd = findViewById(R.id.fabAdd);
+        fabOverlay = findViewById(R.id.fabOverlay);
+        layoutSubNewGroup = findViewById(R.id.layoutSubNewGroup);
+        layoutSubNewChat = findViewById(R.id.layoutSubNewChat);
+        fabSubNewGroup = findViewById(R.id.fabSubNewGroup);
+        fabSubNewChat = findViewById(R.id.fabSubNewChat);
+
+        if (fabAdd != null) {
+            fabAdd.setOnClickListener(v -> toggleFabMenu());
+        }
+        if (fabOverlay != null) {
+            fabOverlay.setOnClickListener(v -> collapseFabMenu());
+        }
+        if (fabSubNewChat != null) {
+            fabSubNewChat.setOnClickListener(v -> {
+                collapseFabMenu();
                 Toast.makeText(this, R.string.fab_new_chat, Toast.LENGTH_SHORT).show();
-                return true;
-            } else if (item.getItemId() == R.id.fab_group) {
+            });
+        }
+        View tvSubNewChatLabel = findViewById(R.id.tvSubNewChatLabel);
+        if (tvSubNewChatLabel != null) {
+            tvSubNewChatLabel.setOnClickListener(v -> {
+                collapseFabMenu();
+                Toast.makeText(this, R.string.fab_new_chat, Toast.LENGTH_SHORT).show();
+            });
+        }
+
+        if (fabSubNewGroup != null) {
+            fabSubNewGroup.setOnClickListener(v -> {
+                collapseFabMenu();
                 Toast.makeText(this, R.string.fab_new_group, Toast.LENGTH_SHORT).show();
-                return true;
-            }
-            return false;
-        });
-        popup.show();
+            });
+        }
+        View tvSubNewGroupLabel = findViewById(R.id.tvSubNewGroupLabel);
+        if (tvSubNewGroupLabel != null) {
+            tvSubNewGroupLabel.setOnClickListener(v -> {
+                collapseFabMenu();
+                Toast.makeText(this, R.string.fab_new_group, Toast.LENGTH_SHORT).show();
+            });
+        }
+    }
+
+    private void toggleFabMenu() {
+        if (isFabExpanded) {
+            collapseFabMenu();
+        } else {
+            expandFabMenu();
+        }
+    }
+
+    private void expandFabMenu() {
+        isFabExpanded = true;
+        if (fabAdd != null) fabAdd.animate().rotation(45f).setDuration(200).start();
+        if (fabOverlay != null) fabOverlay.setVisibility(View.VISIBLE);
+        if (layoutSubNewGroup != null) {
+            layoutSubNewGroup.setVisibility(View.VISIBLE);
+            layoutSubNewGroup.setAlpha(0f);
+            layoutSubNewGroup.setTranslationY(20f);
+            layoutSubNewGroup.animate().alpha(1f).translationY(0f).setDuration(200).start();
+        }
+        if (layoutSubNewChat != null) {
+            layoutSubNewChat.setVisibility(View.VISIBLE);
+            layoutSubNewChat.setAlpha(0f);
+            layoutSubNewChat.setTranslationY(20f);
+            layoutSubNewChat.animate().alpha(1f).translationY(0f).setDuration(200).start();
+        }
+    }
+
+    private void collapseFabMenu() {
+        if (!isFabExpanded) return;
+        isFabExpanded = false;
+        if (fabAdd != null) fabAdd.animate().rotation(0f).setDuration(200).start();
+        if (fabOverlay != null) fabOverlay.setVisibility(View.GONE);
+        if (layoutSubNewGroup != null) {
+            layoutSubNewGroup.animate().alpha(0f).translationY(20f).setDuration(150).withEndAction(() -> layoutSubNewGroup.setVisibility(View.GONE)).start();
+        }
+        if (layoutSubNewChat != null) {
+            layoutSubNewChat.animate().alpha(0f).translationY(20f).setDuration(150).withEndAction(() -> layoutSubNewChat.setVisibility(View.GONE)).start();
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (isFabExpanded) {
+            collapseFabMenu();
+        } else {
+            super.onBackPressed();
+        }
     }
 
     private void fetchUserInfo() {
         String token = PrefUtils.getToken(this);
-        if (token == null) return;
+        if (token == null || token.isEmpty()) return;
 
         Request request = new Request.Builder()
                 .url(ApiClient.BASE_URL + "/v1/user/info")
@@ -481,10 +619,12 @@ public class HomeActivity extends AppCompatActivity {
 
         ApiClient.getClient().newCall(request).enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {}
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                Log.e(TAG, "fetchUserInfo failed", e);
+            }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 if (response.isSuccessful() && response.body() != null) {
                     try {
                         final info userInfo = info.ADAPTER.decode(response.body().source());
@@ -492,14 +632,16 @@ public class HomeActivity extends AppCompatActivity {
                             runOnUiThread(() -> {
                                 PrefUtils.saveUserId(HomeActivity.this, userInfo.data.id);
                                 connectWebSocket();
-                               fetchStickyCount();
+                                fetchStickyCount();
                                 if (tvUsername != null) tvUsername.setText(userInfo.data.name);
-                                if (tvUserId != null) tvUserId.setText("ID: " + userInfo.data.id);
+                                if (tvUserId != null) tvUserId.setText(getString(R.string.user_id_format, userInfo.data.id));
                                 ImageUtils.loadAvatar(HomeActivity.this, userInfo.data.avatar_url, ivAvatar);
                             });
                         }
                     } catch (Exception e) {
-                        e.printStackTrace();
+                        Log.e(TAG, "fetchUserInfo parse error", e);
+                    } finally {
+                        response.body().close();
                     }
                 }
             }
@@ -508,7 +650,7 @@ public class HomeActivity extends AppCompatActivity {
 
     private void performLogout() {
         String token = PrefUtils.getToken(this);
-        if (token == null) {
+        if (token == null || token.isEmpty()) {
             clearLocalDataAndGoToLogin();
             return;
         }
@@ -525,7 +667,7 @@ public class HomeActivity extends AppCompatActivity {
 
         ApiClient.getClient().newCall(request).enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 runOnUiThread(() -> {
                     Toast.makeText(HomeActivity.this, R.string.logout_failed, Toast.LENGTH_SHORT).show();
                     clearLocalDataAndGoToLogin();
@@ -533,7 +675,7 @@ public class HomeActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 runOnUiThread(() -> {
                     if (response.isSuccessful()) {
                         Toast.makeText(HomeActivity.this, R.string.logout_success, Toast.LENGTH_SHORT).show();
@@ -556,62 +698,61 @@ public class HomeActivity extends AppCompatActivity {
     private void connectWebSocket() {
         String userId = PrefUtils.getUserId(this);
         String token = PrefUtils.getToken(this);
-        if (userId != null && userId.length() > 0 && token != null && token.length() > 0) {
+        if (userId != null && !userId.isEmpty() && token != null && !token.isEmpty()) {
             WsLogManager.getInstance().logInfo("starting WebSocket client");
             WsClient.getInstance().connect(userId, token);
         }
     }
 
-    @Override
-    protected void onDestroy() {
-        // 不在 onDestroy 断开 WS，WS 是全局单例，生命周期跟随 Application。
-        // 从后台回到前台时 onResume 会检查并重连。
-        // 只有退出登录时才调用 disconnect()。
-        super.onDestroy();
-    }
-
-    /**
-     * 免打扰判断：供 WsClient 查询某会话是否免打扰。
-     */
-    public void updateDoNotDisturbSet(java.util.List<String> chatIds) {
-        doNotDisturbChatIds.clear();
-        if (chatIds != null) {
-            doNotDisturbChatIds.addAll(chatIds);
+    public void setDoNotDisturb(String chatId, boolean dnd) {
+        if (dnd) {
+            doNotDisturbChatIds.add(chatId);
+        } else {
+            doNotDisturbChatIds.remove(chatId);
         }
     }
 
-    /**
-     * 供 ConversationsFragment 回调更新会话信息缓存。
-     */
-    public void updateConvInfoCache(java.util.List<com.nago8.chat.old.proto.conversation.ConversationList.ConversationData> data) {
-        convInfoCache.clear();
-        if (data != null) {
-            for (com.nago8.chat.old.proto.conversation.ConversationList.ConversationData cd : data) {
-                convInfoCache.put(cd.chat_id, new String[]{cd.name, cd.avatar_url});
+    public void updateDoNotDisturbSet(List<String> dndIds) {
+        doNotDisturbChatIds.clear();
+        if (dndIds != null) {
+            doNotDisturbChatIds.addAll(dndIds);
+        }
+    }
+
+    public boolean isDoNotDisturb(String chatId) {
+        return doNotDisturbChatIds.contains(chatId);
+    }
+
+    public void updateConvInfo(String chatId, String name, String avatarUrl) {
+        if (chatId == null || chatId.isEmpty()) return;
+        convInfoCache.put(chatId, new String[]{name, avatarUrl});
+    }
+
+    public void updateConvInfoCache(List<ConversationList.ConversationData> dataList) {
+        if (dataList == null) return;
+        for (ConversationList.ConversationData item : dataList) {
+            if (item != null && item.chat_id != null && !item.chat_id.isEmpty()) {
+                convInfoCache.put(item.chat_id, new String[]{
+                        item.name != null ? item.name : "",
+                        item.avatar_url != null ? item.avatar_url : ""
+                });
             }
         }
     }
 
-    /**
-     * 查询会话名称，供 WsClient 通知使用。
-     */
     public String getConvName(String chatId) {
-        String[] info = chatId != null ? convInfoCache.get(chatId) : null;
-        return info != null && info[0] != null && info[0].length() > 0 ? info[0] : null;
+        String[] info = convInfoCache.get(chatId);
+        if (info != null && info.length > 0 && info[0] != null && !info[0].isEmpty()) {
+            return info[0];
+        }
+        return null;
     }
 
-    /**
-     * 查询会话头像 URL，供 WsClient 通知使用。
-     */
     public String getConvAvatar(String chatId) {
-        String[] info = chatId != null ? convInfoCache.get(chatId) : null;
-        return info != null && info[1] != null && info[1].length() > 0 ? info[1] : null;
-    }
-
-    /**
-     * 查询某会话是否免打扰，供 WsClient 调用。
-     */
-    public boolean isDoNotDisturb(String chatId) {
-        return chatId != null && doNotDisturbChatIds.contains(chatId);
+        String[] info = convInfoCache.get(chatId);
+        if (info != null && info.length > 1 && info[1] != null && !info[1].isEmpty()) {
+            return info[1];
+        }
+        return null;
     }
 }

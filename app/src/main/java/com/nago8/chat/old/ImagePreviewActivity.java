@@ -31,7 +31,7 @@ import com.bumptech.glide.load.model.LazyHeaders;
 import com.bumptech.glide.request.target.CustomTarget;
 import com.bumptech.glide.request.transition.Transition;
 import com.nago8.chat.old.utils.LocaleHelper;
-import com.nago8.chat.old.widget.ZoomableImageView;
+import com.ortiz.touchview.TouchImageView;
 
 import com.nago8.chat.old.net.ApiClient;
 
@@ -51,7 +51,7 @@ public class ImagePreviewActivity extends AppCompatActivity {
     public static final String EXTRA_IMAGE_URL = "image_url";
     private static final int REQUEST_SAVE_PERMISSION = 2001;
 
-    private ZoomableImageView zoomableImage;
+    private TouchImageView zoomableImage;
     private ProgressBar progressBar;
     private String imageUrl;
     private boolean imageLoaded = false;
@@ -114,7 +114,6 @@ public class ImagePreviewActivity extends AppCompatActivity {
                             gif.start();
                         }
                         zoomableImage.setImageDrawable(resource);
-                        zoomableImage.resetZoom();
                     }
 
                     @Override

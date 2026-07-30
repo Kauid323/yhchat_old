@@ -21,7 +21,8 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.nago8.chat.old.fragments.MessagesAdapter;
 import com.nago8.chat.old.model.MessageGroup;
-import com.nago8.chat.old.net.MessageRepository;
+import com.nago8.chat.old.repository.MessageRepository;
+import com.nago8.chat.old.repository.GroupRepository;
 import com.nago8.chat.old.net.ApiClient;
 import com.nago8.chat.old.proto.Msg;
 import com.nago8.chat.old.proto.send_message;
@@ -53,12 +54,17 @@ import okhttp3.MediaType;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
+import android.net.Uri;
+
+import com.nago8.chat.old.components.ChatInputBar;
+import com.nago8.chat.old.utils.ImageUploadUtils;
 
 public class ChatActivity extends AppCompatActivity {
     public static final String EXTRA_CHAT_ID = "chat_id";
     public static final String EXTRA_CHAT_TYPE = "chat_type";
     public static final String EXTRA_CHAT_NAME = "chat_name";
     public static final String EXTRA_CHAT_AVATAR = "chat_avatar";
+    private static final int REQUEST_CODE_PICK_IMAGES = 2001;
 
     private RecyclerView recyclerView;
     private ProgressBar progressBar;
@@ -66,20 +72,19 @@ public class ChatActivity extends AppCompatActivity {
     private MessagesAdapter adapter;
     private LinearLayoutManager layoutManager;
     private MessageRepository repository;
+    private GroupRepository groupRepository;
     private Call runningCall;
     private Call olderCall;
     private Call sendCall;
     private final List<Msg> allMessages = new ArrayList<>();
     private boolean loadingOlder = false;
     private boolean noMoreOlder = false;
-    private LinearLayout inputBar;
+    private ChatInputBar chatInputBar;
     private TextView tvTitle;
     private Call groupInfoCall;
     private final Set<String> adminIds = new HashSet<>();
     private String ownerId;
     private WsClient.MessageListener wsListener;
-    private AppCompatEditText etMessage;
-    private AppCompatImageButton btnSend;
 
     private String chatId;
     private int chatType;
@@ -100,6 +105,9 @@ public class ChatActivity extends AppCompatActivity {
         chatId = getIntent().getStringExtra(EXTRA_CHAT_ID);
         chatType = getIntent().getIntExtra(EXTRA_CHAT_TYPE, 0);
         chatName = getIntent().getStringExtra(EXTRA_CHAT_NAME);
+
+        repository = new MessageRepository();
+        groupRepository = new GroupRepository();
 
         AppCompatImageButton btnBack = findViewById(R.id.btnBack);
         AppCompatImageButton btnMore = findViewById(R.id.btnMore);
@@ -156,8 +164,6 @@ public class ChatActivity extends AppCompatActivity {
         });
 
         setupComposeInput();
-
-        repository = new MessageRepository();
         fetchMessages();
     }
 
@@ -229,46 +235,114 @@ public class ChatActivity extends AppCompatActivity {
         return lastVisible >= total - 2;
     }
 
+    private void openImagePicker() {
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        intent.setType("image/*");
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        startActivityForResult(Intent.createChooser(intent, "选择图片"), REQUEST_CODE_PICK_IMAGES);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_CODE_PICK_IMAGES && resultCode == RESULT_OK && data != null) {
+            List<Uri> selectedUris = new ArrayList<>();
+            if (data.getClipData() != null) {
+                int count = data.getClipData().getItemCount();
+                for (int i = 0; i < count; i++) {
+                    Uri uri = data.getClipData().getItemAt(i).getUri();
+                    if (uri != null) selectedUris.add(uri);
+                }
+            } else if (data.getData() != null) {
+                selectedUris.add(data.getData());
+            }
+
+            if (!selectedUris.isEmpty()) {
+                uploadAndSendImages(selectedUris);
+            }
+        }
+    }
+
+    private void uploadAndSendImages(List<Uri> uris) {
+        String token = PrefUtils.getToken(this);
+        if (token == null || token.isEmpty()) {
+            Toast.makeText(this, "用户未登录", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Toast.makeText(this, "准备发送 " + uris.size() + " 张图片...", Toast.LENGTH_SHORT).show();
+
+        repository.uploadAndSendImages(this, token, chatId, chatType, uris, new MessageRepository.ImageUploadListener() {
+            @Override
+            public void onProgress(int index, int total) {
+            }
+
+            @Override
+            public void onImageSuccess(int index, int total) {
+                runOnUiThread(() -> {
+                    Toast.makeText(ChatActivity.this, "图片 (" + index + "/" + total + ") 发送成功", Toast.LENGTH_SHORT).show();
+                    fetchLatestMessage();
+                });
+            }
+
+            @Override
+            public void onImageError(int index, int total, Exception error) {
+                runOnUiThread(() -> Toast.makeText(ChatActivity.this, "图片发送失败: " + error.getMessage(), Toast.LENGTH_SHORT).show());
+            }
+
+            @Override
+            public void onAllCompleted() {
+            }
+        });
+    }
+
     private void setupComposeInput() {
-        inputBar = findViewById(R.id.inputBar);
-        etMessage = findViewById(R.id.etMessage);
-        btnSend = findViewById(R.id.btnSend);
-
-        btnSend.setOnClickListener(v -> {
-            String text = etMessage.getText() != null ? etMessage.getText().toString().trim() : "";
-            if (text.length() == 0) return;
-            performSend(text);
-        });
-
-        etMessage.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-            }
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-            }
-
-            @Override
-            public void afterTextChanged(Editable s) {
-                boolean hasText = s != null && s.toString().trim().length() > 0;
-                btnSend.setAlpha(hasText ? 1.0f : 0.4f);
-                btnSend.setEnabled(hasText);
-            }
-        });
-        btnSend.setAlpha(0.4f);
-        btnSend.setEnabled(false);
+        chatInputBar = findViewById(R.id.chatInputBar);
+        if (chatInputBar != null) {
+            chatInputBar.setOnSendClickListener(this::performSend);
+            chatInputBar.setOnPanelActionClickListener(actionType -> {
+                if ("image".equals(actionType) || "camera".equals(actionType)) {
+                    openImagePicker();
+                } else {
+                    String actionName;
+                    switch (actionType) {
+                        case "video":
+                            actionName = "视频";
+                            break;
+                        case "record":
+                            actionName = "录制";
+                            break;
+                        case "file":
+                            actionName = "文件";
+                            break;
+                        case "card":
+                            actionName = "名片";
+                            break;
+                        case "article":
+                            actionName = "文章";
+                            break;
+                        default:
+                            actionName = actionType;
+                            break;
+                    }
+                    Toast.makeText(this, "点击了：" + actionName, Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
     }
 
     private void performSend(String text) {
+        if (text == null || text.trim().isEmpty()) return;
         String token = PrefUtils.getToken(this);
-        btnSend.setEnabled(false);
+        if (chatInputBar != null) chatInputBar.setSendEnabled(false);
         sendCall = repository.sendMessage(token, chatId, chatType, text, new MessageRepository.SendMessageCallback() {
             @Override
             public void onSuccess(send_message response) {
                 runOnUiThread(() -> {
-                    etMessage.setText("");
-                    btnSend.setEnabled(true);
+                    if (chatInputBar != null) {
+                        chatInputBar.clearInput();
+                        chatInputBar.setSendEnabled(true);
+                    }
                     // 发送成功后依赖 WS 推送自动插入消息到列表
                     // 如果 WS 未推送，做一次增量拉取
                     fetchLatestMessage();
@@ -278,7 +352,7 @@ public class ChatActivity extends AppCompatActivity {
             @Override
             public void onError(Exception error) {
                 runOnUiThread(() -> {
-                    btnSend.setEnabled(true);
+                    if (chatInputBar != null) chatInputBar.setSendEnabled(true);
                     Toast.makeText(ChatActivity.this, R.string.send_failed, Toast.LENGTH_SHORT).show();
                 });
             }
@@ -312,59 +386,37 @@ public class ChatActivity extends AppCompatActivity {
     private void fetchGroupInfo() {
         String token = PrefUtils.getToken(this);
         if (token == null) return;
+        if (groupRepository == null) groupRepository = new GroupRepository();
 
-        info_send requestProto = new info_send.Builder()
-                .group_id(chatId)
-                .build();
-
-        RequestBody body = RequestBody.create(
-                MediaType.parse("application/x-protobuf"),
-                requestProto.encode()
-        );
-
-        Request request = new Request.Builder()
-                .url(ApiClient.BASE_URL + "/v1/group/info")
-                .header("token", token)
-                .post(body)
-                .build();
-
-        groupInfoCall = ApiClient.getClient().newCall(request);
-        groupInfoCall.enqueue(new Callback() {
+        groupInfoCall = groupRepository.getGroupInfo(token, chatId, new GroupRepository.GroupInfoCallback() {
             @Override
-            public void onFailure(Call call, IOException e) {
-                // 静默失败，标题保持原样
+            public void onSuccess(info result) {
+                runOnUiThread(() -> {
+                    if (result != null && result.data != null) {
+                        // 保存管理员ID列表，用于消息列表显示管理员标签
+                        adminIds.clear();
+                        if (result.data.admin != null) {
+                            adminIds.addAll(result.data.admin);
+                        }
+                        // 保存群主ID，用于消息列表显示群主标签
+                        ownerId = result.data.owner;
+                        // 群主也是管理员，加入 adminIds 以兼容逻辑
+                        if (ownerId != null && ownerId.length() > 0) {
+                            adminIds.add(ownerId);
+                        }
+                        // 标题格式：群名 (人数)
+                        String displayName = result.data.name != null && result.data.name.length() > 0
+                                ? result.data.name : chatName;
+                        tvTitle.setText(displayName + " (" + result.data.member + ")");
+                        // 刷新消息列表以应用管理员标签
+                        refreshMessages(false);
+                    }
+                });
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                if (response.isSuccessful() && response.body() != null) {
-                    try {
-                        final info result = info.ADAPTER.decode(response.body().source());
-                        runOnUiThread(() -> {
-                            if (result != null && result.data != null) {
-                                // 保存管理员ID列表，用于消息列表显示管理员标签
-                                adminIds.clear();
-                                if (result.data.admin != null) {
-                                    adminIds.addAll(result.data.admin);
-                                }
-                                // 保存群主ID，用于消息列表显示群主标签
-                                ownerId = result.data.owner;
-                                // 群主也是管理员，加入 adminIds 以兼容逻辑
-                                if (ownerId != null && ownerId.length() > 0) {
-                                    adminIds.add(ownerId);
-                                }
-                                // 标题格式：群名 (人数)
-                                String displayName = result.data.name != null && result.data.name.length() > 0
-                                        ? result.data.name : chatName;
-                                tvTitle.setText(displayName + " (" + result.data.member + ")");
-                                // 刷新消息列表以应用管理员标签
-                                refreshMessages(false);
-                            }
-                        });
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                }
+            public void onError(Exception error) {
+                // 静默失败，标题保持原样
             }
         });
     }
@@ -508,6 +560,15 @@ public class ChatActivity extends AppCompatActivity {
                 previous.uncaughtException(thread, throwable);
             }
         });
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (chatInputBar != null && chatInputBar.isPanelExpanded()) {
+            chatInputBar.collapsePanel();
+            return;
+        }
+        super.onBackPressed();
     }
 
     private void writeCrashLog(Throwable throwable) {

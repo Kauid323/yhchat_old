@@ -149,6 +149,10 @@ public class WsClient {
         this.activeChatId = chatId;
     }
 
+    public String getActiveChatId() {
+        return activeChatId;
+    }
+
     public void connect(String userId, String token) {
         if (connected) {
             WsLogManager.getInstance().logInfo("already connected, skip");
@@ -324,6 +328,19 @@ public class WsClient {
         }
     }
 
+    public static boolean isBlockedMessage(WsMsg msg) {
+        if (msg == null) return false;
+        if (msg.cmd != null && msg.cmd.name != null && !msg.cmd.name.isEmpty()) {
+            String name = msg.cmd.name.toLowerCase();
+            if (name.contains("blocked")) return true;
+        }
+        if (msg.content != null && msg.content.text != null) {
+            String text = msg.content.text.toLowerCase();
+            if (text.contains("blocked_message")) return true;
+        }
+        return false;
+    }
+
     /**
      * 通知逻辑：收到消息时判断是否需要发系统通知。
      * - 当前正在聊天的会话不发
@@ -331,6 +348,7 @@ public class WsClient {
      */
     private void handleNotification(WsMsg msg) {
         if (appContext == null || msg == null || msg.chat_id == null) return;
+        if (isBlockedMessage(msg)) return;
         // 正在聊天的会话不通知
         if (msg.chat_id.equals(activeChatId)) return;
         // 免打扰会话不通知
@@ -383,6 +401,12 @@ public class WsClient {
                 String cmd = m.info != null && m.info.cmd != null ? m.info.cmd : "";
                 String seq = m.info != null && m.info.seq != null ? m.info.seq : "";
                 if (cmd.length() == 0) return null;
+
+                // 直接判断 info.cmd，如果是 blocked_message 则直接拦截过滤，不发通知也不触发任何会话列表更新
+                if ("blocked_message".equalsIgnoreCase(cmd) || "blocked".equalsIgnoreCase(cmd) || cmd.toLowerCase().contains("blocked")) {
+                    return "[cmd=" + cmd + " seq=" + seq + "] push_message blocked (filtered)";
+                }
+
                 String detail = "";
                 if (m.data != null && m.data.msg != null) {
                     WsMsg wm = m.data.msg;
@@ -392,7 +416,13 @@ public class WsClient {
                 }
                 // 通知所有监听器
                 if (m.data != null && m.data.msg != null) {
-                    notifyListeners(m.data.msg);
+                    WsMsg wm = m.data.msg;
+                    if (cmd.length() > 0 && (wm.cmd == null || wm.cmd.name == null || wm.cmd.name.isEmpty())) {
+                        wm = wm.newBuilder()
+                                .cmd(new WsMsg.WsCmd.Builder().name(cmd).build())
+                                .build();
+                    }
+                    notifyListeners(wm);
                 }
                 return "[cmd=" + cmd + " seq=" + seq + "] push_message " + detail;
             } else if (msg instanceof heartbeat_ack) {

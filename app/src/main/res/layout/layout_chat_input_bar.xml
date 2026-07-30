@@ -1,0 +1,312 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/card_background"
+    android:orientation="vertical">
+
+    <!-- Top Input Controls Row -->
+    <LinearLayout
+        android:id="@+id/layoutInputRow"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="8dp">
+
+        <!-- Left Plus Toggle Button -->
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/btnTogglePanel"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginEnd="8dp"
+            android:layout_marginRight="8dp"
+            android:background="?attr/selectableItemBackground"
+            android:contentDescription="@string/action_more"
+            app:srcCompat="@drawable/ic_add"
+            app:tint="?android:attr/textColorSecondary" />
+
+        <!-- Message EditText -->
+        <androidx.appcompat.widget.AppCompatEditText
+            android:id="@+id/etMessage"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="@android:color/transparent"
+            android:hint="@string/hint_input_message"
+            android:imeOptions="actionSend"
+            android:inputType="textMultiLine|textCapSentences"
+            android:maxLines="4"
+            android:minHeight="40dp"
+            android:padding="8dp"
+            android:textColor="@color/bubble_text_left"
+            android:textColorHint="?android:attr/textColorSecondary"
+            android:textSize="15sp" />
+
+        <!-- Send Button -->
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/btnSend"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginLeft="8dp"
+            android:background="?attr/selectableItemBackground"
+            android:contentDescription="@string/btn_send"
+            app:srcCompat="@drawable/ic_send"
+            app:tint="@color/app_primary" />
+    </LinearLayout>
+
+    <!-- Bottom Expandable Panel (Compact Height IM Panel) -->
+    <LinearLayout
+        android:id="@+id/panelMore"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?android:attr/colorBackground"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginBottom="12dp"
+            android:background="@color/divider_color" />
+
+        <!-- Action Row 1: Media Actions -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <!-- Item 1: Photo/Image -->
+            <LinearLayout
+                android:id="@+id/itemActionImage"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="6dp">
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="@drawable/bg_fab_label"
+                    android:padding="10dp"
+                    app:srcCompat="@drawable/ic_image"
+                    app:tint="@android:color/white" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="照片"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- Item 2: Camera Photo -->
+            <LinearLayout
+                android:id="@+id/itemActionCamera"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="6dp">
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="@drawable/bg_fab_label"
+                    android:padding="10dp"
+                    app:srcCompat="@drawable/ic_camera"
+                    app:tint="@android:color/white" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="拍照"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- Item 3: Video -->
+            <LinearLayout
+                android:id="@+id/itemActionVideo"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="6dp">
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="@drawable/bg_fab_label"
+                    android:padding="10dp"
+                    app:srcCompat="@drawable/ic_video"
+                    app:tint="@android:color/white" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="视频"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- Item 4: Audio Record -->
+            <LinearLayout
+                android:id="@+id/itemActionRecord"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="6dp">
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="@drawable/bg_fab_label"
+                    android:padding="10dp"
+                    app:srcCompat="@drawable/ic_mic"
+                    app:tint="@android:color/white" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="录制"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- Action Row 2: File & Other Actions -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal">
+
+            <!-- Item 5: File -->
+            <LinearLayout
+                android:id="@+id/itemActionFile"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="6dp">
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="@drawable/bg_fab_label"
+                    android:padding="10dp"
+                    app:srcCompat="@drawable/ic_file"
+                    app:tint="@android:color/white" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="文件"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- Item 6: Contact Card -->
+            <LinearLayout
+                android:id="@+id/itemActionCard"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="6dp">
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="@drawable/bg_fab_label"
+                    android:padding="10dp"
+                    app:srcCompat="@drawable/ic_contacts"
+                    app:tint="@android:color/white" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="名片"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- Item 7: Article -->
+            <LinearLayout
+                android:id="@+id/itemActionArticle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="6dp">
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="@drawable/bg_fab_label"
+                    android:padding="10dp"
+                    app:srcCompat="@drawable/ic_article"
+                    app:tint="@android:color/white" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="文章"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- Placeholder Item for layout grid balance -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1" />
+
+        </LinearLayout>
+    </LinearLayout>
+
+</LinearLayout>

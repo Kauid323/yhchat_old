@@ -152,4 +152,24 @@
     <string name="message_file_failed">Download failed</string>
     <string name="group_profile_update_failed">Failed to update group info</string>
     <string name="group_profile_community_readonly">Community is currently read-only because no edit API was found in the repository docs</string>
+    <string name="tab_address_book_friends">Friends</string>
+    <string name="tab_address_book_groups">Groups</string>
+    <string name="tab_address_book_bots">Bots</string>
+    <string name="address_book_empty">No contacts found</string>
+    <string name="address_book_not_logged_in">Not logged in</string>
+    <string name="address_book_load_failed">Network error: %1$s</string>
+    <string name="address_book_fetch_failed">Failed to fetch address book</string>
+    <string name="action_refresh">Refresh</string>
+    <string name="address_book_refreshed">Address book refreshed</string>
+    <string name="conversations_refreshed">Conversations refreshed</string>
+    <string name="sticky_refreshed">Sticky list refreshed</string>
+    <string name="action_report">Report</string>
+    <string name="action_add_friend">Add Friend</string>
+    <string name="action_enter_chat">Enter Chat</string>
+    <string name="report_submitted">Report submitted successfully</string>
+    <string name="friend_request_sent">Friend request sent</string>
+    <string name="settings_clear_all_cache">Clear All Cache</string>
+    <string name="settings_cache_cleared">All cache cleared</string>
+    <string name="settings_cache_size_format">Cache size: %1$s</string>
+    <string name="user_id_format">ID: %1$s</string>
 </resources>

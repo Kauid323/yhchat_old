@@ -5,7 +5,7 @@
     android:layout_height="match_parent"
     android:background="#FF000000">
 
-    <com.nago8.chat.old.widget.ZoomableImageView
+    <com.ortiz.touchview.TouchImageView
         android:id="@+id/zoomableImage"
         android:layout_width="match_parent"
         android:layout_height="match_parent"

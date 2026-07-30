@@ -4,7 +4,9 @@ import android.content.Context;
 import android.graphics.Matrix;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
+import android.os.Build;
 import android.util.AttributeSet;
+import android.view.ViewConfiguration;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
@@ -30,6 +32,9 @@ public class ZoomableImageView extends AppCompatImageView {
 
     private float lastX, lastY;
     private int lastPointerCount = 0;
+    private int activePointerId = MotionEvent.INVALID_POINTER_ID;
+    private boolean dragging = false;
+    private float touchSlop;
 
     private ScaleGestureDetector scaleDetector;
     private GestureDetector gestureDetector;
@@ -53,6 +58,7 @@ public class ZoomableImageView extends AppCompatImageView {
 
     private void init(Context context) {
         setScaleType(ScaleType.MATRIX);
+        touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
 
         scaleDetector = new ScaleGestureDetector(context, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
             @Override
@@ -84,6 +90,11 @@ public class ZoomableImageView extends AppCompatImageView {
                 return true;
             }
         });
+        // Keep a one-finger drag reserved for panning. Android's quick-scale
+        // gesture otherwise treats a double-tap followed by a drag as zoom.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            scaleDetector.setQuickScaleEnabled(false);
+        }
 
         gestureDetector = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener() {
             @Override
@@ -116,31 +127,78 @@ public class ZoomableImageView extends AppCompatImageView {
         scaleDetector.onTouchEvent(event);
         gestureDetector.onTouchEvent(event);
 
+        final int action = event.getActionMasked();
         int pointerCount = event.getPointerCount();
 
-        if (pointerCount != lastPointerCount) {
-            lastX = event.getX();
-            lastY = event.getY();
-            lastPointerCount = pointerCount;
+        switch (action) {
+            case MotionEvent.ACTION_DOWN:
+                activePointerId = event.getPointerId(0);
+                lastX = event.getX(0);
+                lastY = event.getY(0);
+                lastPointerCount = 1;
+                dragging = false;
+                break;
+
+            case MotionEvent.ACTION_POINTER_DOWN:
+                // A second finger belongs to the scale detector. Do not carry
+                // its movement into the one-finger pan when it is lifted.
+                lastPointerCount = pointerCount;
+                dragging = false;
+                break;
+
+            case MotionEvent.ACTION_MOVE:
+                if (pointerCount == 1 && currentScale > baseScale + 0.01f) {
+                    int pointerIndex = event.findPointerIndex(activePointerId);
+                    if (pointerIndex < 0) pointerIndex = 0;
+
+                    float x = event.getX(pointerIndex);
+                    float y = event.getY(pointerIndex);
+                    float dx = x - lastX;
+                    float dy = y - lastY;
+
+                    if (!dragging && (dx * dx + dy * dy) >= touchSlop * touchSlop) {
+                        dragging = true;
+                        if (getParent() != null) {
+                            getParent().requestDisallowInterceptTouchEvent(true);
+                        }
+                    }
+                    if (dragging) {
+                        translateX += dx;
+                        translateY += dy;
+                        constrainTranslation();
+                        applyMatrix();
+                    }
+                    lastX = x;
+                    lastY = y;
+                } else if (pointerCount != lastPointerCount) {
+                    lastX = event.getX(0);
+                    lastY = event.getY(0);
+                }
+                lastPointerCount = pointerCount;
+                break;
+
+            case MotionEvent.ACTION_POINTER_UP:
+                // Rebase the next one-finger drag at the remaining pointer.
+                if (pointerCount > 1) {
+                    int remainingIndex = event.getActionIndex() == 0 ? 1 : 0;
+                    activePointerId = event.getPointerId(remainingIndex);
+                    lastX = event.getX(remainingIndex);
+                    lastY = event.getY(remainingIndex);
+                }
+                lastPointerCount = pointerCount - 1;
+                dragging = false;
+                break;
+
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                if (getParent() != null) {
+                    getParent().requestDisallowInterceptTouchEvent(false);
+                }
+                activePointerId = MotionEvent.INVALID_POINTER_ID;
+                lastPointerCount = 0;
+                dragging = false;
+                break;
         }
-
-        if (pointerCount == 1 && event.getAction() == MotionEvent.ACTION_MOVE && currentScale > baseScale + 0.01f) {
-            float dx = event.getX() - lastX;
-            float dy = event.getY() - lastY;
-
-            translateX += dx;
-            translateY += dy;
-
-            constrainTranslation();
-            applyMatrix();
-        }
-
-        if (event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
-            lastPointerCount = 0;
-        }
-
-        lastX = event.getX();
-        lastY = event.getY();
 
         return true;
     }

@@ -16,7 +16,7 @@ import androidx.appcompat.widget.AppCompatImageView;
 import com.nago8.chat.old.proto.user.Medal_info;
 import com.nago8.chat.old.proto.user.ProfileInfo;
 
-import com.nago8.chat.old.net.UserRepository;
+import com.nago8.chat.old.repository.UserRepository;
 import com.nago8.chat.old.proto.user.get_user;
 import com.nago8.chat.old.utils.ImageUtils;
 import com.nago8.chat.old.utils.LocaleHelper;
@@ -28,6 +28,11 @@ import java.util.List;
 import java.util.Locale;
 
 import okhttp3.Call;
+
+import android.content.Intent;
+import android.widget.LinearLayout;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.nago8.chat.old.cache.AddressBookCache;
 
 public class UserProfileActivity extends AppCompatActivity {
 
@@ -50,6 +55,19 @@ public class UserProfileActivity extends AppCompatActivity {
     private UserRepository repository;
     private Call runningCall;
 
+    private FloatingActionButton fabMain;
+    private View fabOverlay;
+    private LinearLayout layoutSubAddOrChat;
+    private LinearLayout layoutSubReport;
+    private FloatingActionButton fabAddOrChat;
+    private FloatingActionButton fabReport;
+    private TextView tvAddOrChatLabel;
+    private boolean isFabExpanded = false;
+
+    private String currentUserId;
+    private String currentUserName = "";
+    private String currentUserAvatar = "";
+
     @Override
     protected void attachBaseContext(Context newBase) {
         super.attachBaseContext(LocaleHelper.wrap(newBase));
@@ -62,6 +80,7 @@ public class UserProfileActivity extends AppCompatActivity {
         setContentView(R.layout.activity_user_profile);
 
         String userId = getIntent().getStringExtra(EXTRA_USER_ID);
+        currentUserId = userId;
 
         AppCompatImageButton btnBack = findViewById(R.id.btnBack);
         ivAvatar = findViewById(R.id.ivAvatar);
@@ -78,6 +97,43 @@ public class UserProfileActivity extends AppCompatActivity {
         tvIpGeo = findViewById(R.id.tvIpGeo);
         tvMedals = findViewById(R.id.tvMedals);
         progressBar = findViewById(R.id.progressBar);
+
+        fabMain = findViewById(R.id.fabMain);
+        fabOverlay = findViewById(R.id.fabOverlay);
+        layoutSubAddOrChat = findViewById(R.id.layoutSubAddOrChat);
+        layoutSubReport = findViewById(R.id.layoutSubReport);
+        fabAddOrChat = findViewById(R.id.fabAddOrChat);
+        fabReport = findViewById(R.id.fabReport);
+        tvAddOrChatLabel = findViewById(R.id.tvAddOrChatLabel);
+
+        if (fabMain != null) {
+            fabMain.setOnClickListener(v -> toggleFabMenu());
+        }
+        if (fabOverlay != null) {
+            fabOverlay.setOnClickListener(v -> collapseFabMenu());
+        }
+        if (fabReport != null) {
+            fabReport.setOnClickListener(v -> {
+                collapseFabMenu();
+                Toast.makeText(this, R.string.report_submitted, Toast.LENGTH_SHORT).show();
+            });
+        }
+        if (fabAddOrChat != null) {
+            fabAddOrChat.setOnClickListener(v -> {
+                collapseFabMenu();
+                boolean isFriend = AddressBookCache.containsUserId(this, currentUserId);
+                if (isFriend) {
+                    Intent intent = new Intent(this, ChatActivity.class);
+                    intent.putExtra(ChatActivity.EXTRA_CHAT_ID, currentUserId);
+                    intent.putExtra(ChatActivity.EXTRA_CHAT_TYPE, 1);
+                    intent.putExtra(ChatActivity.EXTRA_CHAT_NAME, currentUserName);
+                    intent.putExtra(ChatActivity.EXTRA_CHAT_AVATAR, currentUserAvatar);
+                    startActivity(intent);
+                } else {
+                    Toast.makeText(this, R.string.friend_request_sent, Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
 
         btnBack.setOnClickListener(v -> onBackPressed());
 
@@ -124,9 +180,13 @@ public class UserProfileActivity extends AppCompatActivity {
     }
 
     private void bindUser(get_user.Data data) {
-        tvName.setText(data.name != null && data.name.length() > 0 ? data.name : getString(R.string.unknown_user));
+        if (data == null) return;
+        currentUserName = data.name != null && data.name.length() > 0 ? data.name : getString(R.string.unknown_user);
+        currentUserAvatar = data.avatar_url != null ? data.avatar_url : "";
+
+        tvName.setText(currentUserName);
         tvUserId.setText("ID: " + data.id);
-        ImageUtils.loadAvatar(this, data.avatar_url, ivAvatar);
+        ImageUtils.loadAvatar(this, currentUserAvatar, ivAvatar);
 
         if (data.is_vip == 1) {
             tvVip.setVisibility(View.VISIBLE);
@@ -184,6 +244,66 @@ public class UserProfileActivity extends AppCompatActivity {
             tvMedals.setText(getString(R.string.user_profile_medals, sb.length() > 0 ? sb.toString() : getString(R.string.user_profile_no_medal)));
         } else {
             tvMedals.setText(getString(R.string.user_profile_medals, getString(R.string.user_profile_no_medal)));
+        }
+    }
+
+    private void updateFabSubItemState() {
+        if (currentUserId == null || currentUserId.isEmpty()) return;
+        boolean isFriend = AddressBookCache.containsUserId(this, currentUserId);
+        if (tvAddOrChatLabel != null) {
+            tvAddOrChatLabel.setText(isFriend ? R.string.action_enter_chat : R.string.action_add_friend);
+        }
+        if (fabAddOrChat != null) {
+            fabAddOrChat.setImageResource(isFriend ? R.drawable.ic_chat : R.drawable.ic_add);
+        }
+    }
+
+    private void toggleFabMenu() {
+        if (isFabExpanded) {
+            collapseFabMenu();
+        } else {
+            expandFabMenu();
+        }
+    }
+
+    private void expandFabMenu() {
+        updateFabSubItemState();
+        isFabExpanded = true;
+        if (fabMain != null) fabMain.animate().rotation(45f).setDuration(200).start();
+        if (fabOverlay != null) fabOverlay.setVisibility(View.VISIBLE);
+        if (layoutSubReport != null) {
+            layoutSubReport.setVisibility(View.VISIBLE);
+            layoutSubReport.setAlpha(0f);
+            layoutSubReport.setTranslationY(20f);
+            layoutSubReport.animate().alpha(1f).translationY(0f).setDuration(200).start();
+        }
+        if (layoutSubAddOrChat != null) {
+            layoutSubAddOrChat.setVisibility(View.VISIBLE);
+            layoutSubAddOrChat.setAlpha(0f);
+            layoutSubAddOrChat.setTranslationY(20f);
+            layoutSubAddOrChat.animate().alpha(1f).translationY(0f).setDuration(200).start();
+        }
+    }
+
+    private void collapseFabMenu() {
+        if (!isFabExpanded) return;
+        isFabExpanded = false;
+        if (fabMain != null) fabMain.animate().rotation(0f).setDuration(200).start();
+        if (fabOverlay != null) fabOverlay.setVisibility(View.GONE);
+        if (layoutSubReport != null) {
+            layoutSubReport.animate().alpha(0f).translationY(20f).setDuration(150).withEndAction(() -> layoutSubReport.setVisibility(View.GONE)).start();
+        }
+        if (layoutSubAddOrChat != null) {
+            layoutSubAddOrChat.animate().alpha(0f).translationY(20f).setDuration(150).withEndAction(() -> layoutSubAddOrChat.setVisibility(View.GONE)).start();
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (isFabExpanded) {
+            collapseFabMenu();
+        } else {
+            super.onBackPressed();
         }
     }
 }

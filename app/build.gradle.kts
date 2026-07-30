@@ -12,7 +12,7 @@ android {
         minSdk = 16
         targetSdk = 34
         versionCode = 1
-        versionName = "1.0.1-test"
+        versionName = "1.0.2-test"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -35,12 +35,14 @@ dependencies {
     implementation(libs.activity.ktx)
     implementation(libs.androidsvg)
     implementation(libs.appcompat)
+    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
     implementation(libs.constraintlayout)
     implementation(libs.material)
     implementation(libs.wire.runtime)
     implementation(libs.okhttp)
     implementation(libs.gson)
     implementation(libs.glide)
+    implementation(libs.touch.image.view)
     implementation(libs.markwon.core)
     implementation(libs.markwon.ext.strikethrough)
     testImplementation(libs.junit)

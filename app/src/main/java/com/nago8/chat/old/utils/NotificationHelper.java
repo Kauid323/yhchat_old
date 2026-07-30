@@ -8,12 +8,6 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.Paint;
-import android.graphics.PorterDuff;
-import android.graphics.PorterDuffXfermode;
-import android.graphics.RectF;
-import android.graphics.Rect;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
@@ -24,8 +18,8 @@ import com.bumptech.glide.load.model.GlideUrl;
 import com.bumptech.glide.load.model.LazyHeaders;
 import com.bumptech.glide.request.target.SimpleTarget;
 import com.bumptech.glide.request.transition.Transition;
-import com.nago8.chat.old.net.ApiClient;
 
+import com.nago8.chat.old.App;
 import com.nago8.chat.old.ChatActivity;
 import com.nago8.chat.old.R;
 
@@ -90,6 +84,7 @@ public class NotificationHelper {
      */
     public static void showMessageNotification(Context ctx, String chatId, int chatType,
                                                 String title, String content, String avatarUrl) {
+        if (App.isAppInForeground()) return;
         // Android 13+ 没有通知权限就不发
         if (!hasNotificationPermission(ctx)) return;
 
@@ -144,17 +139,17 @@ public class NotificationHelper {
                         @Override
                         public void onResourceReady(Bitmap resource, Transition<? super Bitmap> transition) {
                             builder.setLargeIcon(resource);
-                            if (nm != null) nm.notify(notifId, builder.build());
+                            if (!App.isAppInForeground() && nm != null) nm.notify(notifId, builder.build());
                         }
 
                         @Override
                         public void onLoadFailed(android.graphics.drawable.Drawable errorDrawable) {
                             // 头像加载失败，直接发不带大图标的通知
-                            if (nm != null) nm.notify(notifId, builder.build());
+                            if (!App.isAppInForeground() && nm != null) nm.notify(notifId, builder.build());
                         }
                     });
         } else {
-            if (nm != null) nm.notify(notifId, builder.build());
+            if (!App.isAppInForeground() && nm != null) nm.notify(notifId, builder.build());
         }
     }
 
