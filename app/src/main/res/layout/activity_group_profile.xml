@@ -222,28 +222,7 @@
                     android:textSize="13sp"
                     android:textStyle="bold" />
 
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:orientation="horizontal">
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/group_profile_create_by_label"
-                        android:textColor="?android:attr/textColorSecondary"
-                        android:textSize="14sp" />
-
-                    <TextView
-                        android:id="@+id/tvCreateBy"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:layout_marginLeft="8dp"
-                        android:textColor="@color/bubble_text_left"
-                        android:textSize="14sp" />
-                </LinearLayout>
 
                 <LinearLayout
                     android:id="@+id/rowCategory"

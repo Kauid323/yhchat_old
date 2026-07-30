@@ -30,9 +30,13 @@ import java.util.Locale;
 import okhttp3.Call;
 
 import android.content.Intent;
+import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import androidx.appcompat.app.AlertDialog;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.nago8.chat.old.cache.AddressBookCache;
+import com.nago8.chat.old.repository.FriendRepository;
 
 public class UserProfileActivity extends AppCompatActivity {
 
@@ -53,6 +57,7 @@ public class UserProfileActivity extends AppCompatActivity {
     private TextView tvMedals;
     private ProgressBar progressBar;
     private UserRepository repository;
+    private FriendRepository friendRepository;
     private Call runningCall;
 
     private FloatingActionButton fabMain;
@@ -84,6 +89,15 @@ public class UserProfileActivity extends AppCompatActivity {
 
         AppCompatImageButton btnBack = findViewById(R.id.btnBack);
         ivAvatar = findViewById(R.id.ivAvatar);
+        if (ivAvatar != null) {
+            ivAvatar.setOnClickListener(v -> {
+                if (currentUserAvatar != null && currentUserAvatar.length() > 0) {
+                    Intent intent = new Intent(this, ImagePreviewActivity.class);
+                    intent.putExtra(ImagePreviewActivity.EXTRA_IMAGE_URL, currentUserAvatar);
+                    startActivity(intent);
+                }
+            });
+        }
         tvName = findViewById(R.id.tvName);
         tvUserId = findViewById(R.id.tvUserId);
         tvVip = findViewById(R.id.tvVip);
@@ -130,7 +144,7 @@ public class UserProfileActivity extends AppCompatActivity {
                     intent.putExtra(ChatActivity.EXTRA_CHAT_AVATAR, currentUserAvatar);
                     startActivity(intent);
                 } else {
-                    Toast.makeText(this, R.string.friend_request_sent, Toast.LENGTH_SHORT).show();
+                    showAddFriendDialog();
                 }
             });
         }
@@ -296,6 +310,61 @@ public class UserProfileActivity extends AppCompatActivity {
         if (layoutSubAddOrChat != null) {
             layoutSubAddOrChat.animate().alpha(0f).translationY(20f).setDuration(150).withEndAction(() -> layoutSubAddOrChat.setVisibility(View.GONE)).start();
         }
+    }
+
+    private void showAddFriendDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("添加好友");
+
+        final EditText etRemark = new EditText(this);
+        etRemark.setHint("请输入申请备注信息（可选）");
+        etRemark.setSingleLine(true);
+
+        FrameLayout container = new FrameLayout(this);
+        int padding = (int) (16 * getResources().getDisplayMetrics().density);
+        container.setPadding(padding, padding / 2, padding, padding / 2);
+        container.addView(etRemark);
+        builder.setView(container);
+
+        builder.setPositiveButton("确定", (dialog, which) -> {
+            String remark = etRemark.getText().toString().trim();
+            sendFriendApply(remark);
+        });
+        builder.setNegativeButton("取消", (dialog, which) -> dialog.dismiss());
+
+        builder.show();
+    }
+
+    private void sendFriendApply(String remark) {
+        String token = PrefUtils.getToken(this);
+        if (token == null || token.isEmpty()) return;
+
+        if (friendRepository == null) {
+            friendRepository = new FriendRepository();
+        }
+
+        if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
+        friendRepository.applyFriend(token, currentUserId, 1, remark, new FriendRepository.ApplyFriendCallback() {
+            @Override
+            public void onSuccess(int code, String msg) {
+                runOnUiThread(() -> {
+                    if (progressBar != null) progressBar.setVisibility(View.GONE);
+                    if (code == 1) {
+                        Toast.makeText(UserProfileActivity.this, "好友申请已发送", Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(UserProfileActivity.this, msg != null && !msg.isEmpty() ? msg : "发送申请失败", Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+
+            @Override
+            public void onError(Exception error) {
+                runOnUiThread(() -> {
+                    if (progressBar != null) progressBar.setVisibility(View.GONE);
+                    Toast.makeText(UserProfileActivity.this, "发送申请失败：" + error.getMessage(), Toast.LENGTH_SHORT).show();
+                });
+            }
+        });
     }
 
     @Override

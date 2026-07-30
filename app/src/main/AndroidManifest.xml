@@ -16,6 +16,7 @@
         android:name=".App"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
         android:theme="@style/Theme.云湖Old">
         <activity
             android:name=".MainActivity"
@@ -38,8 +39,33 @@
         <activity android:name=".WsLogActivity" />
         <activity android:name=".ImagePreviewActivity"
             android:theme="@style/Theme.云湖Old.Fullscreen" />
-        <activity android:name=".PostDetailActivity" />
+        <activity
+            android:name=".PostDetailActivity"
+            android:exported="true">
+            <!-- yunhu://post-detail?id=xxx -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="yunhu" android:host="post-detail" />
+            </intent-filter>
+
+            <!-- http(s)://www.yhchat.com/c/p/xxx & http(s)://yhchat.com/c/p/xxx -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:host="www.yhchat.com" />
+                <data android:host="yhchat.com" />
+                <data android:pathPrefix="/c/p/" />
+            </intent-filter>
+        </activity>
         <activity android:name=".GroupMembersActivity" />
+        <activity android:name=".VideoPlayerActivity"
+            android:configChanges="orientation|screenSize"
+            android:theme="@style/Theme.云湖Old.Fullscreen" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

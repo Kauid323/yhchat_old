@@ -96,7 +96,7 @@
     <string name="group_profile_member">群人数：%1$s</string>
     <string name="group_profile_create_by">创建者ID：%1$s</string>
     <string name="group_profile_category">分类：%1$s</string>
-    <string name="group_profile_private">是否私有：%1$s</string>
+    <string name="group_profile_private">是否私有</string>
     <string name="group_profile_private_yes">是</string>
     <string name="group_profile_private_no">否</string>
     <string name="group_profile_members">群成员</string>

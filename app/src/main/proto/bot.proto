@@ -116,7 +116,7 @@ message create_bot_send {
     string name = 2;                // 机器人名称
     string introduction = 3;        // 机器人简介
     string avatar_url = 4;          // 头像URL
-    int32 private = 5;              // 是否私有 (0-公开，1-私有)
+    bool private = 5;              // 是否私有 (0-公开，1-私有)
 }
 
 message create_bot {

@@ -5,6 +5,8 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Build;
@@ -121,42 +123,99 @@ public class ImagePreviewActivity extends AppCompatActivity {
 
         progressBar.setVisibility(View.VISIBLE);
 
-        GlideUrl glideUrl;
-        if (imageUrl.contains(".jwznb.com")) {
-            glideUrl = new GlideUrl(imageUrl, new LazyHeaders.Builder()
-                    .addHeader("Referer", "http://myapp.jwznb.com")
-                    .build());
-        } else {
-            glideUrl = new GlideUrl(imageUrl);
+        String targetUrl = imageUrl.trim();
+        if (Build.VERSION.SDK_INT < 21 || targetUrl.contains(".jwznb.com")) {
+            if (targetUrl.startsWith("https://")) {
+                targetUrl = "http://" + targetUrl.substring(8);
+            }
         }
 
-        Glide.with(this)
-                .asDrawable()
-                .load(glideUrl)
-                .diskCacheStrategy(DiskCacheStrategy.ALL)
-                .into(new CustomTarget<Drawable>() {
-                    @Override
-                    public void onResourceReady(@NonNull Drawable resource, @Nullable Transition<? super Drawable> transition) {
+        final String downloadUrl = targetUrl;
+        new Thread(() -> {
+            try {
+                Request.Builder builder = new Request.Builder().url(downloadUrl);
+                if (downloadUrl.contains(".jwznb.com")) {
+                    builder.addHeader("Referer", "http://myapp.jwznb.com");
+                }
+                Response response = ApiClient.getClient().newCall(builder.build()).execute();
+                if (!response.isSuccessful() || response.body() == null) {
+                    runOnUiThread(() -> {
+                        if (isFinishing() || (Build.VERSION.SDK_INT >= 17 && isDestroyed())) return;
                         progressBar.setVisibility(View.GONE);
-                        imageLoaded = true;
+                        Toast.makeText(ImagePreviewActivity.this, R.string.image_preview_load_failed, Toast.LENGTH_SHORT).show();
+                    });
+                    return;
+                }
 
-                        imageWidth = resource.getIntrinsicWidth();
-                        imageHeight = resource.getIntrinsicHeight();
+                final File tempFile = new File(getCacheDir(), "preview_" + System.currentTimeMillis() + ".tmp");
+                InputStream is = response.body().byteStream();
+                FileOutputStream fos = new FileOutputStream(tempFile);
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = is.read(buffer)) != -1) {
+                    fos.write(buffer, 0, read);
+                }
+                fos.flush();
+                fos.close();
+                is.close();
 
-                        // GIF 需要手动启动动画播放
-                        if (resource instanceof GifDrawable) {
-                            GifDrawable gif = (GifDrawable) resource;
-                            gif.setLoopCount(GifDrawable.LOOP_INTRINSIC);
-                            gif.start();
-                        }
-                        zoomableImage.setImageDrawable(resource);
-                    }
+                runOnUiThread(() -> {
+                    if (isFinishing() || (Build.VERSION.SDK_INT >= 17 && isDestroyed())) return;
+                    progressBar.setVisibility(View.GONE);
+                    imageLoaded = true;
 
-                    @Override
-                    public void onLoadCleared(@Nullable Drawable placeholder) {
-                        stopGifIfRunning();
-                    }
+                    // 使用 .override(2048, 2048) 限制最大解码分辨率，防止 200MB 超高分辨率大图导致的 OOM
+                    Glide.with(getApplicationContext())
+                            .load(tempFile)
+                            .override(2048, 2048)
+                            .diskCacheStrategy(DiskCacheStrategy.NONE)
+                            .skipMemoryCache(true)
+                            .into(new CustomTarget<Drawable>() {
+                                @Override
+                                public void onResourceReady(@NonNull Drawable drawable, @Nullable Transition<? super Drawable> transition) {
+                                    if (isFinishing() || (Build.VERSION.SDK_INT >= 17 && isDestroyed())) return;
+                                    imageWidth = drawable.getIntrinsicWidth();
+                                    imageHeight = drawable.getIntrinsicHeight();
+                                    if (drawable instanceof GifDrawable) {
+                                        GifDrawable gif = (GifDrawable) drawable;
+                                        gif.setLoopCount(GifDrawable.LOOP_INTRINSIC);
+                                        gif.start();
+                                    }
+                                    zoomableImage.setImageDrawable(drawable);
+                                }
+
+                                @Override
+                                public void onLoadFailed(@Nullable Drawable errorDrawable) {
+                                    if (isFinishing() || (Build.VERSION.SDK_INT >= 17 && isDestroyed())) return;
+                                    // 兜底方案：使用带采样下采样的 Android 原生 BitmapFactory 安全解码超大图
+                                    try {
+                                        Bitmap bitmap = decodeSampledBitmapFromFile(tempFile.getAbsolutePath(), 2048, 2048);
+                                        if (bitmap != null) {
+                                            imageWidth = bitmap.getWidth();
+                                            imageHeight = bitmap.getHeight();
+                                            zoomableImage.setImageBitmap(bitmap);
+                                            return;
+                                        }
+                                    } catch (Throwable ignored) {}
+                                    Toast.makeText(ImagePreviewActivity.this, R.string.image_preview_load_failed, Toast.LENGTH_SHORT).show();
+                                }
+
+                                @Override
+                                public void onLoadCleared(@Nullable Drawable placeholder) {
+                                    stopGifIfRunning();
+                                }
+                            });
                 });
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                runOnUiThread(() -> {
+                    if (isFinishing() || (Build.VERSION.SDK_INT >= 17 && isDestroyed())) return;
+                    progressBar.setVisibility(View.GONE);
+                    Toast.makeText(ImagePreviewActivity.this, R.string.image_preview_load_failed, Toast.LENGTH_SHORT).show();
+                });
+            }
+        }).start();
     }
 
     private void stopGifIfRunning() {
@@ -438,5 +497,38 @@ public class ImagePreviewActivity extends AppCompatActivity {
         if ("png".equals(ext)) return "image/png";
         if ("bmp".equals(ext)) return "image/bmp";
         return "image/jpeg";
+    }
+
+    public static Bitmap decodeSampledBitmapFromFile(String filePath, int reqWidth, int reqHeight) {
+        try {
+            BitmapFactory.Options options = new BitmapFactory.Options();
+            options.inJustDecodeBounds = true;
+            BitmapFactory.decodeFile(filePath, options);
+
+            options.inSampleSize = calculateInSampleSize(options, reqWidth, reqHeight);
+            options.inJustDecodeBounds = false;
+            options.inPreferredConfig = Bitmap.Config.RGB_565;
+
+            return BitmapFactory.decodeFile(filePath, options);
+        } catch (Throwable e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    public static int calculateInSampleSize(BitmapFactory.Options options, int reqWidth, int reqHeight) {
+        final int height = options.outHeight;
+        final int width = options.outWidth;
+        int inSampleSize = 1;
+
+        if (height > reqHeight || width > reqWidth) {
+            final int halfHeight = height / 2;
+            final int halfWidth = width / 2;
+
+            while ((halfHeight / inSampleSize) >= reqHeight && (halfWidth / inSampleSize) >= reqWidth) {
+                inSampleSize *= 2;
+            }
+        }
+        return inSampleSize;
     }
 }

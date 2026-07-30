@@ -12,19 +12,22 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.AppCompatImageButton;
 import androidx.appcompat.widget.AppCompatImageView;
+import androidx.appcompat.widget.PopupMenu;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.nago8.chat.old.net.ApiClient;
 import com.nago8.chat.old.proto.group.User;
 import com.nago8.chat.old.proto.group.info;
 import com.nago8.chat.old.proto.group.info_send;
 import com.nago8.chat.old.proto.group.list_member;
 import com.nago8.chat.old.proto.group.list_member_send;
-import com.nago8.chat.old.net.ApiClient;
+import com.nago8.chat.old.repository.GroupRepository;
 import com.nago8.chat.old.utils.ImageUtils;
 import com.nago8.chat.old.utils.LocaleHelper;
 import com.nago8.chat.old.utils.PrefUtils;
@@ -54,6 +57,7 @@ public class GroupMembersActivity extends AppCompatActivity {
     private String groupId;
     private String ownerId;
     private final Set<String> adminIds = new HashSet<>();
+    private GroupRepository groupRepository;
 
     @Override
     protected void attachBaseContext(Context newBase) {
@@ -67,6 +71,7 @@ public class GroupMembersActivity extends AppCompatActivity {
         setContentView(R.layout.activity_group_members);
 
         groupId = getIntent().getStringExtra(EXTRA_GROUP_ID);
+        groupRepository = new GroupRepository();
 
         AppCompatImageButton btnBack = findViewById(R.id.btnBack);
         recyclerView = findViewById(R.id.recyclerView);
@@ -261,7 +266,26 @@ public class GroupMembersActivity extends AppCompatActivity {
                 holder.tvTag.setVisibility(View.GONE);
             }
 
+            String currentUserId = PrefUtils.getUserId(GroupMembersActivity.this);
+            boolean isMyselfOwner = currentUserId != null && ownerId != null && currentUserId.equals(ownerId);
+            boolean isMyselfAdmin = currentUserId != null && adminIds.contains(currentUserId);
+            boolean isMyselfManager = isMyselfOwner || isMyselfAdmin;
+
+            // 规则：不在 群主/管理员 列表的话，都不显示；如果是群主本身(Target是群主)，也不显示 more 菜单
+            if (!isMyselfManager || isOwner) {
+                holder.ibMore.setVisibility(View.GONE);
+            } else {
+                holder.ibMore.setVisibility(View.VISIBLE);
+            }
+
             final String finalUserId = userId;
+            final String finalName = name;
+            final boolean finalIsAdmin = isAdmin;
+            final boolean finalIsGag = (member.is_gag == 1);
+            final int itemPos = position;
+
+            holder.ibMore.setOnClickListener(v -> showMemberActionMenu(v, finalUserId, finalName, finalIsAdmin, finalIsGag, isMyselfOwner, itemPos, member));
+
             holder.itemView.setOnClickListener(v -> {
                 if (finalUserId.length() > 0) {
                     Intent intent = new Intent(v.getContext(), UserProfileActivity.class);
@@ -269,6 +293,136 @@ public class GroupMembersActivity extends AppCompatActivity {
                     v.getContext().startActivity(intent);
                 }
             });
+        }
+
+        private void showMemberActionMenu(View anchor, String targetUserId, String targetName, boolean isTargetAdmin, boolean isTargetGagged, boolean isMyselfOwner, int position, User member) {
+            PopupMenu popup = new PopupMenu(GroupMembersActivity.this, anchor);
+            popup.getMenu().add(0, 1, 0, "踢出成员");
+            popup.getMenu().add(0, 2, 0, isTargetGagged ? "取消禁言" : "禁言成员");
+
+            if (isMyselfOwner) {
+                popup.getMenu().add(0, 3, 0, isTargetAdmin ? "移除管理员" : "设置管理员");
+            }
+
+            popup.setOnMenuItemClickListener(item -> {
+                String token = PrefUtils.getToken(GroupMembersActivity.this);
+                if (token == null || token.isEmpty()) return true;
+
+                switch (item.getItemId()) {
+                    case 1:
+                        // 踢出成员
+                        groupRepository.removeMember(token, groupId, targetUserId, new GroupRepository.GroupActionCallback() {
+                            @Override
+                            public void onSuccess(int code, String msg) {
+                                runOnUiThread(() -> {
+                                    if (code == 1) {
+                                        Toast.makeText(GroupMembersActivity.this, "已踢出成员: " + targetName, Toast.LENGTH_SHORT).show();
+                                        if (position >= 0 && position < members.size()) {
+                                            members.remove(position);
+                                            notifyItemRemoved(position);
+                                        }
+                                    } else {
+                                        Toast.makeText(GroupMembersActivity.this, msg != null && !msg.isEmpty() ? msg : "踢出失败", Toast.LENGTH_SHORT).show();
+                                    }
+                                });
+                            }
+
+                            @Override
+                            public void onError(Exception error) {
+                                runOnUiThread(() -> Toast.makeText(GroupMembersActivity.this, "操作失败: " + error.getMessage(), Toast.LENGTH_SHORT).show());
+                            }
+                        });
+                        return true;
+
+                    case 2:
+                        // 禁言 / 取消禁言
+                        if (isTargetGagged) {
+                            groupRepository.gagMember(token, groupId, targetUserId, 0, new GroupRepository.GroupActionCallback() {
+                                @Override
+                                public void onSuccess(int code, String msg) {
+                                    runOnUiThread(() -> {
+                                        if (code == 1) {
+                                            Toast.makeText(GroupMembersActivity.this, "已取消禁言", Toast.LENGTH_SHORT).show();
+                                            fetchMembers();
+                                        } else {
+                                            Toast.makeText(GroupMembersActivity.this, msg != null && !msg.isEmpty() ? msg : "操作失败", Toast.LENGTH_SHORT).show();
+                                        }
+                                    });
+                                }
+
+                                @Override
+                                public void onError(Exception error) {
+                                    runOnUiThread(() -> Toast.makeText(GroupMembersActivity.this, "操作失败: " + error.getMessage(), Toast.LENGTH_SHORT).show());
+                                }
+                            });
+                        } else {
+                            showGagOptionsDialog(token, targetUserId);
+                        }
+                        return true;
+
+                    case 3:
+                        // 设置 / 移除管理员
+                        groupRepository.editAdmin(token, groupId, targetUserId, !isTargetAdmin, new GroupRepository.GroupActionCallback() {
+                            @Override
+                            public void onSuccess(int code, String msg) {
+                                runOnUiThread(() -> {
+                                    if (code == 1) {
+                                        Toast.makeText(GroupMembersActivity.this, !isTargetAdmin ? "已设为管理员" : "已移除管理员", Toast.LENGTH_SHORT).show();
+                                        if (!isTargetAdmin) {
+                                            adminIds.add(targetUserId);
+                                        } else {
+                                            adminIds.remove(targetUserId);
+                                        }
+                                        notifyItemChanged(position);
+                                    } else {
+                                        Toast.makeText(GroupMembersActivity.this, msg != null && !msg.isEmpty() ? msg : "操作失败", Toast.LENGTH_SHORT).show();
+                                    }
+                                });
+                            }
+
+                            @Override
+                            public void onError(Exception error) {
+                                runOnUiThread(() -> Toast.makeText(GroupMembersActivity.this, "操作失败: " + error.getMessage(), Toast.LENGTH_SHORT).show());
+                            }
+                        });
+                        return true;
+
+                    default:
+                        return false;
+                }
+            });
+
+            popup.show();
+        }
+
+        private void showGagOptionsDialog(String token, String targetUserId) {
+            String[] options = new String[]{"10分钟", "1小时", "6小时", "12小时", "永久禁言"};
+            int[] seconds = new int[]{600, 3600, 21600, 43200, -1};
+
+            AlertDialog.Builder builder = new AlertDialog.Builder(GroupMembersActivity.this);
+            builder.setTitle("选择禁言时长");
+            builder.setItems(options, (dialog, which) -> {
+                int duration = seconds[which];
+                groupRepository.gagMember(token, groupId, targetUserId, duration, new GroupRepository.GroupActionCallback() {
+                    @Override
+                    public void onSuccess(int code, String msg) {
+                        runOnUiThread(() -> {
+                            if (code == 1) {
+                                Toast.makeText(GroupMembersActivity.this, "已禁言该成员", Toast.LENGTH_SHORT).show();
+                                fetchMembers();
+                            } else {
+                                Toast.makeText(GroupMembersActivity.this, msg != null && !msg.isEmpty() ? msg : "禁言失败", Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    }
+
+                    @Override
+                    public void onError(Exception error) {
+                        runOnUiThread(() -> Toast.makeText(GroupMembersActivity.this, "操作失败: " + error.getMessage(), Toast.LENGTH_SHORT).show());
+                    }
+                });
+            });
+            builder.show();
         }
 
         @Override
@@ -280,12 +434,14 @@ public class GroupMembersActivity extends AppCompatActivity {
             AppCompatImageView ivAvatar;
             TextView tvName;
             TextView tvTag;
+            AppCompatImageButton ibMore;
 
             MemberViewHolder(@NonNull View itemView) {
                 super(itemView);
                 ivAvatar = itemView.findViewById(R.id.ivAvatar);
                 tvName = itemView.findViewById(R.id.tvName);
                 tvTag = itemView.findViewById(R.id.tvTag);
+                ibMore = itemView.findViewById(R.id.ibMore);
             }
         }
     }

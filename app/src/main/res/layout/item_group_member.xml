@@ -44,4 +44,15 @@
             android:visibility="gone" />
     </LinearLayout>
 
+    <androidx.appcompat.widget.AppCompatImageButton
+        android:id="@+id/ibMore"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="More options"
+        android:padding="8dp"
+        app:srcCompat="@drawable/ic_more"
+        app:tint="@color/text_secondary"
+        android:visibility="gone" />
+
 </LinearLayout>

@@ -66,6 +66,8 @@ public class StickyConversationsFragment extends Fragment {
         }
 
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        recyclerView.setHasFixedSize(true);
+        recyclerView.setItemViewCacheSize(20);
         recyclerView.setItemAnimator(null);
         adapter = new ConversationsAdapter();
         recyclerView.setAdapter(adapter);

@@ -19,6 +19,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.nago8.chat.old.R;
 import com.nago8.chat.old.ImagePreviewActivity;
 import com.nago8.chat.old.PostDetailActivity;
+import com.nago8.chat.old.VideoPlayerActivity;
 import com.nago8.chat.old.net.FileDownloadManager;
 import com.nago8.chat.old.model.MessageGroup;
 import com.nago8.chat.old.proto.Msg;
@@ -64,7 +65,30 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
     }
 
     private Markwon getMarkwon(Context context) {
-        if (markwon == null) markwon = Markwon.builder(context).usePlugin(StrikethroughPlugin.create()).build();
+        if (markwon == null) {
+            markwon = Markwon.builder(context)
+                    .usePlugin(StrikethroughPlugin.create())
+                    .usePlugin(new io.noties.markwon.AbstractMarkwonPlugin() {
+                        @Override
+                        public void configureConfiguration(@NonNull io.noties.markwon.MarkwonConfiguration.Builder builder) {
+                            builder.linkResolver((view, link) -> {
+                                if (!com.nago8.chat.old.utils.InternalLinkUtils.handleUrl(view.getContext(), link)) {
+                                    try {
+                                        String openUrl = link;
+                                        if (!openUrl.startsWith("http://") && !openUrl.startsWith("https://") && !openUrl.startsWith("yunhu://")) {
+                                            openUrl = "http://" + openUrl;
+                                        }
+                                        android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(openUrl));
+                                        view.getContext().startActivity(intent);
+                                    } catch (Exception e) {
+                                        e.printStackTrace();
+                                    }
+                                }
+                            });
+                        }
+                    })
+                    .build();
+        }
         return markwon;
     }
 
@@ -198,6 +222,9 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
         }
 
         private View createBubble(MessageGroup group, Msg msg, int index, int count) {
+            if (msg != null && msg.content != null && msg.content.video_url != null && msg.content.video_url.length() > 0) {
+                return createVideoBubble(group, msg, index, count);
+            }
             if (msg != null && msg.content != null && msg.content.image_url != null && msg.content.image_url.length() > 0) {
                 return createImageBubble(group, msg, index, count);
             }
@@ -211,11 +238,15 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             TextView textView = new TextView(itemView.getContext());
             int emojiSize = dp(22);
             CharSequence displayText = FengEmojiRenderer.apply(itemView.getContext(), getMessageText(msg), emojiSize);
+            int linkColor = group.mine ? 0xFFE0F2FE : 0xFF1A73E8;
+            textView.setLinkTextColor(linkColor);
+
             boolean isMarkdown = msg != null && msg.content_type == 3;
-            if (msg != null && msg.content_type == 3) {
+            if (isMarkdown) {
                 getMarkwon(itemView.getContext()).setMarkdown(textView, getMessageText(msg));
             } else {
                 textView.setText(displayText, TextView.BufferType.SPANNABLE);
+                com.nago8.chat.old.utils.InternalLinkUtils.processTextViewLinks(textView, group.mine);
             }
             textView.setTextSize(15);
             textView.setTextColor(itemView.getResources().getColor(group.mine ? android.R.color.white : R.color.bubble_text_left));
@@ -269,6 +300,77 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                 textView.setLayoutParams(params);
                 return textView;
             }
+        }
+
+        /**
+         * 视频消息气泡：视频图标 + 文件名，引用消息，点击跳转 VideoPlayerActivity 播放视频
+         */
+        private View createVideoBubble(MessageGroup group, Msg msg, int index, int count) {
+            final Context ctx = itemView.getContext();
+            final String videoUrl = msg.content.video_url;
+            final String videoTitle = msg.content.file_name != null && msg.content.file_name.length() > 0 ? msg.content.file_name : ctx.getString(R.string.preview_video);
+
+            int textColor = itemView.getResources().getColor(group.mine ? android.R.color.white : R.color.bubble_text_left);
+
+            LinearLayout container = new LinearLayout(ctx);
+            container.setOrientation(LinearLayout.VERTICAL);
+            container.setBackgroundResource(getBubbleBackground(group.mine, index, count));
+            container.setPadding(dp(12), dp(10), dp(12), dp(10));
+            container.setClickable(true);
+            container.setFocusable(true);
+
+            String quoteTextStr = getQuoteText(msg);
+            if (quoteTextStr != null && quoteTextStr.length() > 0) {
+                View quoteView = createQuoteView(ctx, quoteTextStr);
+                if (quoteView != null) {
+                    container.addView(quoteView);
+                }
+            }
+
+            LinearLayout videoRow = new LinearLayout(ctx);
+            videoRow.setOrientation(LinearLayout.HORIZONTAL);
+            videoRow.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            if (quoteTextStr != null && quoteTextStr.length() > 0) {
+                rowParams.topMargin = dp(4);
+            }
+            videoRow.setLayoutParams(rowParams);
+
+            ImageView icon = new ImageView(ctx);
+            int iconSize = dp(24);
+            LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(iconSize, iconSize);
+            iconParams.rightMargin = dp(8);
+            icon.setLayoutParams(iconParams);
+            icon.setImageResource(R.drawable.ic_video);
+            icon.setColorFilter(textColor);
+            videoRow.addView(icon);
+
+            TextView tvVideo = new TextView(ctx);
+            tvVideo.setText(videoTitle);
+            tvVideo.setTextSize(15);
+            tvVideo.setTextColor(textColor);
+            tvVideo.setMaxWidth(dp(220));
+            tvVideo.setSingleLine(true);
+            tvVideo.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            videoRow.addView(tvVideo);
+
+            container.addView(videoRow);
+
+            container.setOnClickListener(v -> {
+                Intent intent = new Intent(ctx, VideoPlayerActivity.class);
+                intent.putExtra(VideoPlayerActivity.EXTRA_VIDEO_URL, videoUrl);
+                intent.putExtra(VideoPlayerActivity.EXTRA_VIDEO_TITLE, videoTitle);
+                ctx.startActivity(intent);
+            });
+
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            params.topMargin = dp(2);
+            params.leftMargin = group.mine ? dp(48) : 0;
+            params.rightMargin = group.mine ? 0 : dp(48);
+            params.gravity = group.mine ? Gravity.RIGHT : Gravity.LEFT;
+            container.setLayoutParams(params);
+
+            return container;
         }
 
         /**

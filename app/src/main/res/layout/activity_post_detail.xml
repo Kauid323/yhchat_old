@@ -6,6 +6,7 @@
     android:background="@color/chat_background"
     android:orientation="vertical">
 
+    <!-- 顶栏 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="56dp"
@@ -35,6 +36,20 @@
             android:textStyle="bold" />
     </LinearLayout>
 
+    <!-- Tab 选择栏 -->
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/tabLayout"
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:background="@color/app_primary"
+        app:tabSelectedTextColor="@color/text_white"
+        app:tabTextColor="#AAFFFFFF"
+        app:tabIndicatorColor="@color/text_white"
+        app:tabIndicatorHeight="3dp"
+        app:tabMode="fixed"
+        app:tabGravity="fill" />
+
+    <!-- 全局 ProgressBar（加载中显示） -->
     <ProgressBar
         android:id="@+id/progressBar"
         android:layout_width="wrap_content"
@@ -43,6 +58,7 @@
         android:layout_marginTop="48dp"
         android:visibility="gone" />
 
+    <!-- ===== Tab 0: 文章内容 ===== -->
     <ScrollView
         android:id="@+id/scrollView"
         android:layout_width="match_parent"
@@ -106,5 +122,235 @@
 
         </LinearLayout>
     </ScrollView>
+
+    <!-- ===== Tab 1: 互动 Tab ===== -->
+    <LinearLayout
+        android:id="@+id/interactionLayout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <!-- 点赞、收藏、投币按钮行 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="72dp"
+            android:background="@color/chat_background"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:elevation="2dp">
+
+            <!-- 点赞 -->
+            <LinearLayout
+                android:id="@+id/btnLike"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackground">
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:id="@+id/ivLike"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    app:srcCompat="@drawable/ic_like_outline"
+                    app:tint="@color/text_secondary" />
+
+                <TextView
+                    android:id="@+id/tvLikeNum"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0"
+                    android:textSize="12sp"
+                    android:textColor="@color/text_secondary"
+                    android:layout_marginTop="3dp" />
+            </LinearLayout>
+
+            <!-- 收藏 -->
+            <LinearLayout
+                android:id="@+id/btnCollect"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackground">
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:id="@+id/ivCollect"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    app:srcCompat="@drawable/ic_star_outline"
+                    app:tint="@color/text_secondary" />
+
+                <TextView
+                    android:id="@+id/tvCollectNum"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0"
+                    android:textSize="12sp"
+                    android:textColor="@color/text_secondary"
+                    android:layout_marginTop="3dp" />
+            </LinearLayout>
+
+            <!-- 投币 -->
+            <LinearLayout
+                android:id="@+id/btnReward"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackground">
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:id="@+id/ivReward"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    app:srcCompat="@drawable/ic_coin"
+                    app:tint="@color/text_secondary" />
+
+                <TextView
+                    android:id="@+id/tvRewardNum"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0"
+                    android:textSize="12sp"
+                    android:textColor="@color/text_secondary"
+                    android:layout_marginTop="3dp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/divider_color" />
+
+        <!-- 评论区标题 -->
+        <TextView
+            android:id="@+id/tvCommentTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_primary"
+            android:text="评论" />
+
+        <!-- 下拉刷新包裹评论区 -->
+        <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+            android:id="@+id/swipeRefreshLayout"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
+            <ScrollView
+                android:id="@+id/commentScrollView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+                <LinearLayout
+                    android:id="@+id/commentListContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingBottom="8dp">
+
+                    <!-- 评论加载进度 -->
+                    <ProgressBar
+                        android:id="@+id/commentProgressBar"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center_horizontal"
+                        android:layout_marginTop="16dp"
+                        android:layout_marginBottom="16dp"
+                        android:visibility="gone" />
+
+                    <!-- 没有评论 -->
+                    <TextView
+                        android:id="@+id/tvNoComment"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:padding="24dp"
+                        android:gravity="center"
+                        android:text="暂无评论，快来抢沙发~"
+                        android:textSize="14sp"
+                        android:textColor="@color/text_secondary"
+                        android:visibility="gone" />
+
+                    <!-- 加载更多 -->
+                    <TextView
+                        android:id="@+id/tvLoadMoreComments"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:padding="12dp"
+                        android:gravity="center"
+                        android:text="加载更多评论"
+                        android:textSize="13sp"
+                        android:textColor="@color/app_primary"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:background="?attr/selectableItemBackground"
+                        android:visibility="gone" />
+
+                </LinearLayout>
+            </ScrollView>
+        </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/divider_color" />
+
+        <!-- 发评论输入框 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="12dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
+            android:background="@color/chat_background">
+
+            <EditText
+                android:id="@+id/etComment"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:hint="写评论..."
+                android:textSize="14sp"
+                android:background="@drawable/bg_input_flat"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:inputType="textMultiLine|textCapSentences"
+                android:maxLines="3"
+                android:imeOptions="actionSend" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btnSendComment"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:layout_marginStart="8dp"
+                android:text="发送"
+                android:textSize="13sp"
+                android:textColor="@color/text_white"
+                android:background="@drawable/bg_button_flat"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp" />
+
+        </LinearLayout>
+    </LinearLayout>
 
 </LinearLayout>

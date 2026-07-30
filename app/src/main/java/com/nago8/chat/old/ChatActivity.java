@@ -146,6 +146,9 @@ public class ChatActivity extends AppCompatActivity {
         layoutManager = new LinearLayoutManager(this);
         layoutManager.setStackFromEnd(true);
         recyclerView.setLayoutManager(layoutManager);
+        recyclerView.setHasFixedSize(true);
+        recyclerView.setItemViewCacheSize(20);
+        recyclerView.setItemAnimator(null);
         recyclerView.addOnScrollListener(new TopLoadScrollListener());
         adapter = new MessagesAdapter();
         recyclerView.setAdapter(adapter);

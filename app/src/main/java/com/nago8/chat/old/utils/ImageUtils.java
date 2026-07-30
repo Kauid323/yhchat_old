@@ -4,6 +4,7 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
+import android.os.Build;
 import android.widget.ImageView;
 
 import androidx.annotation.Nullable;
@@ -34,8 +35,17 @@ public class ImageUtils {
             return;
         }
 
-        String finalUrl = url;
-        if (!finalUrl.contains("/default-avatars/")) {
+        String finalUrl = url.trim();
+
+        // 兼容 Android 4.x (SDK < 21) 系统 SSL/TLS 协议低版本导致的 HTTPS 握手失败，转换为 HTTP 访问
+        if (Build.VERSION.SDK_INT < 21 || finalUrl.contains(".jwznb.com")) {
+            if (finalUrl.startsWith("https://")) {
+                finalUrl = "http://" + finalUrl.substring(8);
+            }
+        }
+
+        // 避免给默认头像添加 resize 参数 (兼容 default-avatars 和 defalut-avatars 拼写)
+        if (!finalUrl.contains("/default-avatars/") && !finalUrl.contains("/defalut-avatars/")) {
             if (finalUrl.contains("?")) {
                 finalUrl = finalUrl + "&" + AVATAR_RESIZE_PARAM;
             } else {
@@ -47,6 +57,7 @@ public class ImageUtils {
         File cachedFile = AvatarCache.getAvatarFile(context, cacheKeyUrl);
         if (cachedFile != null && cachedFile.exists() && cachedFile.length() > 0) {
             Glide.with(context)
+                    .asBitmap()
                     .load(cachedFile)
                     .placeholder(android.R.drawable.ic_menu_gallery)
                     .error(android.R.drawable.ic_menu_report_image)
@@ -64,23 +75,40 @@ public class ImageUtils {
             glideUrl = new GlideUrl(finalUrl);
         }
 
+        final String originalUrl = url;
+
         Glide.with(context)
+                .asBitmap()
                 .load(glideUrl)
                 .placeholder(android.R.drawable.ic_menu_gallery)
                 .error(android.R.drawable.ic_menu_report_image)
                 .diskCacheStrategy(DiskCacheStrategy.ALL)
                 .circleCrop()
-                .listener(new RequestListener<Drawable>() {
+                .listener(new RequestListener<Bitmap>() {
                     @Override
-                    public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Drawable> target, boolean isFirstResource) {
+                    public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Bitmap> target, boolean isFirstResource) {
+                        if (originalUrl != null && originalUrl.startsWith("https://") && model instanceof GlideUrl) {
+                            String httpUrl = "http://" + originalUrl.substring(8);
+                            GlideUrl retryUrl = new GlideUrl(httpUrl, new LazyHeaders.Builder()
+                                    .addHeader("Referer", "http://myapp.jwznb.com")
+                                    .build());
+                            Glide.with(context)
+                                    .asBitmap()
+                                    .load(retryUrl)
+                                    .placeholder(android.R.drawable.ic_menu_gallery)
+                                    .error(android.R.drawable.ic_menu_report_image)
+                                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                                    .circleCrop()
+                                    .into(imageView);
+                            return true;
+                        }
                         return false;
                     }
 
                     @Override
-                    public boolean onResourceReady(Drawable resource, Object model, Target<Drawable> target, DataSource dataSource, boolean isFirstResource) {
-                        if (resource instanceof BitmapDrawable) {
-                            Bitmap bitmap = ((BitmapDrawable) resource).getBitmap();
-                            AvatarCache.saveAvatarCache(context, cacheKeyUrl, bitmap);
+                    public boolean onResourceReady(Bitmap resource, Object model, Target<Bitmap> target, DataSource dataSource, boolean isFirstResource) {
+                        if (resource != null) {
+                            AvatarCache.saveAvatarCache(context, cacheKeyUrl, resource);
                         }
                         return false;
                     }

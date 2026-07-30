@@ -52,7 +52,6 @@ public class GroupProfileActivity extends AppCompatActivity {
     private TextView tvGroupId;
     private TextView tvIntroduction;
     private TextView tvMemberCount;
-    private TextView tvCreateBy;
     private TextView tvCategory;
     private TextView tvGroupCode;
     private TextView tvMyNickname;
@@ -102,11 +101,19 @@ public class GroupProfileActivity extends AppCompatActivity {
 
         AppCompatImageButton btnBack = findViewById(R.id.btnBack);
         ivAvatar = findViewById(R.id.ivAvatar);
+        if (ivAvatar != null) {
+            ivAvatar.setOnClickListener(v -> {
+                if (currentGroup != null && currentGroup.avatar_url != null && currentGroup.avatar_url.length() > 0) {
+                    Intent intent = new Intent(this, ImagePreviewActivity.class);
+                    intent.putExtra(ImagePreviewActivity.EXTRA_IMAGE_URL, currentGroup.avatar_url);
+                    startActivity(intent);
+                }
+            });
+        }
         tvName = findViewById(R.id.tvName);
         tvGroupId = findViewById(R.id.tvGroupId);
         tvIntroduction = findViewById(R.id.tvIntroduction);
         tvMemberCount = findViewById(R.id.tvMemberCount);
-        tvCreateBy = findViewById(R.id.tvCreateBy);
         tvCategory = findViewById(R.id.tvCategory);
         tvGroupCode = findViewById(R.id.tvGroupCode);
         tvMyNickname = findViewById(R.id.tvMyNickname);
@@ -236,9 +243,6 @@ public class GroupProfileActivity extends AppCompatActivity {
         tvIntroduction.setText(intro);
 
         tvMemberCount.setText(getString(R.string.group_profile_members_format, data.member));
-
-        String createBy = data.create_by != null && data.create_by.length() > 0 ? data.create_by : "";
-        tvCreateBy.setText(createBy);
 
         String category = data.category_name != null && data.category_name.length() > 0 ? data.category_name : "";
         tvCategory.setText(category);
