@@ -1,100 +1,142 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.nago8.chat.old.components.SwipeMenuLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/rootView"
+    android:id="@+id/swipeLayout"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:background="?attr/selectableItemBackground"
-    android:clickable="true"
-    android:focusable="true"
-    android:gravity="center_vertical"
-    android:orientation="horizontal"
-    android:padding="12dp">
+    android:layout_height="wrap_content">
 
-    <FrameLayout
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content">
-
-        <com.google.android.material.imageview.ShapeableImageView
-            android:id="@+id/ivAvatar"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:scaleType="centerCrop"
-            app:shapeAppearanceOverlay="@style/ShapeAppearance.Circle"
-            android:src="@android:drawable/sym_def_app_icon" />
-
-        <TextView
-            android:id="@+id/tvUnreadCount"
-            android:layout_width="16dp"
-            android:layout_height="16dp"
-            android:layout_gravity="top|end"
-            android:background="@drawable/bg_unread_badge"
-            android:gravity="center"
-            android:text="1"
-            android:textColor="@color/text_white"
-            android:textSize="10sp"
-            android:visibility="gone"
-            tools:visibility="visible" />
-    </FrameLayout>
-
+    <!-- 主视图 (会话内容) -->
     <LinearLayout
-        android:layout_width="0dp"
+        android:id="@+id/rootView"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_marginStart="12dp"
-        android:layout_marginLeft="12dp"
-        android:orientation="vertical">
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="12dp">
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
+        <FrameLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/ivAvatar"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:scaleType="centerCrop"
+                android:src="@android:drawable/sym_def_app_icon"
+                app:shapeAppearanceOverlay="@style/ShapeAppearance.Circle" />
 
             <TextView
-                android:id="@+id/tvName"
-                android:layout_width="0dp"
+                android:id="@+id/tvUnreadCount"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:layout_gravity="top|end"
+                android:background="@drawable/bg_unread_badge"
+                android:gravity="center"
+                android:text="1"
+                android:textColor="@color/text_white"
+                android:textSize="10sp"
+                android:visibility="gone"
+                tools:visibility="visible" />
+        </FrameLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_marginLeft="12dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvName"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:singleLine="true"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    tools:text="Conversation Name" />
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:id="@+id/ivDnd"
+                    android:layout_width="14dp"
+                    android:layout_height="14dp"
+                    android:layout_marginStart="4dp"
+                    android:layout_marginLeft="4dp"
+                    android:visibility="gone"
+                    app:srcCompat="@drawable/ic_do_not_disturb"
+                    app:tint="?android:attr/textColorSecondary" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tvContent"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
                 android:ellipsize="end"
                 android:singleLine="true"
-                android:textColor="?android:attr/textColorPrimary"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                tools:text="Conversation Name" />
-
-            <androidx.appcompat.widget.AppCompatImageView
-                android:id="@+id/ivDnd"
-                android:layout_width="14dp"
-                android:layout_height="14dp"
-                android:layout_marginStart="4dp"
-                android:layout_marginLeft="4dp"
-                app:srcCompat="@drawable/ic_do_not_disturb"
-                app:tint="?android:attr/textColorSecondary"
-                android:visibility="gone" />
+                android:textColor="?android:attr/textColorSecondary"
+                android:textSize="14sp"
+                tools:text="Last chat message content goes here..." />
         </LinearLayout>
 
         <TextView
-            android:id="@+id/tvContent"
+            android:id="@+id/tvTime"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:ellipsize="end"
-            android:singleLine="true"
+            android:layout_marginStart="8dp"
+            android:layout_marginLeft="8dp"
             android:textColor="?android:attr/textColorSecondary"
-            android:textSize="14sp"
-            tools:text="Last chat message content goes here..." />
+            android:textSize="12sp"
+            tools:text="12:30" />
+
     </LinearLayout>
 
-    <TextView
-        android:id="@+id/tvTime"
+    <!-- 侧滑菜单 (置顶 / 取消置顶 与 删除按钮) -->
+    <LinearLayout
+        android:id="@+id/menuView"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
-        android:layout_marginLeft="8dp"
-        android:textColor="?android:attr/textColorSecondary"
-        android:textSize="12sp"
-        tools:text="12:30" />
+        android:layout_height="match_parent"
+        android:orientation="horizontal">
 
-</LinearLayout>
+        <TextView
+            android:id="@+id/btnPin"
+            android:layout_width="80dp"
+            android:layout_height="match_parent"
+            android:background="#3B82F6"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:text="置顶"
+            android:textColor="@color/text_white"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/btnDelete"
+            android:layout_width="80dp"
+            android:layout_height="match_parent"
+            android:background="#EF4444"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:text="删除"
+            android:textColor="@color/text_white"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+</com.nago8.chat.old.components.SwipeMenuLayout>

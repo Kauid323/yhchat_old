@@ -41,6 +41,7 @@ public class ConversationCache {
 
     // 内存数据存储：LinkedHashMap 保持顺序并强行按 chatId 去重
     private final LinkedHashMap<String, ConversationList.ConversationData> conversationMap = new LinkedHashMap<>();
+    private final LinkedHashMap<String, ConversationList.ConversationData> stickyMap = new LinkedHashMap<>();
     private final Set<String> stickySet = new HashSet<>();
     private final Set<String> dndSet = new HashSet<>();
 
@@ -78,13 +79,51 @@ public class ConversationCache {
      */
     public synchronized void updateStickyList(List<StickyInfo> stickyList) {
         stickySet.clear();
+        stickyMap.clear();
         if (stickyList != null) {
             for (StickyInfo s : stickyList) {
                 if (s != null && s.chatId != null && !s.chatId.isEmpty()) {
                     stickySet.add(s.chatId);
+
+                    ConversationList.ConversationData mainConv = conversationMap.get(s.chatId);
+                    if (mainConv != null) {
+                        stickyMap.put(s.chatId, mainConv);
+                    } else {
+                        ConversationList.ConversationData convData = new ConversationList.ConversationData.Builder()
+                                .chat_id(s.chatId)
+                                .chat_type(s.chatType != 0 ? s.chatType : 1)
+                                .name(s.chatName != null ? s.chatName : "")
+                                .avatar_url(s.avatarUrl != null ? s.avatarUrl : "")
+                                .chat_content("")
+                                .build();
+                        stickyMap.put(s.chatId, convData);
+                    }
                 }
             }
         }
+        recalculateUnreadCounts();
+    }
+
+    public synchronized boolean isSticky(String chatId) {
+        return chatId != null && stickySet.contains(chatId);
+    }
+
+    /**
+     * 从普通主会话列表中移除指定会话（保留置顶缓存不变）
+     */
+    public synchronized void removeConversationFromMainList(String chatId) {
+        if (chatId == null || chatId.isEmpty()) return;
+        conversationMap.remove(chatId);
+        recalculateUnreadCounts();
+    }
+
+    /**
+     * 从置顶列表中移除指定会话
+     */
+    public synchronized void removeStickyConversation(String chatId) {
+        if (chatId == null || chatId.isEmpty()) return;
+        stickySet.remove(chatId);
+        stickyMap.remove(chatId);
         recalculateUnreadCounts();
     }
 
@@ -107,14 +146,19 @@ public class ConversationCache {
     }
 
     /**
-     * 获取置顶会话列表
+     * 获取置顶会话列表（独立保持，不受主列表删除影响）
      */
     public synchronized List<ConversationList.ConversationData> getStickyConversationDataList() {
         List<ConversationList.ConversationData> result = new ArrayList<>();
         for (String chatId : stickySet) {
-            ConversationList.ConversationData conv = conversationMap.get(chatId);
-            if (conv != null) {
-                result.add(conv);
+            ConversationList.ConversationData mainConv = conversationMap.get(chatId);
+            if (mainConv != null) {
+                result.add(mainConv);
+            } else {
+                ConversationList.ConversationData stickyConv = stickyMap.get(chatId);
+                if (stickyConv != null) {
+                    result.add(stickyConv);
+                }
             }
         }
         return result;
@@ -141,7 +185,6 @@ public class ConversationCache {
     public synchronized void onPushMessage(WsMsg wsMsg, Context ctx) {
         if (wsMsg == null || wsMsg.chat_id == null || wsMsg.chat_id.isEmpty()) return;
 
-        // 屏蔽消息直接忽略
         if (WsClient.isBlockedMessage(wsMsg)) return;
 
         String chatId = wsMsg.chat_id;
@@ -184,7 +227,6 @@ public class ConversationCache {
                     .build();
         }
 
-        // 移到顶部：先移除再插入
         conversationMap.remove(chatId);
         LinkedHashMap<String, ConversationList.ConversationData> newMap = new LinkedHashMap<>();
         newMap.put(chatId, newData);
@@ -206,7 +248,6 @@ public class ConversationCache {
         for (ConversationList.ConversationData cd : conversationMap.values()) {
             if (cd == null || cd.chat_id == null || cd.chat_id.isEmpty()) continue;
 
-            // 免打扰会话不计入未读总数（检查数据结构中的 do_not_disturb 以及全局 dndSet）
             if (cd.do_not_disturb != 0 || dndSet.contains(cd.chat_id)) continue;
 
             int unread = cd.unread_message;
@@ -236,6 +277,7 @@ public class ConversationCache {
 
     public synchronized void clearCache() {
         conversationMap.clear();
+        stickyMap.clear();
         stickySet.clear();
         dndSet.clear();
         totalUnreadCount = 0;

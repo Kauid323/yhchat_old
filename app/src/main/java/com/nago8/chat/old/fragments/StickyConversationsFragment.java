@@ -70,17 +70,33 @@ public class StickyConversationsFragment extends Fragment {
         adapter = new ConversationsAdapter();
         recyclerView.setAdapter(adapter);
 
-        adapter.setOnConversationClickListener((data, position) -> {
-            if (data.chat_id == null || data.chat_id.length() == 0) return;
-            if (getContext() == null) return;
-            Intent intent = new Intent(getContext(), ChatActivity.class);
-            intent.putExtra(ChatActivity.EXTRA_CHAT_ID, data.chat_id);
-            intent.putExtra(ChatActivity.EXTRA_CHAT_TYPE, data.chat_type);
-            intent.putExtra(ChatActivity.EXTRA_CHAT_NAME, data.name);
-            intent.putExtra(ChatActivity.EXTRA_CHAT_AVATAR, data.avatar_url);
-            startActivity(intent);
+        adapter.setOnConversationActionListener(new ConversationsAdapter.OnConversationActionListener() {
+            @Override
+            public void onConversationClick(ConversationList.ConversationData data, int position) {
+                if (data.chat_id == null || data.chat_id.length() == 0) return;
+                if (getContext() == null) return;
+                Intent intent = new Intent(getContext(), ChatActivity.class);
+                intent.putExtra(ChatActivity.EXTRA_CHAT_ID, data.chat_id);
+                intent.putExtra(ChatActivity.EXTRA_CHAT_TYPE, data.chat_type);
+                intent.putExtra(ChatActivity.EXTRA_CHAT_NAME, data.name);
+                intent.putExtra(ChatActivity.EXTRA_CHAT_AVATAR, data.avatar_url);
+                startActivity(intent);
 
-            dismissNotification(data.chat_id, position);
+                dismissNotification(data.chat_id, position);
+            }
+
+            @Override
+            public void onPinToggle(ConversationList.ConversationData data, boolean isSticky, int position) {
+                if (data == null || data.chat_id == null || data.chat_id.isEmpty()) return;
+                int chatType = data.chat_type != 0 ? data.chat_type : 1;
+                toggleStickyConversation(data.chat_id, chatType, isSticky);
+            }
+
+            @Override
+            public void onDeleteConversation(ConversationList.ConversationData data, int position) {
+                if (data == null || data.chat_id == null || data.chat_id.isEmpty()) return;
+                deleteConversation(data.chat_id, position);
+            }
         });
 
         return view;
@@ -253,6 +269,97 @@ public class StickyConversationsFragment extends Fragment {
                 if (response.body() != null) {
                     response.body().close();
                 }
+            }
+        });
+    }
+
+    private void toggleStickyConversation(String chatId, int chatType, boolean currentSticky) {
+        String token = PrefUtils.getToken(getContext());
+        if (token == null || token.isEmpty()) return;
+
+        String endpoint = currentSticky ? "/v1/sticky/delete" : "/v1/sticky/add";
+        String json = "{\"chatId\":\"" + chatId + "\",\"chatType\":" + chatType + "}";
+        RequestBody body = RequestBody.create(
+                MediaType.parse("application/json; charset=utf-8"),
+                json
+        );
+
+        Request request = new Request.Builder()
+                .url(ApiClient.BASE_URL + endpoint)
+                .header("token", token)
+                .post(body)
+                .build();
+
+        ApiClient.getClient().newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> Toast.makeText(getContext(), "操作失败", Toast.LENGTH_SHORT).show());
+                }
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        Toast.makeText(getContext(), currentSticky ? "已取消置顶" : "已置顶", Toast.LENGTH_SHORT).show();
+                        if (getActivity() instanceof HomeActivity) {
+                            ((HomeActivity) getActivity()).fetchStickyCount();
+                        }
+                        loadStickyData();
+                    });
+                }
+                if (response.body() != null) response.body().close();
+            }
+        });
+    }
+
+    private void deleteConversation(String chatId, int position) {
+        String token = PrefUtils.getToken(getContext());
+        if (token == null || token.isEmpty()) return;
+
+        String json = "{\"chatId\":\"" + chatId + "\"}";
+        RequestBody body = RequestBody.create(
+                MediaType.parse("application/json; charset=utf-8"),
+                json
+        );
+
+        Request request = new Request.Builder()
+                .url(ApiClient.BASE_URL + "/v1/conversation/remove")
+                .header("token", token)
+                .post(body)
+                .build();
+
+        ApiClient.getClient().newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> Toast.makeText(getContext(), "删除失败", Toast.LENGTH_SHORT).show());
+                }
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        Toast.makeText(getContext(), "已删除会话", Toast.LENGTH_SHORT).show();
+                        if (getActivity() instanceof HomeActivity) {
+                            HomeActivity home = (HomeActivity) getActivity();
+                            List<ConversationList.ConversationData> currentList = home.getCachedConversationList();
+                            List<ConversationList.ConversationData> updatedList = new ArrayList<>();
+                            if (currentList != null) {
+                                for (ConversationList.ConversationData cd : currentList) {
+                                    if (!chatId.equals(cd.chat_id)) {
+                                        updatedList.add(cd);
+                                    }
+                                }
+                            }
+                            home.updateConversationDataList(updatedList);
+                        }
+                        loadStickyData();
+                    });
+                }
+                if (response.body() != null) response.body().close();
             }
         });
     }

@@ -70,14 +70,29 @@ public class ConversationsFragment extends Fragment implements SearchHost {
         adapter = new ConversationsAdapter();
         recyclerView.setAdapter(adapter);
 
-        adapter.setOnConversationClickListener((data, position) -> {
-            // 标题项（chat_id 为空）不响应点击
-            if (data.chat_id == null || data.chat_id.length() == 0) return;
+        adapter.setOnConversationActionListener(new ConversationsAdapter.OnConversationActionListener() {
+            @Override
+            public void onConversationClick(ConversationList.ConversationData data, int position) {
+                if (data.chat_id == null || data.chat_id.length() == 0) return;
 
-            if (searchMode) {
-                openChatFromSearch(data);
-            } else {
-                openChat(data, position);
+                if (searchMode) {
+                    openChatFromSearch(data);
+                } else {
+                    openChat(data, position);
+                }
+            }
+
+            @Override
+            public void onPinToggle(ConversationList.ConversationData data, boolean isSticky, int position) {
+                if (data == null || data.chat_id == null || data.chat_id.isEmpty()) return;
+                int chatType = data.chat_type != 0 ? data.chat_type : 1;
+                toggleStickyConversation(data.chat_id, chatType, isSticky);
+            }
+
+            @Override
+            public void onDeleteConversation(ConversationList.ConversationData data, int position) {
+                if (data == null || data.chat_id == null || data.chat_id.isEmpty()) return;
+                deleteConversation(data.chat_id, position);
             }
         });
 
@@ -434,6 +449,88 @@ public class ConversationsFragment extends Fragment implements SearchHost {
                         adapter.markAsRead(position);
                     });
                 }
+            }
+        });
+    }
+
+    private void toggleStickyConversation(String chatId, int chatType, boolean currentSticky) {
+        String token = PrefUtils.getToken(getContext());
+        if (token == null || token.isEmpty()) return;
+
+        String endpoint = currentSticky ? "/v1/sticky/delete" : "/v1/sticky/add";
+        String json = "{\"chatId\":\"" + chatId + "\",\"chatType\":" + chatType + "}";
+        RequestBody body = RequestBody.create(
+                MediaType.parse("application/json; charset=utf-8"),
+                json
+        );
+
+        Request request = new Request.Builder()
+                .url(ApiClient.BASE_URL + endpoint)
+                .header("token", token)
+                .post(body)
+                .build();
+
+        ApiClient.getClient().newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> Toast.makeText(getContext(), "操作失败", Toast.LENGTH_SHORT).show());
+                }
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        Toast.makeText(getContext(), currentSticky ? "已取消置顶" : "已置顶", Toast.LENGTH_SHORT).show();
+                        if (getActivity() instanceof HomeActivity) {
+                            ((HomeActivity) getActivity()).fetchStickyCount();
+                        }
+                        loadConversationsData();
+                    });
+                }
+                if (response.body() != null) response.body().close();
+            }
+        });
+    }
+
+    private void deleteConversation(String chatId, int position) {
+        String token = PrefUtils.getToken(getContext());
+        if (token == null || token.isEmpty()) return;
+
+        String json = "{\"chatId\":\"" + chatId + "\"}";
+        RequestBody body = RequestBody.create(
+                MediaType.parse("application/json; charset=utf-8"),
+                json
+        );
+
+        Request request = new Request.Builder()
+                .url(ApiClient.BASE_URL + "/v1/conversation/remove")
+                .header("token", token)
+                .post(body)
+                .build();
+
+        ApiClient.getClient().newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> Toast.makeText(getContext(), "删除失败", Toast.LENGTH_SHORT).show());
+                }
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        Toast.makeText(getContext(), "已删除会话", Toast.LENGTH_SHORT).show();
+                        com.nago8.chat.old.cache.ConversationCache.getInstance().removeConversationFromMainList(chatId);
+                        if (getActivity() instanceof HomeActivity) {
+                            HomeActivity home = (HomeActivity) getActivity();
+                            adapter.setData(home.getCachedConversationList());
+                        }
+                    });
+                }
+                if (response.body() != null) response.body().close();
             }
         });
     }

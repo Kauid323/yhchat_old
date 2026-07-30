@@ -12,6 +12,8 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.nago8.chat.old.R;
+import com.nago8.chat.old.cache.ConversationCache;
+import com.nago8.chat.old.components.SwipeMenuLayout;
 import com.nago8.chat.old.proto.chat_ws_go.WsMsg;
 import com.nago8.chat.old.proto.conversation.ConversationList;
 import com.nago8.chat.old.utils.ImageUtils;
@@ -27,22 +29,41 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
     private static final int TYPE_ITEM = 1;
 
     private List<ConversationList.ConversationData> dataList = new ArrayList<>();
-    private OnConversationClickListener clickListener;
-    private OnUnreadCountChangeListener unreadCountChangeListener;
+    private OnConversationActionListener actionListener;
 
     private String lastClickedChatId = "";
     private int clickCount = 0;
 
+    public interface OnConversationActionListener {
+        void onConversationClick(ConversationList.ConversationData data, int position);
+        void onPinToggle(ConversationList.ConversationData data, boolean isSticky, int position);
+        void onDeleteConversation(ConversationList.ConversationData data, int position);
+    }
+
+    public void setOnConversationActionListener(OnConversationActionListener listener) {
+        this.actionListener = listener;
+    }
+
+    // Retain legacy method signature compatibility
+    public void setOnConversationClickListener(OnConversationClickListener listener) {
+        if (listener != null) {
+            this.actionListener = new OnConversationActionListener() {
+                @Override
+                public void onConversationClick(ConversationList.ConversationData data, int position) {
+                    listener.onConversationClick(data, position);
+                }
+
+                @Override
+                public void onPinToggle(ConversationList.ConversationData data, boolean isSticky, int position) {}
+
+                @Override
+                public void onDeleteConversation(ConversationList.ConversationData data, int position) {}
+            };
+        }
+    }
+
     public interface OnConversationClickListener {
         void onConversationClick(ConversationList.ConversationData data, int position);
-    }
-
-    public interface OnUnreadCountChangeListener {
-        void onUnreadCountChanged(int totalUnread);
-    }
-
-    public void setOnConversationClickListener(OnConversationClickListener listener) {
-        this.clickListener = listener;
     }
 
     public void setData(List<ConversationList.ConversationData> data) {
@@ -62,19 +83,10 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
         }
     }
 
-    /**
-     * 判断是否为搜索分组标题项（chat_id 为空即为标题）
-     */
     private boolean isHeader(ConversationList.ConversationData data) {
         return data.chat_id == null || data.chat_id.length() == 0;
     }
 
-    /**
-     * 收到 WS 推送消息时调用：
-     * 根据 wsMsg.chat_id 找到对应会话，未读数 +1，
-     * 预览内容更新为 "{sender.name}:{preview}"，
-     * 并将该会话移到列表顶部。若会话不在列表中则新增并移至顶部。
-     */
     public void onPushMessage(WsMsg wsMsg, Context ctx) {
         if (wsMsg == null || wsMsg.chat_id == null || ctx == null) return;
 
@@ -89,8 +101,7 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
             }
         }
 
-        String senderName = (wsMsg.sender != null && wsMsg.sender.name != null)
-                ? wsMsg.sender.name : "";
+        String senderName = (wsMsg.sender != null && wsMsg.sender.name != null) ? wsMsg.sender.name : "";
         String preview = WsMsgConverter.toPreviewText(wsMsg, ctx);
         String chatContent = (senderName != null && !senderName.isEmpty()) ? senderName + ":" + preview : preview;
 
@@ -155,6 +166,10 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
         }
 
         ItemViewHolder h = (ItemViewHolder) holder;
+        if (h.swipeLayout != null) {
+            h.swipeLayout.smoothClose();
+        }
+
         h.tvName.setText(data.name);
         h.tvContent.setText(data.chat_content);
         if (data.timestamp_ms > 0) {
@@ -173,7 +188,6 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
         }
 
         if (data.unread_message > 0) {
-            // 免打扰会话不显示未读数字，只显示小圆点
             if (data.do_not_disturb == 1) {
                 h.tvUnreadCount.setVisibility(View.GONE);
             } else {
@@ -184,7 +198,36 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
             h.tvUnreadCount.setVisibility(View.GONE);
         }
 
-        h.itemView.setOnClickListener(v -> {
+        // 判断该会话 ID 是否已经被置顶
+        boolean isSticky = ConversationCache.getInstance().isSticky(data.chat_id);
+
+        if (h.btnPin != null) {
+            if (isSticky) {
+                h.btnPin.setText("取消置顶");
+                h.btnPin.setBackgroundColor(0xFF6B7280);
+            } else {
+                h.btnPin.setText("置顶");
+                h.btnPin.setBackgroundColor(0xFF3B82F6);
+            }
+
+            h.btnPin.setOnClickListener(v -> {
+                if (h.swipeLayout != null) h.swipeLayout.smoothClose();
+                if (actionListener != null) {
+                    actionListener.onPinToggle(data, isSticky, holder.getAdapterPosition());
+                }
+            });
+        }
+
+        if (h.btnDelete != null) {
+            h.btnDelete.setOnClickListener(v -> {
+                if (h.swipeLayout != null) h.swipeLayout.smoothClose();
+                if (actionListener != null) {
+                    actionListener.onDeleteConversation(data, holder.getAdapterPosition());
+                }
+            });
+        }
+
+        h.rootView.setOnClickListener(v -> {
             if (data.chat_id.equals(lastClickedChatId)) {
                 clickCount++;
             } else {
@@ -196,11 +239,22 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
                 Toast.makeText(v.getContext(), "别戳了___*( ￣皿￣)/#____", Toast.LENGTH_SHORT).show();
                 clickCount = 0;
             } else {
-                if (clickListener != null) {
-                    clickListener.onConversationClick(data, position);
+                if (actionListener != null) {
+                    actionListener.onConversationClick(data, holder.getAdapterPosition());
                 }
             }
         });
+    }
+
+    private boolean isChatSticky(String chatId) {
+        if (chatId == null) return false;
+        List<ConversationList.ConversationData> stickyList = ConversationCache.getInstance().getStickyConversationDataList();
+        if (stickyList != null) {
+            for (ConversationList.ConversationData cd : stickyList) {
+                if (chatId.equals(cd.chat_id)) return true;
+            }
+        }
+        return false;
     }
 
     @Override
@@ -218,18 +272,24 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
     }
 
     static class ItemViewHolder extends RecyclerView.ViewHolder {
+        SwipeMenuLayout swipeLayout;
+        View rootView;
         ImageView ivAvatar;
-        TextView tvName, tvContent, tvTime, tvUnreadCount;
+        TextView tvName, tvContent, tvTime, tvUnreadCount, btnPin, btnDelete;
         androidx.appcompat.widget.AppCompatImageView ivDnd;
 
         public ItemViewHolder(@NonNull View itemView) {
             super(itemView);
+            swipeLayout = itemView.findViewById(R.id.swipeLayout);
+            rootView = itemView.findViewById(R.id.rootView);
             ivAvatar = itemView.findViewById(R.id.ivAvatar);
             tvName = itemView.findViewById(R.id.tvName);
             tvContent = itemView.findViewById(R.id.tvContent);
             tvTime = itemView.findViewById(R.id.tvTime);
             tvUnreadCount = itemView.findViewById(R.id.tvUnreadCount);
             ivDnd = itemView.findViewById(R.id.ivDnd);
+            btnPin = itemView.findViewById(R.id.btnPin);
+            btnDelete = itemView.findViewById(R.id.btnDelete);
         }
     }
 }
