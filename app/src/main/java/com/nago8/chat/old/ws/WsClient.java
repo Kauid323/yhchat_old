@@ -10,7 +10,6 @@ import com.nago8.chat.old.utils.NotificationHelper;
 import com.nago8.chat.old.utils.PrefUtils;
 import com.nago8.chat.old.utils.WsMsgConverter;
 import com.nago8.chat.old.net.ApiClient;
-import com.nago8.chat.old.proto.chat_ws_go.INFO;
 import com.nago8.chat.old.proto.chat_ws_go.bot_board_message;
 import com.nago8.chat.old.proto.chat_ws_go.draft_input;
 import com.nago8.chat.old.proto.chat_ws_go.edit_message;

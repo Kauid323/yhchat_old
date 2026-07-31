@@ -176,4 +176,5 @@
     <string name="settings_cache_cleared">已清除所有缓存</string>
     <string name="settings_cache_size_format">缓存大小：%1$s</string>
     <string name="user_id_format">ID: %1$s</string>
+    <string name="group_title_format">%1$s (%2$d)</string>
 </resources>

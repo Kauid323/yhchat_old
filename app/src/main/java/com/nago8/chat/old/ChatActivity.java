@@ -8,6 +8,7 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
@@ -35,7 +36,6 @@ import java.io.FileWriter;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -102,7 +102,7 @@ public class ChatActivity extends AppCompatActivity {
         progressBar = findViewById(R.id.progressBar);
         tvEmpty = findViewById(R.id.tvEmpty);
 
-        if (chatName == null || chatName.length() == 0) chatName = chatId == null ? getString(R.string.chat_default_title) : chatId;
+        if (chatName == null || chatName.isEmpty()) chatName = chatId == null ? getString(R.string.chat_default_title) : chatId;
         tvTitle.setText(chatName);
 
         // 群聊时请求群信息，在标题后追加 (人数)
@@ -172,12 +172,7 @@ public class ChatActivity extends AppCompatActivity {
         com.nago8.chat.old.ws.WsClient.getInstance().setActiveChatId(chatId);
         // 取消当前会话的通知
         com.nago8.chat.old.utils.NotificationHelper.cancelNotification(this, chatId);
-        wsListener = new WsClient.MessageListener() {
-            @Override
-            public void onPushMessage(WsMsg wsMsg) {
-                runOnUiThread(() -> handlePushMessage(wsMsg));
-            }
-        };
+        wsListener = wsMsg -> runOnUiThread(() -> handlePushMessage(wsMsg));
         WsClient.getInstance().addMessageListener(wsListener);
     }
 
@@ -196,13 +191,13 @@ public class ChatActivity extends AppCompatActivity {
         String myUserId = PrefUtils.getUserId(this);
         String targetChatId = WsClient.getTargetChatId(wsMsg, myUserId);
         // 只处理当前聊天界面的消息
-        if (targetChatId == null || !chatId.equals(targetChatId)) return;
+        if (!chatId.equals(targetChatId)) return;
 
         Msg msg = WsMsgConverter.convert(wsMsg, myUserId);
         if (msg == null) return;
 
         // 去重
-        if (msg.msg_id != null && msg.msg_id.length() > 0) {
+        if (msg.msg_id != null && !msg.msg_id.isEmpty()) {
             for (Msg existing : allMessages) {
                 if (existing != null && msg.msg_id.equals(existing.msg_id)) return;
             }
@@ -225,6 +220,7 @@ public class ChatActivity extends AppCompatActivity {
         return lastVisible >= total - 2;
     }
 
+    @android.annotation.SuppressLint("InlinedApi")
     private void openImagePicker() {
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
         intent.setType("image/*");
@@ -391,13 +387,13 @@ public class ChatActivity extends AppCompatActivity {
                         // 保存群主ID，用于消息列表显示群主标签
                         ownerId = result.data.owner;
                         // 群主也是管理员，加入 adminIds 以兼容逻辑
-                        if (ownerId != null && ownerId.length() > 0) {
+                        if (ownerId != null && !ownerId.isEmpty()) {
                             adminIds.add(ownerId);
                         }
                         // 标题格式：群名 (人数)
-                        String displayName = result.data.name != null && result.data.name.length() > 0
+                        String displayName = result.data.name != null && !result.data.name.isEmpty()
                                 ? result.data.name : chatName;
-                        tvTitle.setText(displayName + " (" + result.data.member + ")");
+                        tvTitle.setText(getString(R.string.group_title_format, displayName, result.data.member));
                         // 刷新消息列表以应用管理员标签
                         refreshMessages(false);
                     }
@@ -442,7 +438,7 @@ public class ChatActivity extends AppCompatActivity {
         if (loadingOlder || noMoreOlder || allMessages.isEmpty()) return;
 
         Msg oldest = findOldestMessage();
-        if (oldest == null || oldest.msg_id == null || oldest.msg_id.length() == 0) return;
+        if (oldest == null || oldest.msg_id == null || oldest.msg_id.isEmpty()) return;
 
         String token = PrefUtils.getToken(this);
         loadingOlder = true;
@@ -497,14 +493,10 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     private void sortMessagesOldToNew() {
-        Collections.sort(allMessages, new Comparator<Msg>() {
-            @Override
-            public int compare(Msg left, Msg right) {
-                long leftTime = left == null ? 0 : left.send_time;
-                long rightTime = right == null ? 0 : right.send_time;
-                if (leftTime == rightTime) return 0;
-                return leftTime < rightTime ? -1 : 1;
-            }
+        Collections.sort(allMessages, (left, right) -> {
+            long leftTime = left == null ? 0 : left.send_time;
+            long rightTime = right == null ? 0 : right.send_time;
+            return Long.compare(leftTime, rightTime);
         });
     }
 
@@ -522,7 +514,7 @@ public class ChatActivity extends AppCompatActivity {
         List<MessageGroup> groups = MessageGroup.fromMessages(allMessages);
         // 标记管理员消息
         for (MessageGroup group : groups) {
-            group.isOwner = ownerId != null && ownerId.length() > 0 && ownerId.equals(group.senderId);
+            group.isOwner = ownerId != null && !ownerId.isEmpty() && ownerId.equals(group.senderId);
             // 群主不显示管理员标签，只显示群主标签
             group.isAdmin = !group.isOwner && group.senderId != null && adminIds.contains(group.senderId);
         }
@@ -533,7 +525,7 @@ public class ChatActivity extends AppCompatActivity {
 
     private class TopLoadScrollListener extends RecyclerView.OnScrollListener {
         @Override
-        public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
+        public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
             super.onScrolled(recyclerView, dx, dy);
             if (dy >= 0 || layoutManager == null) return;
             if (layoutManager.findFirstVisibleItemPosition() == 0) {

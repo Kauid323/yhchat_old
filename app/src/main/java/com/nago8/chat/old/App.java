@@ -4,13 +4,7 @@ import android.app.Application;
 import android.app.Activity;
 import android.content.Context;
 import android.content.res.Configuration;
-import android.content.res.Resources;
 import android.os.Bundle;
-import android.util.DisplayMetrics;
-
-import com.nago8.chat.old.utils.PrefUtils;
-
-import java.util.Locale;
 
 public class App extends Application {
 

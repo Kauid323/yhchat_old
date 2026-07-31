@@ -2,11 +2,13 @@ package com.nago8.chat.old;
 
 import android.content.Context;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
@@ -85,7 +87,7 @@ public class BotProfileActivity extends AppCompatActivity {
     }
 
     private void fetchBotInfo(String botId) {
-        if (botId == null || botId.length() == 0) {
+        if (botId == null || botId.isEmpty()) {
             Toast.makeText(this, R.string.bot_profile_load_failed, Toast.LENGTH_SHORT).show();
             finish();
             return;
@@ -117,7 +119,7 @@ public class BotProfileActivity extends AppCompatActivity {
         runningCall = ApiClient.getClient().newCall(request);
         runningCall.enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 runOnUiThread(() -> {
                     progressBar.setVisibility(View.GONE);
                     Toast.makeText(BotProfileActivity.this, R.string.bot_profile_load_failed, Toast.LENGTH_SHORT).show();
@@ -125,7 +127,7 @@ public class BotProfileActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 if (response.isSuccessful() && response.body() != null) {
                     try {
                         final bot_info result = bot_info.ADAPTER.decode(response.body().source());
@@ -138,7 +140,7 @@ public class BotProfileActivity extends AppCompatActivity {
                             bindBot(result.data);
                         });
                     } catch (Exception e) {
-                        e.printStackTrace();
+                        Log.e("BotProfileActivity", "Decode bot info failed", e);
                         runOnUiThread(() -> {
                             progressBar.setVisibility(View.GONE);
                             Toast.makeText(BotProfileActivity.this, R.string.bot_profile_load_failed, Toast.LENGTH_SHORT).show();
@@ -155,11 +157,11 @@ public class BotProfileActivity extends AppCompatActivity {
     }
 
     private void bindBot(bot_info.Bot_data data) {
-        tvName.setText(data.name != null && data.name.length() > 0 ? data.name : getString(R.string.unknown_user));
-        tvBotId.setText("ID: " + data.bot_id);
+        tvName.setText(data.name != null && !data.name.isEmpty() ? data.name : getString(R.string.unknown_user));
+        tvBotId.setText(getString(R.string.user_id_format, data.bot_id));
         ImageUtils.loadAvatar(this, data.avatar_url, ivAvatar);
 
-        String intro = data.introduction != null && data.introduction.length() > 0 ? data.introduction : "";
+        String intro = data.introduction != null && !data.introduction.isEmpty() ? data.introduction : "";
         tvIntroduction.setText(getString(R.string.bot_profile_introduction, intro));
 
         tvHeadcount.setText(getString(R.string.bot_profile_headcount, String.valueOf(data.headcount)));
@@ -171,7 +173,7 @@ public class BotProfileActivity extends AppCompatActivity {
             tvCreateTime.setText(getString(R.string.bot_profile_create_time, getString(R.string.bot_profile_unknown)));
         }
 
-        String createBy = data.create_by != null && data.create_by.length() > 0 ? data.create_by : "";
+        String createBy = data.create_by != null && !data.create_by.isEmpty() ? data.create_by : "";
         tvCreateBy.setText(getString(R.string.bot_profile_create_by, createBy));
 
         tvPrivate.setText(getString(R.string.bot_profile_private, getString(data.private_ == 1 ? R.string.bot_profile_private_yes : R.string.bot_profile_private_no)));
