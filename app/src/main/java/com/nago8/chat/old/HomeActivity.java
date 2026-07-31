@@ -233,6 +233,11 @@ public class HomeActivity extends AppCompatActivity {
         if (tabContainer != null && !searchMode) {
             tabContainer.setVisibility(isConversationTab ? View.VISIBLE : View.GONE);
         }
+
+        collapseFabMenu();
+        if (fabAdd != null) {
+            fabAdd.setVisibility(isConversationTab ? View.VISIBLE : View.GONE);
+        }
     }
 
     private void initConversationTabs() {
@@ -524,32 +529,33 @@ public class HomeActivity extends AppCompatActivity {
         if (fabOverlay != null) {
             fabOverlay.setOnClickListener(v -> collapseFabMenu());
         }
+        Runnable openCreateChatAction = () -> {
+            collapseFabMenu();
+            Intent intent = new Intent(HomeActivity.this, CreateChatActivity.class);
+            startActivity(intent);
+        };
         if (fabSubNewChat != null) {
-            fabSubNewChat.setOnClickListener(v -> {
-                collapseFabMenu();
-                Toast.makeText(this, R.string.fab_new_chat, Toast.LENGTH_SHORT).show();
-            });
+            fabSubNewChat.setOnClickListener(v -> openCreateChatAction.run());
         }
         View tvSubNewChatLabel = findViewById(R.id.tvSubNewChatLabel);
         if (tvSubNewChatLabel != null) {
-            tvSubNewChatLabel.setOnClickListener(v -> {
-                collapseFabMenu();
-                Toast.makeText(this, R.string.fab_new_chat, Toast.LENGTH_SHORT).show();
-            });
+            tvSubNewChatLabel.setOnClickListener(v -> openCreateChatAction.run());
         }
 
+        Runnable openAddAction = () -> {
+            collapseFabMenu();
+            if (etSearch != null) {
+                etSearch.requestFocus();
+                android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                if (imm != null) imm.showSoftInput(etSearch, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+            }
+        };
         if (fabSubNewGroup != null) {
-            fabSubNewGroup.setOnClickListener(v -> {
-                collapseFabMenu();
-                Toast.makeText(this, R.string.fab_new_group, Toast.LENGTH_SHORT).show();
-            });
+            fabSubNewGroup.setOnClickListener(v -> openAddAction.run());
         }
         View tvSubNewGroupLabel = findViewById(R.id.tvSubNewGroupLabel);
         if (tvSubNewGroupLabel != null) {
-            tvSubNewGroupLabel.setOnClickListener(v -> {
-                collapseFabMenu();
-                Toast.makeText(this, R.string.fab_new_group, Toast.LENGTH_SHORT).show();
-            });
+            tvSubNewGroupLabel.setOnClickListener(v -> openAddAction.run());
         }
     }
 

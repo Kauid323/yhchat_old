@@ -38,6 +38,7 @@
         <activity android:name=".GroupProfileActivity" />
         <activity android:name=".SettingsActivity" />
         <activity android:name=".WsLogActivity" />
+        <activity android:name=".CreateChatActivity" />
         <activity android:name=".ImagePreviewActivity"
             android:theme="@style/Theme.云湖Old.Fullscreen" />
         <activity

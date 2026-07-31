@@ -603,12 +603,12 @@ public class GroupProfileActivity extends AppCompatActivity {
     private String formatAutoDelete(long seconds) {
         if (seconds <= 0) return getString(R.string.group_profile_off);
         long days = seconds / 86400;
-        if (days > 0 && seconds % 86400 == 0) return days + "天";
+        if (days > 0 && seconds % 86400 == 0) return getString(R.string.time_unit_days_format, days);
         long hours = seconds / 3600;
-        if (hours > 0 && seconds % 3600 == 0) return hours + "小时";
+        if (hours > 0 && seconds % 3600 == 0) return getString(R.string.time_unit_hours_format, hours);
         long minutes = seconds / 60;
-        if (minutes > 0 && seconds % 60 == 0) return minutes + "分钟";
-        return seconds + "秒";
+        if (minutes > 0 && seconds % 60 == 0) return getString(R.string.time_unit_minutes_format, minutes);
+        return getString(R.string.time_unit_seconds_format, seconds);
     }
 
     private interface OnTextSubmitListener {

@@ -192,7 +192,7 @@ public class ConversationsFragment extends Fragment implements SearchHost {
                     getActivity().runOnUiThread(() -> {
                         progressBar.setVisibility(View.GONE);
                         if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
-                        Toast.makeText(getContext(), "获取会话失败", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(getContext(), R.string.conv_fetch_failed, Toast.LENGTH_SHORT).show();
                     });
                 }
             }
@@ -432,7 +432,7 @@ public class ConversationsFragment extends Fragment implements SearchHost {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 if (getActivity() != null) {
-                    getActivity().runOnUiThread(() -> Toast.makeText(getContext(), "请求失败", Toast.LENGTH_SHORT).show());
+                    getActivity().runOnUiThread(() -> Toast.makeText(getContext(), R.string.conv_request_failed, Toast.LENGTH_SHORT).show());
                 }
             }
 
@@ -440,7 +440,6 @@ public class ConversationsFragment extends Fragment implements SearchHost {
             public void onResponse(@NonNull Call call, @NonNull Response response) {
                 if (getActivity() != null) {
                     getActivity().runOnUiThread(() -> {
-                        Toast.makeText(getContext(), "气泡：啊~我没了", Toast.LENGTH_SHORT).show();
                         if (getActivity() instanceof HomeActivity) {
                             ((HomeActivity) getActivity()).markConversationReadInMemory(chatId);
                         }
@@ -472,7 +471,7 @@ public class ConversationsFragment extends Fragment implements SearchHost {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 if (getActivity() != null) {
-                    getActivity().runOnUiThread(() -> Toast.makeText(getContext(), "操作失败", Toast.LENGTH_SHORT).show());
+                    getActivity().runOnUiThread(() -> Toast.makeText(getContext(), R.string.conv_operation_failed, Toast.LENGTH_SHORT).show());
                 }
             }
 
@@ -480,7 +479,7 @@ public class ConversationsFragment extends Fragment implements SearchHost {
             public void onResponse(@NonNull Call call, @NonNull Response response) {
                 if (getActivity() != null) {
                     getActivity().runOnUiThread(() -> {
-                        Toast.makeText(getContext(), currentSticky ? "已取消置顶" : "已置顶", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(getContext(), currentSticky ? R.string.conv_sticky_removed : R.string.conv_sticky_added, Toast.LENGTH_SHORT).show();
                         if (getActivity() instanceof HomeActivity) {
                             ((HomeActivity) getActivity()).fetchStickyCount();
                         }
@@ -512,7 +511,7 @@ public class ConversationsFragment extends Fragment implements SearchHost {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 if (getActivity() != null) {
-                    getActivity().runOnUiThread(() -> Toast.makeText(getContext(), "删除失败", Toast.LENGTH_SHORT).show());
+                    getActivity().runOnUiThread(() -> Toast.makeText(getContext(), R.string.conv_delete_failed, Toast.LENGTH_SHORT).show());
                 }
             }
 
@@ -520,7 +519,7 @@ public class ConversationsFragment extends Fragment implements SearchHost {
             public void onResponse(@NonNull Call call, @NonNull Response response) {
                 if (getActivity() != null) {
                     getActivity().runOnUiThread(() -> {
-                        Toast.makeText(getContext(), "已删除会话", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(getContext(), R.string.conv_deleted, Toast.LENGTH_SHORT).show();
                         com.nago8.chat.old.cache.ConversationCache.getInstance().removeConversationFromMainList(chatId);
                         if (getActivity() instanceof HomeActivity) {
                             HomeActivity home = (HomeActivity) getActivity();

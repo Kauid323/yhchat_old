@@ -158,9 +158,9 @@ public class AddressBookFragment extends Fragment {
         Menu menu = popup.getMenu();
 
         if (currentTabPosition == 1) { // 群聊
-            menu.add(0, 0, 0, "默认排序");
-            menu.add(0, 1, 1, "我创建的群聊");
-            menu.add(0, 2, 2, "我管理的群聊");
+            menu.add(0, 0, 0, R.string.filter_default_sort);
+            menu.add(0, 1, 1, R.string.filter_my_groups);
+            menu.add(0, 2, 2, R.string.filter_managed_groups);
 
             popup.setOnMenuItemClickListener(item -> {
                 currentGroupFilter = item.getItemId();
@@ -168,8 +168,8 @@ public class AddressBookFragment extends Fragment {
                 return true;
             });
         } else if (currentTabPosition == 2) { // 机器人
-            menu.add(0, 0, 0, "默认排序");
-            menu.add(0, 1, 1, "我创建的机器人");
+            menu.add(0, 0, 0, R.string.filter_default_sort);
+            menu.add(0, 1, 1, R.string.filter_my_bots);
 
             popup.setOnMenuItemClickListener(item -> {
                 currentBotFilter = item.getItemId();
@@ -186,25 +186,25 @@ public class AddressBookFragment extends Fragment {
             btnFilterMenu.setVisibility(View.VISIBLE);
             switch (currentGroupFilter) {
                 case 1:
-                    if (tvFilterTitle != null) tvFilterTitle.setText("我创建的群聊");
+                    if (tvFilterTitle != null) tvFilterTitle.setText(R.string.filter_my_groups);
                     break;
                 case 2:
-                    if (tvFilterTitle != null) tvFilterTitle.setText("我管理的群聊");
+                    if (tvFilterTitle != null) tvFilterTitle.setText(R.string.filter_managed_groups);
                     break;
                 case 0:
                 default:
-                    if (tvFilterTitle != null) tvFilterTitle.setText("默认排序");
+                    if (tvFilterTitle != null) tvFilterTitle.setText(R.string.filter_default_sort);
                     break;
             }
         } else if (currentTabPosition == 2) { // 机器人
             btnFilterMenu.setVisibility(View.VISIBLE);
             switch (currentBotFilter) {
                 case 1:
-                    if (tvFilterTitle != null) tvFilterTitle.setText("我创建的机器人");
+                    if (tvFilterTitle != null) tvFilterTitle.setText(R.string.filter_my_bots);
                     break;
                 case 0:
                 default:
-                    if (tvFilterTitle != null) tvFilterTitle.setText("默认排序");
+                    if (tvFilterTitle != null) tvFilterTitle.setText(R.string.filter_default_sort);
                     break;
             }
         } else {
@@ -305,15 +305,20 @@ public class AddressBookFragment extends Fragment {
 
     private void applyFiltersAndUpdateList() {
         // Filter Groups
+        // 群权限等级说明 (permisson_level): 群主 = 100, 管理员 = 2, 普通成员 = 0 或 1
         List<address_book_list.Data.Data_list> filteredGroups = new ArrayList<>();
         for (address_book_list.Data.Data_list item : rawGroupsData) {
             if (item == null) continue;
             int level = item.permisson_level;
-            if (currentGroupFilter == 1) { // 我创建的群聊 (permisson_level == 100)
-                if (level == 100) filteredGroups.add(item);
-            } else if (currentGroupFilter == 2) { // 我管理的群聊 (permisson_level > 0)
-                if (level > 0) filteredGroups.add(item);
-            } else {
+            if (currentGroupFilter == 1) { // 我创建的群聊 (群主 level == 100)
+                if (level == 100) {
+                    filteredGroups.add(item);
+                }
+            } else if (currentGroupFilter == 2) { // 我管理的群聊 (群主 level == 100 或 管理员 level == 2)
+                if (level == 100 || level == 2) {
+                    filteredGroups.add(item);
+                }
+            } else { // 默认排序：展示所有群聊
                 filteredGroups.add(item);
             }
         }
@@ -323,9 +328,11 @@ public class AddressBookFragment extends Fragment {
         for (address_book_list.Data.Data_list item : rawBotsData) {
             if (item == null) continue;
             int level = item.permisson_level;
-            if (currentBotFilter == 1) { // 我创建的机器人 (permisson_level > 0)
-                if (level > 0) filteredBots.add(item);
-            } else {
+            if (currentBotFilter == 1) { // 我创建的机器人 (permisson_level == 100 或 > 0)
+                if (level == 100 || level == 1) {
+                    filteredBots.add(item);
+                }
+            } else { // 默认排序：展示所有机器人
                 filteredBots.add(item);
             }
         }

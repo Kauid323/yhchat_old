@@ -1,5 +1,7 @@
 package com.nago8.chat.old.repository;
 
+import androidx.annotation.NonNull;
+
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.nago8.chat.old.net.ApiClient;
@@ -15,6 +17,7 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 
+@SuppressWarnings("UnusedReturnValue")
 public class GroupRepository {
 
     public interface GroupInfoCallback {
@@ -55,12 +58,12 @@ public class GroupRepository {
         Call call = ApiClient.getClient().newCall(request);
         call.enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 if (callback != null) callback.onError(e);
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 try {
                     if (!response.isSuccessful() || response.body() == null) {
                         if (callback != null) callback.onError(new IOException("HTTP " + response.code()));
@@ -103,12 +106,12 @@ public class GroupRepository {
         Call call = ApiClient.getClient().newCall(request);
         call.enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 if (callback != null) callback.onError(e);
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 handleJsonResponse(response, callback);
             }
         });
@@ -138,12 +141,12 @@ public class GroupRepository {
         Call call = ApiClient.getClient().newCall(request);
         call.enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 if (callback != null) callback.onError(e);
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 handleJsonResponse(response, callback);
             }
         });
@@ -173,13 +176,68 @@ public class GroupRepository {
         Call call = ApiClient.getClient().newCall(request);
         call.enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 if (callback != null) callback.onError(e);
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 handleJsonResponse(response, callback);
+            }
+        });
+        return call;
+    }
+
+    /**
+     * 创建群聊 (POST /v1/group/create-group)
+     */
+    public Call createGroup(String token, String name, String introduction, String avatarUrl, GroupActionCallback callback) {
+        if (token == null || token.isEmpty()) {
+            if (callback != null) callback.onError(new IllegalArgumentException("token is empty"));
+            return null;
+        }
+
+        com.nago8.chat.old.proto.group.create_group_send requestProto =
+                new com.nago8.chat.old.proto.group.create_group_send.Builder()
+                        .name(name != null ? name : "")
+                        .introduction(introduction != null ? introduction : "")
+                        .avatar_url(avatarUrl != null ? avatarUrl : "")
+                        .build();
+
+        RequestBody body = RequestBody.create(
+                MediaType.parse("application/x-protobuf"),
+                requestProto.encode()
+        );
+
+        Request request = new Request.Builder()
+                .url(ApiClient.BASE_URL + "/v1/group/create-group")
+                .header("token", token)
+                .post(body)
+                .build();
+
+        Call call = ApiClient.getClient().newCall(request);
+        call.enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                if (callback != null) callback.onError(e);
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
+                try {
+                    if (!response.isSuccessful() || response.body() == null) {
+                        if (callback != null) callback.onError(new IOException("HTTP " + response.code()));
+                        return;
+                    }
+                    com.nago8.chat.old.proto.group.create_group resultProto = com.nago8.chat.old.proto.group.create_group.ADAPTER.decode(response.body().source());
+                    int code = resultProto.status != null ? resultProto.status.code : -1;
+                    String msg = (resultProto.status != null && resultProto.status.msg != null) ? resultProto.status.msg : "";
+                    if (callback != null) callback.onSuccess(code, !msg.isEmpty() ? msg : resultProto.group_id);
+                } catch (Exception e) {
+                    if (callback != null) callback.onError(e);
+                } finally {
+                    if (response.body() != null) response.body().close();
+                }
             }
         });
         return call;

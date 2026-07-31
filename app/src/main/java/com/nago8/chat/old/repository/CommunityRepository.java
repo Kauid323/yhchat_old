@@ -161,4 +161,36 @@ public class CommunityRepository {
                 "{\"id\":" + commentId + "}", cb);
         return null;
     }
+
+    // ==================== 文章列表获取 API ====================
+
+    /** 获取文章列表（POST /v1/community/posts/post-list） */
+    @SuppressWarnings("UnusedReturnValue")
+    public Call getPostList(String token, int typ, int baId, int page, int size, StringCallback cb) {
+        try {
+            JSONObject json = new JSONObject();
+            if (typ > 0) json.put("typ", typ);
+            if (baId > 0) json.put("baId", baId);
+            json.put("page", page);
+            json.put("size", size);
+            return post("/v1/community/posts/post-list", token, json.toString(), cb);
+        } catch (Exception e) {
+            cb.onError(e.getMessage());
+            return null;
+        }
+    }
+
+    /** 获取推荐文章列表（POST /v1/community/posts/post-list-recommend） */
+    @SuppressWarnings("UnusedReturnValue")
+    public Call getRecommendPostList(String token, int page, int size, StringCallback cb) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("page", page);
+            json.put("size", size);
+            return post("/v1/community/posts/post-list-recommend", token, json.toString(), cb);
+        } catch (Exception e) {
+            cb.onError(e.getMessage());
+            return null;
+        }
+    }
 }

@@ -15,6 +15,7 @@ public class App extends Application {
     @Override
     public void onCreate() {
         super.onCreate();
+        androidx.appcompat.app.AppCompatDelegate.setCompatVectorFromResourcesEnabled(true);
         registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks() {
             @Override
             public void onActivityStarted(Activity activity) {

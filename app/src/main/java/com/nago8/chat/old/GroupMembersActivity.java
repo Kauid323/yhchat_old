@@ -307,11 +307,11 @@ public class GroupMembersActivity extends AppCompatActivity {
 
         private void showMemberActionMenu(View anchor, String targetUserId, String targetName, boolean isTargetAdmin, boolean isTargetGagged, boolean isMyselfOwner, int position) {
             PopupMenu popup = new PopupMenu(GroupMembersActivity.this, anchor);
-            popup.getMenu().add(0, 1, 0, "踢出成员");
-            popup.getMenu().add(0, 2, 0, isTargetGagged ? "取消禁言" : "禁言成员");
+            popup.getMenu().add(0, 1, 0, getString(R.string.member_action_kick));
+            popup.getMenu().add(0, 2, 0, isTargetGagged ? getString(R.string.member_action_unmute) : getString(R.string.member_action_mute));
 
             if (isMyselfOwner) {
-                popup.getMenu().add(0, 3, 0, isTargetAdmin ? "移除管理员" : "设置管理员");
+                popup.getMenu().add(0, 3, 0, isTargetAdmin ? getString(R.string.member_action_remove_admin) : getString(R.string.member_action_set_admin));
             }
 
             popup.setOnMenuItemClickListener(item -> {
@@ -326,20 +326,20 @@ public class GroupMembersActivity extends AppCompatActivity {
                             public void onSuccess(int code, String msg) {
                                 runOnUiThread(() -> {
                                     if (code == 1) {
-                                        Toast.makeText(GroupMembersActivity.this, "已踢出成员: " + targetName, Toast.LENGTH_SHORT).show();
+                                        Toast.makeText(GroupMembersActivity.this, getString(R.string.member_kicked_format, targetName), Toast.LENGTH_SHORT).show();
                                         if (position >= 0 && position < members.size()) {
                                             members.remove(position);
                                             notifyItemRemoved(position);
                                         }
                                     } else {
-                                        Toast.makeText(GroupMembersActivity.this, msg != null && !msg.isEmpty() ? msg : "踢出失败", Toast.LENGTH_SHORT).show();
+                                        Toast.makeText(GroupMembersActivity.this, msg != null && !msg.isEmpty() ? msg : getString(R.string.member_kick_failed), Toast.LENGTH_SHORT).show();
                                     }
                                 });
                             }
 
                             @Override
                             public void onError(Exception error) {
-                                runOnUiThread(() -> Toast.makeText(GroupMembersActivity.this, "操作失败: " + error.getMessage(), Toast.LENGTH_SHORT).show());
+                                runOnUiThread(() -> Toast.makeText(GroupMembersActivity.this, getString(R.string.operation_failed_format, error.getMessage()), Toast.LENGTH_SHORT).show());
                             }
                         });
                         return true;
@@ -352,17 +352,17 @@ public class GroupMembersActivity extends AppCompatActivity {
                                 public void onSuccess(int code, String msg) {
                                     runOnUiThread(() -> {
                                         if (code == 1) {
-                                            Toast.makeText(GroupMembersActivity.this, "已取消禁言", Toast.LENGTH_SHORT).show();
+                                            Toast.makeText(GroupMembersActivity.this, getString(R.string.member_unmuted), Toast.LENGTH_SHORT).show();
                                             fetchMembers();
                                         } else {
-                                            Toast.makeText(GroupMembersActivity.this, msg != null && !msg.isEmpty() ? msg : "操作失败", Toast.LENGTH_SHORT).show();
+                                            Toast.makeText(GroupMembersActivity.this, msg != null && !msg.isEmpty() ? msg : getString(R.string.operation_failed), Toast.LENGTH_SHORT).show();
                                         }
                                     });
                                 }
 
                                 @Override
                                 public void onError(Exception error) {
-                                    runOnUiThread(() -> Toast.makeText(GroupMembersActivity.this, "操作失败: " + error.getMessage(), Toast.LENGTH_SHORT).show());
+                                    runOnUiThread(() -> Toast.makeText(GroupMembersActivity.this, getString(R.string.operation_failed_format, error.getMessage()), Toast.LENGTH_SHORT).show());
                                 }
                             });
                         } else {
@@ -377,7 +377,7 @@ public class GroupMembersActivity extends AppCompatActivity {
                             public void onSuccess(int code, String msg) {
                                 runOnUiThread(() -> {
                                     if (code == 1) {
-                                        Toast.makeText(GroupMembersActivity.this, !isTargetAdmin ? "已设为管理员" : "已移除管理员", Toast.LENGTH_SHORT).show();
+                                        Toast.makeText(GroupMembersActivity.this, !isTargetAdmin ? getString(R.string.member_set_admin) : getString(R.string.member_removed_admin), Toast.LENGTH_SHORT).show();
                                         if (!isTargetAdmin) {
                                             adminIds.add(targetUserId);
                                         } else {
@@ -385,14 +385,14 @@ public class GroupMembersActivity extends AppCompatActivity {
                                         }
                                         notifyItemChanged(position);
                                     } else {
-                                        Toast.makeText(GroupMembersActivity.this, msg != null && !msg.isEmpty() ? msg : "操作失败", Toast.LENGTH_SHORT).show();
+                                        Toast.makeText(GroupMembersActivity.this, msg != null && !msg.isEmpty() ? msg : getString(R.string.operation_failed), Toast.LENGTH_SHORT).show();
                                     }
                                 });
                             }
 
                             @Override
                             public void onError(Exception error) {
-                                runOnUiThread(() -> Toast.makeText(GroupMembersActivity.this, "操作失败: " + error.getMessage(), Toast.LENGTH_SHORT).show());
+                                runOnUiThread(() -> Toast.makeText(GroupMembersActivity.this, getString(R.string.operation_failed_format, error.getMessage()), Toast.LENGTH_SHORT).show());
                             }
                         });
                         return true;
@@ -406,11 +406,17 @@ public class GroupMembersActivity extends AppCompatActivity {
         }
 
         private void showGagOptionsDialog(String token, String targetUserId) {
-            String[] options = new String[]{"10分钟", "1小时", "6小时", "12小时", "永久禁言"};
+            String[] options = new String[]{
+                    getString(R.string.mute_10min),
+                    getString(R.string.mute_1hour),
+                    getString(R.string.mute_6hours),
+                    getString(R.string.mute_12hours),
+                    getString(R.string.mute_permanent)
+            };
             int[] seconds = new int[]{600, 3600, 21600, 43200, -1};
 
             AlertDialog.Builder builder = new AlertDialog.Builder(GroupMembersActivity.this);
-            builder.setTitle("选择禁言时长");
+            builder.setTitle(R.string.mute_dialog_title);
             builder.setItems(options, (dialog, which) -> {
                 int duration = seconds[which];
                 groupRepository.gagMember(token, groupId, targetUserId, duration, new GroupRepository.GroupActionCallback() {
@@ -418,17 +424,17 @@ public class GroupMembersActivity extends AppCompatActivity {
                     public void onSuccess(int code, String msg) {
                         runOnUiThread(() -> {
                             if (code == 1) {
-                                Toast.makeText(GroupMembersActivity.this, "已禁言该成员", Toast.LENGTH_SHORT).show();
+                                Toast.makeText(GroupMembersActivity.this, R.string.member_muted, Toast.LENGTH_SHORT).show();
                                 fetchMembers();
                             } else {
-                                Toast.makeText(GroupMembersActivity.this, msg != null && !msg.isEmpty() ? msg : "禁言失败", Toast.LENGTH_SHORT).show();
+                                Toast.makeText(GroupMembersActivity.this, msg != null && !msg.isEmpty() ? msg : getString(R.string.member_mute_failed), Toast.LENGTH_SHORT).show();
                             }
                         });
                     }
 
                     @Override
                     public void onError(Exception error) {
-                        runOnUiThread(() -> Toast.makeText(GroupMembersActivity.this, "操作失败: " + error.getMessage(), Toast.LENGTH_SHORT).show());
+                        runOnUiThread(() -> Toast.makeText(GroupMembersActivity.this, getString(R.string.operation_failed_format, error.getMessage()), Toast.LENGTH_SHORT).show());
                     }
                 });
             });

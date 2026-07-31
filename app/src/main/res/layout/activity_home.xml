@@ -90,7 +90,7 @@
                     android:background="@drawable/bg_fab_label"
                     android:paddingHorizontal="10dp"
                     android:paddingVertical="4dp"
-                    android:text="@string/fab_new_group"
+                    android:text="@string/fab_add_item"
                     android:textColor="@android:color/white"
                     android:textSize="13sp" />
 
@@ -99,10 +99,10 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     app:fabSize="mini"
-                    app:srcCompat="@drawable/ic_group"
+                    app:srcCompat="@drawable/ic_add"
                     app:tint="@android:color/white"
                     app:backgroundTint="@color/app_primary"
-                    android:contentDescription="@string/fab_new_group" />
+                    android:contentDescription="@string/fab_add_item" />
             </LinearLayout>
 
             <!-- Sub Item 1: New Chat -->

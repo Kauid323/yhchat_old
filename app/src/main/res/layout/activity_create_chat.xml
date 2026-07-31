@@ -5,9 +5,20 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
-    <!-- MD2 Community TabLayout -->
+    <!-- Header Toolbar -->
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorPrimary"
+        android:elevation="4dp"
+        app:navigationIcon="@drawable/ic_back"
+        app:title="@string/create_chat_title"
+        app:titleTextColor="@android:color/white" />
+
+    <!-- Material Design 2 TabLayout -->
     <com.google.android.material.tabs.TabLayout
-        android:id="@+id/tabLayoutCommunity"
+        android:id="@+id/tabLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         app:tabIndicatorColor="?attr/colorPrimary"
@@ -15,9 +26,9 @@
         app:tabSelectedTextColor="?attr/colorPrimary"
         app:tabTextColor="?android:attr/textColorSecondary" />
 
-    <!-- ViewPager2 for Community Tabs -->
+    <!-- ViewPager2 for Tabs -->
     <androidx.viewpager2.widget.ViewPager2
-        android:id="@+id/viewPagerCommunity"
+        android:id="@+id/viewPager"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1" />

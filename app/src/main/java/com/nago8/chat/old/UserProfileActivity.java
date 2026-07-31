@@ -218,7 +218,7 @@ public class UserProfileActivity extends AppCompatActivity {
         currentUserAvatar = data.avatar_url != null ? data.avatar_url : "";
 
         tvName.setText(currentUserName);
-        tvUserId.setText("ID: " + data.id);
+        tvUserId.setText(getString(R.string.user_id_format, data.id));
         ImageUtils.loadAvatar(this, currentUserAvatar, ivAvatar);
 
         if (data.is_vip == 1) {
@@ -332,24 +332,30 @@ public class UserProfileActivity extends AppCompatActivity {
     }
 
     private void showAddFriendDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("添加好友");
+        com.google.android.material.dialog.MaterialAlertDialogBuilder builder =
+                new com.google.android.material.dialog.MaterialAlertDialogBuilder(this);
+        builder.setTitle(R.string.add_friend_dialog_title);
 
-        final EditText etRemark = new EditText(this);
-        etRemark.setHint("请输入申请备注信息（可选）");
+        com.google.android.material.textfield.TextInputLayout inputLayout =
+                new com.google.android.material.textfield.TextInputLayout(this, null, com.google.android.material.R.attr.textInputStyle);
+        inputLayout.setHint(getString(R.string.add_friend_remark_hint));
+
+        final com.google.android.material.textfield.TextInputEditText etRemark =
+                new com.google.android.material.textfield.TextInputEditText(inputLayout.getContext());
         etRemark.setSingleLine(true);
+        inputLayout.addView(etRemark);
 
         FrameLayout container = new FrameLayout(this);
-        int padding = (int) (16 * getResources().getDisplayMetrics().density);
+        int padding = (int) (20 * getResources().getDisplayMetrics().density);
         container.setPadding(padding, padding / 2, padding, padding / 2);
-        container.addView(etRemark);
+        container.addView(inputLayout);
         builder.setView(container);
 
-        builder.setPositiveButton("确定", (dialog, which) -> {
-            String remark = etRemark.getText().toString().trim();
+        builder.setPositiveButton(R.string.dialog_confirm, (dialog, which) -> {
+            String remark = etRemark.getText() != null ? etRemark.getText().toString().trim() : "";
             sendFriendApply(remark);
         });
-        builder.setNegativeButton("取消", (dialog, which) -> dialog.dismiss());
+        builder.setNegativeButton(R.string.dialog_cancel, (dialog, which) -> dialog.dismiss());
 
         builder.show();
     }
@@ -369,9 +375,9 @@ public class UserProfileActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     if (progressBar != null) progressBar.setVisibility(View.GONE);
                     if (code == 1) {
-                        Toast.makeText(UserProfileActivity.this, "好友申请已发送", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(UserProfileActivity.this, R.string.add_friend_sent, Toast.LENGTH_SHORT).show();
                     } else {
-                        Toast.makeText(UserProfileActivity.this, msg != null && !msg.isEmpty() ? msg : "发送申请失败", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(UserProfileActivity.this, msg != null && !msg.isEmpty() ? msg : getString(R.string.add_friend_failed), Toast.LENGTH_SHORT).show();
                     }
                 });
             }
@@ -380,7 +386,7 @@ public class UserProfileActivity extends AppCompatActivity {
             public void onError(Exception error) {
                 runOnUiThread(() -> {
                     if (progressBar != null) progressBar.setVisibility(View.GONE);
-                    Toast.makeText(UserProfileActivity.this, "发送申请失败：" + error.getMessage(), Toast.LENGTH_SHORT).show();
+                    Toast.makeText(UserProfileActivity.this, getString(R.string.add_friend_failed_format, error.getMessage()), Toast.LENGTH_SHORT).show();
                 });
             }
         });
@@ -388,55 +394,53 @@ public class UserProfileActivity extends AppCompatActivity {
 
     private void showReportDialog() {
         reportImageUri = null;
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("举报用户");
+        com.google.android.material.dialog.MaterialAlertDialogBuilder builder =
+                new com.google.android.material.dialog.MaterialAlertDialogBuilder(this);
+        builder.setTitle(R.string.report_user_dialog_title);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        int padding = (int) (16 * getResources().getDisplayMetrics().density);
+        int padding = (int) (20 * getResources().getDisplayMetrics().density);
         root.setPadding(padding, padding / 2, padding, padding / 2);
 
         // 1. 举报原因分类选择器
         TextView tvReasonTitle = new TextView(this);
-        tvReasonTitle.setText("举报类型：");
+        tvReasonTitle.setText(R.string.report_type_label);
         tvReasonTitle.setTextSize(14);
-        tvReasonTitle.setTextColor(0xFF333333);
+        tvReasonTitle.setTextColor(0xFF888888);
         root.addView(tvReasonTitle);
 
-        final String[] reasons = {"色情低俗", "时政不实消息", "垃圾广告", "青少年不宜", "辱骂攻击", "侵犯权益", "违法犯罪", "开盒网暴", "其他"};
+        final String[] reasons = getResources().getStringArray(R.array.report_reasons);
         Spinner spinnerReason = new Spinner(this);
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, reasons);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinnerReason.setAdapter(adapter);
-        spinnerReason.setPadding(0, (int) (4 * getResources().getDisplayMetrics().density), 0, (int) (8 * getResources().getDisplayMetrics().density));
+        spinnerReason.setPadding(0, (int) (4 * getResources().getDisplayMetrics().density), 0, (int) (12 * getResources().getDisplayMetrics().density));
         root.addView(spinnerReason);
 
-        // 2. 举报详细内容输入框
-        TextView tvContentTitle = new TextView(this);
-        tvContentTitle.setText("详细描述（可选）：");
-        tvContentTitle.setTextSize(14);
-        tvContentTitle.setTextColor(0xFF333333);
-        LinearLayout.LayoutParams paramsTitle = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        paramsTitle.topMargin = (int) (12 * getResources().getDisplayMetrics().density);
-        tvContentTitle.setLayoutParams(paramsTitle);
-        root.addView(tvContentTitle);
+        // 2. MD2 举报详细内容输入框
+        com.google.android.material.textfield.TextInputLayout inputLayoutContent =
+                new com.google.android.material.textfield.TextInputLayout(this, null, com.google.android.material.R.attr.textInputStyle);
+        inputLayoutContent.setHint(getString(R.string.report_content_label));
 
-        final EditText etContent = new EditText(this);
-        etContent.setHint("请详细描述违规行为或事实...");
-        etContent.setTextSize(14);
+        final com.google.android.material.textfield.TextInputEditText etContent =
+                new com.google.android.material.textfield.TextInputEditText(inputLayoutContent.getContext());
+        etContent.setHint(R.string.report_content_hint);
         etContent.setMinLines(3);
         etContent.setGravity(Gravity.TOP | Gravity.START);
-        etContent.setBackgroundResource(android.R.drawable.editbox_background);
-        root.addView(etContent);
+        inputLayoutContent.addView(etContent);
+        
+        LinearLayout.LayoutParams paramsInput = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        paramsInput.topMargin = (int) (8 * getResources().getDisplayMetrics().density);
+        paramsInput.bottomMargin = (int) (12 * getResources().getDisplayMetrics().density);
+        inputLayoutContent.setLayoutParams(paramsInput);
+        root.addView(inputLayoutContent);
 
         // 3. 图片证据选择器
         TextView tvImageTitle = new TextView(this);
-        tvImageTitle.setText("图片证据（可选）：");
+        tvImageTitle.setText(R.string.report_image_label);
         tvImageTitle.setTextSize(14);
-        tvImageTitle.setTextColor(0xFF333333);
-        LinearLayout.LayoutParams paramsImageTitle = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        paramsImageTitle.topMargin = (int) (12 * getResources().getDisplayMetrics().density);
-        tvImageTitle.setLayoutParams(paramsImageTitle);
+        tvImageTitle.setTextColor(0xFF888888);
         root.addView(tvImageTitle);
 
         LinearLayout imageRow = new LinearLayout(this);
@@ -455,41 +459,39 @@ public class UserProfileActivity extends AppCompatActivity {
         dialogIvPreview.setVisibility(View.GONE);
         imageRow.addView(dialogIvPreview);
 
-        dialogTvSelectImage = new TextView(this);
-        dialogTvSelectImage.setText("+ 添加图片");
-        dialogTvSelectImage.setTextSize(13);
-        dialogTvSelectImage.setTextColor(0xFF3B82F6);
-        dialogTvSelectImage.setPadding((int) (8 * getResources().getDisplayMetrics().density), (int) (6 * getResources().getDisplayMetrics().density), (int) (8 * getResources().getDisplayMetrics().density), (int) (6 * getResources().getDisplayMetrics().density));
-        dialogTvSelectImage.setBackgroundResource(android.R.drawable.btn_default);
-        dialogTvSelectImage.setOnClickListener(v -> openImagePickerForReport());
-        imageRow.addView(dialogTvSelectImage);
+        com.google.android.material.button.MaterialButton btnSelectImg =
+                new com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.borderlessButtonStyle);
+        btnSelectImg.setText(R.string.report_select_image);
+        btnSelectImg.setIconResource(R.drawable.ic_image);
+        btnSelectImg.setOnClickListener(v -> openImagePickerForReport());
+        imageRow.addView(btnSelectImg);
 
         root.addView(imageRow);
 
         builder.setView(root);
 
-        builder.setPositiveButton("提交", (dialog, which) -> {
+        builder.setPositiveButton(R.string.report_btn_submit, (dialog, which) -> {
             int selectedPos = spinnerReason.getSelectedItemPosition();
-            String reason = (selectedPos >= 0 && selectedPos < reasons.length) ? reasons[selectedPos] : "其他";
-            String content = etContent.getText().toString().trim();
+            String reason = (selectedPos >= 0 && selectedPos < reasons.length) ? reasons[selectedPos] : reasons[reasons.length - 1];
+            String content = etContent.getText() != null ? etContent.getText().toString().trim() : "";
             doSubmitReport(reason, content);
         });
 
-        builder.setNegativeButton("取消", (dialog, which) -> dialog.dismiss());
+        builder.setNegativeButton(R.string.report_btn_cancel, (dialog, which) -> dialog.dismiss());
         builder.show();
     }
 
     private void openImagePickerForReport() {
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
         intent.setType("image/*");
-        startActivityForResult(Intent.createChooser(intent, "选择图片证明"), REQUEST_CODE_PICK_REPORT_IMAGE);
+        startActivityForResult(Intent.createChooser(intent, getString(R.string.report_pick_image_title)), REQUEST_CODE_PICK_REPORT_IMAGE);
     }
 
     private void updateReportDialogImagePreview() {
         if (dialogIvPreview != null && reportImageUri != null) {
             dialogIvPreview.setImageURI(reportImageUri);
             dialogIvPreview.setVisibility(View.VISIBLE);
-            if (dialogTvSelectImage != null) dialogTvSelectImage.setText("更换图片");
+            if (dialogTvSelectImage != null) dialogTvSelectImage.setText(R.string.report_change_image);
         }
     }
 
@@ -505,7 +507,7 @@ public class UserProfileActivity extends AppCompatActivity {
     private void doSubmitReport(String reason, String content) {
         String token = PrefUtils.getToken(this);
         if (token == null || token.isEmpty()) {
-            Toast.makeText(this, "用户未登录", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.user_profile_not_logged_in, Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -513,11 +515,11 @@ public class UserProfileActivity extends AppCompatActivity {
             reportProgressDialog = new ProgressDialog(this);
             reportProgressDialog.setCancelable(false);
         }
-        reportProgressDialog.setMessage("正在提交举报...");
+        reportProgressDialog.setMessage(getString(R.string.report_submitting));
         reportProgressDialog.show();
 
         if (reportImageUri != null) {
-            reportProgressDialog.setMessage("正在上传图片证明...");
+            reportProgressDialog.setMessage(getString(R.string.report_uploading_image));
             ImageUploadUtils.getQiniuUploadToken(token, new ImageUploadUtils.TokenCallback() {
                 @Override
                 public void onSuccess(String uploadToken) {
@@ -532,7 +534,7 @@ public class UserProfileActivity extends AppCompatActivity {
                         public void onError(Exception e) {
                             runOnUiThread(() -> {
                                 if (reportProgressDialog != null) reportProgressDialog.dismiss();
-                                Toast.makeText(UserProfileActivity.this, "图片上传失败：" + e.getMessage(), Toast.LENGTH_SHORT).show();
+                                Toast.makeText(UserProfileActivity.this, getString(R.string.report_image_upload_failed_format, e.getMessage()), Toast.LENGTH_SHORT).show();
                             });
                         }
                     });
@@ -542,7 +544,7 @@ public class UserProfileActivity extends AppCompatActivity {
                 public void onError(Exception e) {
                     runOnUiThread(() -> {
                         if (reportProgressDialog != null) reportProgressDialog.dismiss();
-                        Toast.makeText(UserProfileActivity.this, "获取上传Token失败：" + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        Toast.makeText(UserProfileActivity.this, getString(R.string.report_token_failed_format, e.getMessage()), Toast.LENGTH_SHORT).show();
                     });
                 }
             });
@@ -562,7 +564,7 @@ public class UserProfileActivity extends AppCompatActivity {
                         Toast.makeText(UserProfileActivity.this, R.string.report_submitted, Toast.LENGTH_SHORT).show();
                         reportImageUri = null;
                     } else {
-                        Toast.makeText(UserProfileActivity.this, msg != null && !msg.isEmpty() ? msg : "举报提交失败", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(UserProfileActivity.this, msg != null && !msg.isEmpty() ? msg : getString(R.string.report_submit_failed), Toast.LENGTH_SHORT).show();
                     }
                 });
             }
@@ -571,7 +573,7 @@ public class UserProfileActivity extends AppCompatActivity {
             public void onError(Exception error) {
                 runOnUiThread(() -> {
                     if (reportProgressDialog != null) reportProgressDialog.dismiss();
-                    Toast.makeText(UserProfileActivity.this, "举报提交失败：" + error.getMessage(), Toast.LENGTH_SHORT).show();
+                    Toast.makeText(UserProfileActivity.this, getString(R.string.report_submit_failed_format, error.getMessage()), Toast.LENGTH_SHORT).show();
                 });
             }
         });

@@ -172,4 +172,180 @@
     <string name="settings_cache_cleared">All cache cleared</string>
     <string name="settings_cache_size_format">Cache size: %1$s</string>
     <string name="user_id_format">ID: %1$s</string>
+    <string name="group_title_format">%1$s (%2$d)</string>
+    <string name="group_profile_owner_label">Owner ID</string>
+    <string name="group_profile_admins_label">Admin IDs</string>
+    <string name="group_profile_none">None</string>
+    <string name="group_profile_off">Off</string>
+
+    <!-- Group Members Actions -->
+    <string name="member_action_kick">Kick Member</string>
+    <string name="member_action_mute">Mute Member</string>
+    <string name="member_action_unmute">Unmute</string>
+    <string name="member_action_set_admin">Set as Admin</string>
+    <string name="member_action_remove_admin">Remove Admin</string>
+    <string name="member_kicked_format">Member kicked: %1$s</string>
+    <string name="member_kick_failed">Failed to kick member</string>
+    <string name="member_unmuted">Member unmuted</string>
+    <string name="member_muted">Member muted</string>
+    <string name="member_mute_failed">Failed to mute</string>
+    <string name="member_set_admin">Set as admin</string>
+    <string name="member_removed_admin">Admin removed</string>
+    <string name="operation_failed_format">Operation failed: %1$s</string>
+    <string name="operation_failed">Operation failed</string>
+
+    <!-- Mute Duration Dialog -->
+    <string name="mute_dialog_title">Select Mute Duration</string>
+    <string name="mute_10min">10 minutes</string>
+    <string name="mute_1hour">1 hour</string>
+    <string name="mute_6hours">6 hours</string>
+    <string name="mute_12hours">12 hours</string>
+    <string name="mute_permanent">Permanent</string>
+
+    <!-- Address Book Filters -->
+    <string name="filter_default_sort">Default Order</string>
+    <string name="filter_my_groups">Groups I Created</string>
+    <string name="filter_managed_groups">Groups I Manage</string>
+    <string name="filter_my_bots">Bots I Created</string>
+
+    <!-- Video Player -->
+    <string name="video_muted">Muted</string>
+    <string name="video_unmuted">Volume on</string>
+    <string name="video_loop_on">Loop enabled</string>
+    <string name="video_loop_off">Loop disabled</string>
+    <string name="video_invalid_url">Invalid video URL</string>
+    <string name="video_play_failed">Video playback failed</string>
+    <string name="video_saved_format">Video saved to: %1$s</string>
+    <string name="video_download_start">Downloading video…</string>
+    <string name="video_download_failed_format">Download failed: %1$s</string>
+    <string name="video_info_title">Video Details</string>
+    <string name="video_info_confirm">OK</string>
+    <string name="video_info_not_ready">Fetching video metadata, please wait…</string>
+    <string name="video_info_template">Video Info\n • Codec: %1$s\n • Resolution: %2$s\n • Frame Rate: %3$s\n • Bitrate: %4$s\n • File Size: %5$s\n\nAudio Info\n • Codec: %6$s\n • Channels: %7$s\n • Sample Rate: %8$s\n • Bitrate: %9$s\n\nDecoder\n • Component: %10$s</string>
+    <string name="video_info_unknown">Unknown</string>
+    <string name="video_cannot_open">Cannot open this file</string>
+
+    <!-- Create Chat & Bot UI -->
+    <string name="fab_add_item">Add</string>
+    <string name="create_chat_title">Create</string>
+    <string name="tab_create_group">New Group</string>
+    <string name="tab_create_bot">New Bot</string>
+    <string name="hint_group_name">Enter group name</string>
+    <string name="hint_group_intro">Enter group description (optional)</string>
+    <string name="hint_avatar_url">Enter avatar URL (optional)</string>
+    <string name="label_group_name">Group Name</string>
+    <string name="label_group_intro">Description</string>
+    <string name="label_avatar_url">Avatar URL</string>
+    <string name="label_group_private">Private Group</string>
+    <string name="desc_group_private">Joinable only via invite or group code</string>
+    <string name="label_bot_name">Bot Name</string>
+    <string name="label_bot_intro">Description</string>
+    <string name="hint_bot_name">Enter bot name</string>
+    <string name="hint_bot_intro">Enter bot description (optional)</string>
+    <string name="label_bot_private">Private Bot</string>
+    <string name="desc_bot_private">Visible only to yourself or via manual authorization</string>
+    <string name="btn_submit_create_group">Create Group</string>
+    <string name="btn_submit_create_bot">Create Bot</string>
+    <string name="create_group_success">Group created successfully!</string>
+    <string name="create_bot_success">Bot created successfully!</string>
+    <string name="tab_community_all">All</string>
+    <string name="tab_community_sections">Sections</string>
+    <string name="tab_community_mine">Mine</string>
+    <string name="community_filter_title">Filter Articles</string>
+    <string name="community_filter_recommend">Recommended</string>
+    <string name="community_filter_latest">Latest</string>
+    <string name="loading">Loading...</string>
+    <string name="create_failed_format">Failed to create: %1$s</string>
+
+    <!-- Chat / File Upload -->
+    <string name="chat_media_too_large_format">File exceeds size limit (%1$s), please upgrade to VIP</string>
+    <string name="chat_media_too_large_vip_format">File exceeds VIP size limit (%1$s)</string>
+
+    <!-- Report Dialog -->
+    <string name="report_dialog_title">Report</string>
+    <string name="report_reason_label">Report Reason</string>
+    <string name="report_description_hint">Enter report details…</string>
+    <string name="report_add_image">Add image evidence</string>
+    <string name="report_submit">Submit Report</string>
+    <string name="report_failed_format">Report failed: %1$s</string>
+
+    <!-- User Profile -->
+    <string name="user_profile_add_remark_hint">Add remark</string>
+    <string name="user_profile_remark_saved">Remark saved</string>
+    <string name="user_profile_remark_failed">Failed to save remark</string>
+
+    <!-- Add Friend Dialog -->
+    <string name="add_friend_dialog_title">Add Friend</string>
+    <string name="add_friend_remark_hint">Enter application note (optional)</string>
+    <string name="add_friend_sent">Friend request sent</string>
+    <string name="add_friend_failed">Failed to send request</string>
+    <string name="add_friend_failed_format">Failed to send request: %1$s</string>
+
+    <!-- Report Dialog -->
+    <string name="report_user_dialog_title">Report User</string>
+    <string name="report_type_label">Report Type:</string>
+    <string name="report_content_label">Details (optional):</string>
+    <string name="report_content_hint">Describe the violation in detail...</string>
+    <string name="report_image_label">Image evidence (optional):</string>
+    <string name="report_select_image">+ Add Image</string>
+    <string name="report_change_image">Change Image</string>
+    <string name="report_pick_image_title">Select image evidence</string>
+    <string name="report_btn_submit">Submit</string>
+    <string name="report_btn_cancel">Cancel</string>
+    <string name="report_uploading_image">Uploading image evidence...</string>
+    <string name="report_submitting">Submitting report...</string>
+    <string name="report_image_upload_failed_format">Image upload failed: %1$s</string>
+    <string name="report_token_failed_format">Failed to get upload token: %1$s</string>
+    <string name="report_submit_failed">Report submission failed</string>
+    <string name="report_submit_failed_format">Report submission failed: %1$s</string>
+    <string-array name="report_reasons">
+        <item>Adult Content</item>
+        <item>Misinformation</item>
+        <item>Spam / Ads</item>
+        <item>Inappropriate for Minors</item>
+        <item>Harassment / Abuse</item>
+        <item>Infringement</item>
+        <item>Illegal Activity</item>
+        <item>Doxxing / Cyberbullying</item>
+        <item>Other</item>
+    </string-array>
+
+    <!-- User Profile -->
+    <string name="user_profile_not_logged_in">Not logged in</string>
+    <string name="dialog_confirm">OK</string>
+    <string name="dialog_cancel">Cancel</string>
+
+    <!-- Chat Activity -->
+    <string name="chat_pick_image_title">Select Image</string>
+    <string name="chat_pick_file_title">Select File</string>
+    <string name="chat_photo_file_failed">Failed to create photo file</string>
+    <string name="chat_no_camera_app">No camera app found</string>
+    <string name="chat_camera_permission_denied">Camera permission required</string>
+    <string name="chat_not_logged_in">Not logged in</string>
+    <string name="chat_sending_images_format">Sending %1$d image(s)...</string>
+    <string name="chat_image_sent_format">Image (%1$d/%2$d) sent</string>
+    <string name="chat_image_failed_format">Image send failed: %1$s</string>
+    <string name="chat_sending_files_format">Sending %1$d file(s)...</string>
+    <string name="chat_file_sent_format">File (%1$d/%2$d) %3$s sent</string>
+    <string name="chat_file_failed_format">File send failed: %1$s</string>
+    <string name="chat_action_video">Video</string>
+    <string name="chat_action_record">Record</string>
+    <string name="chat_action_card">Card</string>
+    <string name="chat_action_article">Article</string>
+    <string name="chat_action_tapped_format">Tapped: %1$s</string>
+
+    <!-- Conversation Fragment -->
+    <string name="conv_fetch_failed">Failed to load conversations</string>
+    <string name="conv_request_failed">Request failed</string>
+    <string name="conv_sticky_added">Pinned</string>
+    <string name="conv_sticky_removed">Unpinned</string>
+    <string name="conv_delete_failed">Delete failed</string>
+    <string name="conv_deleted">Conversation deleted</string>
+    <string name="conv_operation_failed">Operation failed</string>
+
+    <!-- GroupProfile Auto Delete time units -->
+    <string name="time_unit_days_format">%1$d day(s)</string>
+    <string name="time_unit_hours_format">%1$d hour(s)</string>
+    <string name="time_unit_minutes_format">%1$d minute(s)</string>
+    <string name="time_unit_seconds_format">%1$d second(s)</string>
 </resources>

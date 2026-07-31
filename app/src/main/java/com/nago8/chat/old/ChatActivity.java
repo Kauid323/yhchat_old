@@ -239,7 +239,7 @@ public class ChatActivity extends AppCompatActivity {
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
         intent.setType("image/*");
         intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-        startActivityForResult(Intent.createChooser(intent, "选择图片"), REQUEST_CODE_PICK_IMAGES);
+        startActivityForResult(Intent.createChooser(intent, getString(R.string.chat_pick_image_title)), REQUEST_CODE_PICK_IMAGES);
     }
 
     @android.annotation.SuppressLint("InlinedApi")
@@ -248,7 +248,7 @@ public class ChatActivity extends AppCompatActivity {
         intent.setType("*/*");
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-        startActivityForResult(Intent.createChooser(intent, "选择文件"), REQUEST_CODE_PICK_FILES);
+        startActivityForResult(Intent.createChooser(intent, getString(R.string.chat_pick_file_title)), REQUEST_CODE_PICK_FILES);
     }
 
     private void openCamera() {
@@ -268,7 +268,7 @@ public class ChatActivity extends AppCompatActivity {
                 if (storageDir == null) storageDir = getCacheDir();
                 photoFile = File.createTempFile("JPEG_" + timeStamp + "_", ".jpg", storageDir);
             } catch (IOException ex) {
-                Toast.makeText(this, "创建照片文件失败", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, R.string.chat_photo_file_failed, Toast.LENGTH_SHORT).show();
                 return;
             }
 
@@ -283,7 +283,7 @@ public class ChatActivity extends AppCompatActivity {
                 startActivityForResult(takePictureIntent, REQUEST_CODE_TAKE_PHOTO);
             }
         } else {
-            Toast.makeText(this, "未找到相机应用", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.chat_no_camera_app, Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -294,7 +294,7 @@ public class ChatActivity extends AppCompatActivity {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 openCamera();
             } else {
-                Toast.makeText(this, "需要相机权限才能拍照", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, R.string.chat_camera_permission_denied, Toast.LENGTH_SHORT).show();
             }
         }
     }
@@ -338,7 +338,7 @@ public class ChatActivity extends AppCompatActivity {
     private void uploadAndSendImages(List<Uri> uris) {
         String token = PrefUtils.getToken(this);
         if (token == null || token.isEmpty()) {
-            Toast.makeText(this, "用户未登录", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.chat_not_logged_in, Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -355,7 +355,7 @@ public class ChatActivity extends AppCompatActivity {
 
         if (validUris.isEmpty()) return;
 
-        Toast.makeText(this, "准备发送 " + validUris.size() + " 张图片...", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, getString(R.string.chat_sending_images_format, validUris.size()), Toast.LENGTH_SHORT).show();
 
         repository.uploadAndSendImages(this, token, chatId, chatType, validUris, new MessageRepository.ImageUploadListener() {
             @Override
@@ -365,14 +365,14 @@ public class ChatActivity extends AppCompatActivity {
             @Override
             public void onImageSuccess(int index, int total) {
                 runOnUiThread(() -> {
-                    Toast.makeText(ChatActivity.this, "图片 (" + index + "/" + total + ") 发送成功", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(ChatActivity.this, getString(R.string.chat_image_sent_format, index, total), Toast.LENGTH_SHORT).show();
                     fetchLatestMessage();
                 });
             }
 
             @Override
             public void onImageError(int index, int total, Exception error) {
-                runOnUiThread(() -> Toast.makeText(ChatActivity.this, "图片发送失败: " + error.getMessage(), Toast.LENGTH_SHORT).show());
+                runOnUiThread(() -> Toast.makeText(ChatActivity.this, getString(R.string.chat_image_failed_format, error.getMessage()), Toast.LENGTH_SHORT).show());
             }
 
             @Override
@@ -384,7 +384,7 @@ public class ChatActivity extends AppCompatActivity {
     private void uploadAndSendFiles(List<Uri> uris) {
         String token = PrefUtils.getToken(this);
         if (token == null || token.isEmpty()) {
-            Toast.makeText(this, "用户未登录", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.chat_not_logged_in, Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -406,7 +406,7 @@ public class ChatActivity extends AppCompatActivity {
 
         if (validUris.isEmpty()) return;
 
-        Toast.makeText(this, "准备发送 " + validUris.size() + " 个文件...", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, getString(R.string.chat_sending_files_format, validUris.size()), Toast.LENGTH_SHORT).show();
 
         repository.uploadAndSendFiles(this, token, chatId, chatType, validUris, new MessageRepository.FileUploadListener() {
             @Override
@@ -416,14 +416,14 @@ public class ChatActivity extends AppCompatActivity {
             @Override
             public void onFileSuccess(int index, int total, String fileName) {
                 runOnUiThread(() -> {
-                    Toast.makeText(ChatActivity.this, "文件 (" + index + "/" + total + ") " + fileName + " 发送成功", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(ChatActivity.this, getString(R.string.chat_file_sent_format, index, total, fileName), Toast.LENGTH_SHORT).show();
                     fetchLatestMessage();
                 });
             }
 
             @Override
             public void onFileError(int index, int total, Exception error) {
-                runOnUiThread(() -> Toast.makeText(ChatActivity.this, "文件发送失败: " + error.getMessage(), Toast.LENGTH_SHORT).show());
+                runOnUiThread(() -> Toast.makeText(ChatActivity.this, getString(R.string.chat_file_failed_format, error.getMessage()), Toast.LENGTH_SHORT).show());
             }
 
             @Override
@@ -447,22 +447,22 @@ public class ChatActivity extends AppCompatActivity {
                     String actionName;
                     switch (actionType) {
                         case "video":
-                            actionName = "视频";
+                            actionName = getString(R.string.chat_action_video);
                             break;
                         case "record":
-                            actionName = "录制";
+                            actionName = getString(R.string.chat_action_record);
                             break;
                         case "card":
-                            actionName = "名片";
+                            actionName = getString(R.string.chat_action_card);
                             break;
                         case "article":
-                            actionName = "文章";
+                            actionName = getString(R.string.chat_action_article);
                             break;
                         default:
                             actionName = actionType;
                             break;
                     }
-                    Toast.makeText(this, "点击了：" + actionName, Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, getString(R.string.chat_action_tapped_format, actionName), Toast.LENGTH_SHORT).show();
                 }
             });
         }
