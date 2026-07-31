@@ -1,5 +1,6 @@
 package com.nago8.chat.old;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
@@ -8,6 +9,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.util.Base64;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -15,6 +17,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 
@@ -34,6 +37,8 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 public class MainActivity extends AppCompatActivity {
+
+    private static final String TAG = "MainActivity";
 
     private LinearLayout layoutEmail;
     private LinearLayout layoutPhone;
@@ -107,24 +112,30 @@ public class MainActivity extends AppCompatActivity {
 
         ApiClient.getClient().newCall(request).enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
-                runOnUiThread(() -> {
-                    Toast.makeText(MainActivity.this, "获取验证码失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                    e.printStackTrace();
-                });
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                Log.e(TAG, "fetchCaptcha failed", e);
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, "获取验证码失败: " + e.getMessage(), Toast.LENGTH_LONG).show());
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                if (response.isSuccessful()) {
-                    UserModels.CaptchaResponse res = ApiClient.getGson().fromJson(response.body().string(), UserModels.CaptchaResponse.class);
-                    if (res.code == 1 && res.data != null) {
-                        captchaId = res.data.id;
-                        String base64 = res.data.b64s;
-                        if (base64.contains(",")) base64 = base64.split(",")[1];
-                        byte[] decodedString = Base64.decode(base64, Base64.DEFAULT);
-                        Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
-                        runOnUiThread(() -> ivImageCode.setImageBitmap(decodedByte));
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    try {
+                        UserModels.CaptchaResponse res = ApiClient.getGson().fromJson(response.body().string(), UserModels.CaptchaResponse.class);
+                        if (res != null && res.code == 1 && res.data != null) {
+                            captchaId = res.data.id;
+                            String base64 = res.data.b64s;
+                            if (base64 != null && base64.contains(",")) base64 = base64.split(",")[1];
+                            if (base64 != null) {
+                                byte[] decodedString = Base64.decode(base64, Base64.DEFAULT);
+                                Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
+                                runOnUiThread(() -> ivImageCode.setImageBitmap(decodedByte));
+                            }
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "parse captcha error", e);
+                    } finally {
+                        response.body().close();
                     }
                 }
             }
@@ -148,19 +159,29 @@ public class MainActivity extends AppCompatActivity {
 
         ApiClient.getClient().newCall(request).enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                Log.e(TAG, "sendSmsCode failed", e);
                 runOnUiThread(() -> Toast.makeText(MainActivity.this, "发送失败", Toast.LENGTH_SHORT).show());
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                String responseData = response.body().string();
-                UserModels.CommonResponse res = ApiClient.getGson().fromJson(responseData, UserModels.CommonResponse.class);
-                runOnUiThread(() -> Toast.makeText(MainActivity.this, res.msg, Toast.LENGTH_SHORT).show());
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
+                if (response.body() != null) {
+                    try {
+                        String responseData = response.body().string();
+                        UserModels.CommonResponse res = ApiClient.getGson().fromJson(responseData, UserModels.CommonResponse.class);
+                        runOnUiThread(() -> Toast.makeText(MainActivity.this, res != null && res.msg != null ? res.msg : "发送完成", Toast.LENGTH_SHORT).show());
+                    } catch (Exception e) {
+                        Log.e(TAG, "parse sms response error", e);
+                    } finally {
+                        response.body().close();
+                    }
+                }
             }
         });
     }
 
+    @SuppressLint("HardwareIds")
     private void performEmailLogin() {
         String email = etEmail.getText().toString().trim();
         String password = etPassword.getText().toString().trim();
@@ -176,19 +197,18 @@ public class MainActivity extends AppCompatActivity {
 
         ApiClient.getClient().newCall(request).enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
-                runOnUiThread(() -> {
-                    Toast.makeText(MainActivity.this, "网络错误: " + e.getClass().getSimpleName() + " " + e.getMessage(), Toast.LENGTH_LONG).show();
-                    e.printStackTrace();
-                });
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                Log.e(TAG, "email login failed", e);
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, "网络错误: " + e.getClass().getSimpleName() + " " + e.getMessage(), Toast.LENGTH_LONG).show());
             }
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 handleLoginResponse(response);
             }
         });
     }
 
+    @SuppressLint("HardwareIds")
     private void performPhoneLogin() {
         String phone = etPhone.getText().toString().trim();
         String code = etSmsCode.getText().toString().trim();
@@ -204,34 +224,41 @@ public class MainActivity extends AppCompatActivity {
 
         ApiClient.getClient().newCall(request).enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
-                runOnUiThread(() -> {
-                    Toast.makeText(MainActivity.this, "网络错误: " + e.getClass().getSimpleName() + " " + e.getMessage(), Toast.LENGTH_LONG).show();
-                    e.printStackTrace();
-                });
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                Log.e(TAG, "phone login failed", e);
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, "网络错误: " + e.getClass().getSimpleName() + " " + e.getMessage(), Toast.LENGTH_LONG).show());
             }
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 handleLoginResponse(response);
             }
         });
     }
 
-    private void handleLoginResponse(Response response) throws IOException {
-        if (response.isSuccessful()) {
-            String responseData = response.body().string();
-            UserModels.LoginResponse loginResponse = ApiClient.getGson().fromJson(responseData, UserModels.LoginResponse.class);
-            if (loginResponse.code == 1 && loginResponse.data != null) {
-                PrefUtils.saveToken(this, loginResponse.data.token);
-                runOnUiThread(this::goToHome);
-            } else {
-                runOnUiThread(() -> Toast.makeText(MainActivity.this, "登录失败: " + loginResponse.msg, Toast.LENGTH_SHORT).show());
+    private void handleLoginResponse(Response response) {
+        if (response != null && response.isSuccessful() && response.body() != null) {
+            try {
+                String responseData = response.body().string();
+                UserModels.LoginResponse loginResponse = ApiClient.getGson().fromJson(responseData, UserModels.LoginResponse.class);
+                if (loginResponse != null && loginResponse.code == 1 && loginResponse.data != null) {
+                    PrefUtils.saveToken(this, loginResponse.data.token);
+                    runOnUiThread(this::goToHome);
+                } else {
+                    String msg = loginResponse != null ? loginResponse.msg : "";
+                    runOnUiThread(() -> Toast.makeText(MainActivity.this, "登录失败: " + msg, Toast.LENGTH_SHORT).show());
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "handleLoginResponse error", e);
+            } finally {
+                response.body().close();
             }
         } else {
-            runOnUiThread(() -> Toast.makeText(MainActivity.this, "服务器错误: " + response.code(), Toast.LENGTH_SHORT).show());
+            int code = response != null ? response.code() : 0;
+            runOnUiThread(() -> Toast.makeText(MainActivity.this, "服务器错误: " + code, Toast.LENGTH_SHORT).show());
         }
     }
 
+    @SuppressWarnings("deprecation")
     private void goToHome() {
         Intent intent = new Intent(this, HomeActivity.class);
         startActivity(intent);

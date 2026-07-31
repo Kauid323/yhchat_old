@@ -1,6 +1,5 @@
 package com.nago8.chat.old.fragments;
 
-import android.content.Context;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -102,7 +101,7 @@ public class AddressBookFragment extends Fragment {
         }
 
         if (swipeRefreshLayout != null) {
-            swipeRefreshLayout.setOnRefreshListener(() -> refreshData());
+            swipeRefreshLayout.setOnRefreshListener(this::refreshData);
         }
 
         friendRepository = new FriendRepository();
@@ -312,8 +311,8 @@ public class AddressBookFragment extends Fragment {
             int level = item.permisson_level;
             if (currentGroupFilter == 1) { // 我创建的群聊 (permisson_level == 100)
                 if (level == 100) filteredGroups.add(item);
-            } else if (currentGroupFilter == 2) { // 我管理的群聊 (permisson_level == 100 || level == 2 || level > 0)
-                if (level == 100 || level == 2 || level > 0) filteredGroups.add(item);
+            } else if (currentGroupFilter == 2) { // 我管理的群聊 (permisson_level > 0)
+                if (level > 0) filteredGroups.add(item);
             } else {
                 filteredGroups.add(item);
             }
@@ -324,8 +323,8 @@ public class AddressBookFragment extends Fragment {
         for (address_book_list.Data.Data_list item : rawBotsData) {
             if (item == null) continue;
             int level = item.permisson_level;
-            if (currentBotFilter == 1) { // 我创建的机器人 (permisson_level == 100 || level > 0)
-                if (level == 100 || level > 0) filteredBots.add(item);
+            if (currentBotFilter == 1) { // 我创建的机器人 (permisson_level > 0)
+                if (level > 0) filteredBots.add(item);
             } else {
                 filteredBots.add(item);
             }
@@ -357,10 +356,12 @@ public class AddressBookFragment extends Fragment {
             String displayName = getDisplayName(item);
             String letter = PinyinUtils.getSortLetter(displayName);
 
-            if (!letterMap.containsKey(letter)) {
-                letterMap.put(letter, new ArrayList<>());
+            List<address_book_list.Data.Data_list> list = letterMap.get(letter);
+            if (list == null) {
+                list = new ArrayList<>();
+                letterMap.put(letter, list);
             }
-            letterMap.get(letter).add(item);
+            list.add(item);
         }
 
         List<String> sortedLetters = new ArrayList<>(letterMap.keySet());
@@ -442,7 +443,7 @@ public class AddressBookFragment extends Fragment {
         }
 
         int firstVisiblePos = layoutManager.findFirstVisibleItemPosition();
-        if (firstVisiblePos == RecyclerView.NO_POSITION || firstVisiblePos < 0) {
+        if (firstVisiblePos < 0) {
             tvStickyHeader.setVisibility(View.GONE);
             return;
         }

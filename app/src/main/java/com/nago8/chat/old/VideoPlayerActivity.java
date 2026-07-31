@@ -1,5 +1,6 @@
 package com.nago8.chat.old;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.pm.ActivityInfo;
 import android.graphics.Color;
@@ -11,7 +12,9 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.text.format.Formatter;
+import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.ProgressBar;
@@ -20,6 +23,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.VideoView;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -35,6 +39,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HashMap;
 import java.util.Locale;
@@ -47,6 +52,7 @@ import okhttp3.Response;
 
 public class VideoPlayerActivity extends AppCompatActivity {
 
+    private static final String TAG = "VideoPlayerActivity";
     public static final String EXTRA_VIDEO_URL = "video_url";
     public static final String EXTRA_VIDEO_TITLE = "video_title";
     public static final String REFERER_HEADER_VALUE = "http://myapp.jwznb.com";
@@ -59,14 +65,9 @@ public class VideoPlayerActivity extends AppCompatActivity {
     private AppCompatImageButton btnPlayPause;
     private AppCompatImageButton btnMute;
     private AppCompatImageButton btnLoop;
-    private AppCompatImageButton btnRotate;
-    private AppCompatImageButton btnFullscreen;
-    private AppCompatImageButton btnInfo;
-    private AppCompatImageButton btnDownload;
     private SeekBar seekBar;
     private TextView tvCurrentTime;
     private TextView tvTotalTime;
-    private TextView tvTitle;
 
     private MediaPlayer mediaPlayer;
     private Call downloadCall;
@@ -80,9 +81,9 @@ public class VideoPlayerActivity extends AppCompatActivity {
     private boolean isTrackingProgress = false;
     private boolean isControlsShowing = true;
 
-    private Handler handler = new Handler();
+    private final Handler handler = new Handler(Looper.getMainLooper());
 
-    private Runnable updateProgressRunnable = new Runnable() {
+    private final Runnable updateProgressRunnable = new Runnable() {
         @Override
         public void run() {
             if (videoView != null && videoView.isPlaying() && !isTrackingProgress) {
@@ -104,6 +105,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
     }
 
     @Override
+    @SuppressLint("SourceLockedOrientationActivity")
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         AppCompatDelegate.setCompatVectorFromResourcesEnabled(true);
         super.onCreate(savedInstanceState);
@@ -121,15 +123,15 @@ public class VideoPlayerActivity extends AppCompatActivity {
         btnPlayPause = findViewById(R.id.btnPlayPause);
         btnMute = findViewById(R.id.btnMute);
         btnLoop = findViewById(R.id.btnLoop);
-        btnRotate = findViewById(R.id.btnRotate);
-        btnFullscreen = findViewById(R.id.btnFullscreen);
-        btnInfo = findViewById(R.id.btnInfo);
-        btnDownload = findViewById(R.id.btnDownload);
+        AppCompatImageButton btnRotate = findViewById(R.id.btnRotate);
+        AppCompatImageButton btnFullscreen = findViewById(R.id.btnFullscreen);
+        AppCompatImageButton btnInfo = findViewById(R.id.btnInfo);
+        AppCompatImageButton btnDownload = findViewById(R.id.btnDownload);
 
         seekBar = findViewById(R.id.seekBar);
         tvCurrentTime = findViewById(R.id.tvCurrentTime);
         tvTotalTime = findViewById(R.id.tvTotalTime);
-        tvTitle = findViewById(R.id.tvTitle);
+        TextView tvTitle = findViewById(R.id.tvTitle);
 
         AppCompatImageButton btnBack = findViewById(R.id.btnBack);
         btnBack.setOnClickListener(v -> onBackPressed());
@@ -260,6 +262,8 @@ public class VideoPlayerActivity extends AppCompatActivity {
         loadAndPlayVideo(videoUrl);
     }
 
+    @SuppressWarnings("deprecation")
+    @SuppressLint("SourceLockedOrientationActivity")
     private void toggleFullscreen() {
         isFullscreen = !isFullscreen;
         if (isFullscreen) {
@@ -299,6 +303,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
 
     private final Runnable autoHideRunnable = this::hideControls;
 
+    @SuppressWarnings("deprecation")
     private void hideSystemUI() {
         View decorView = getWindow().getDecorView();
         decorView.setSystemUiVisibility(
@@ -307,6 +312,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
                         | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
     }
 
+    @SuppressWarnings("deprecation")
     private void showSystemUI() {
         View decorView = getWindow().getDecorView();
         decorView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
@@ -335,6 +341,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
         });
     }
 
+    @SuppressWarnings("SpellCheckingInspection")
     private void showVideoInfoDialog() {
         if (loadedFile == null || !loadedFile.exists()) {
             Toast.makeText(this, "正在获取视频数据，请稍后...", Toast.LENGTH_SHORT).show();
@@ -345,7 +352,6 @@ public class VideoPlayerActivity extends AppCompatActivity {
 
         String videoCodec = "H.264 / AVC";
         String widthStr = "未知";
-        String heightStr = "未知";
         String frameRateStr = "30 fps";
         String bitrateStr = "未知";
         String fileSizeStr = Formatter.formatFileSize(this, loadedFile.length());
@@ -394,11 +400,11 @@ public class VideoPlayerActivity extends AppCompatActivity {
             for (int i = 0; i < trackCount; i++) {
                 MediaFormat format = extractor.getTrackFormat(i);
                 String trackMime = format.containsKey(MediaFormat.KEY_MIME) ? format.getString(MediaFormat.KEY_MIME) : "";
-                if (trackMime.startsWith("video/")) {
+                if (trackMime != null && trackMime.startsWith("video/")) {
                     if (format.containsKey(MediaFormat.KEY_FRAME_RATE)) {
                         frameRateStr = format.getInteger(MediaFormat.KEY_FRAME_RATE) + " fps";
                     }
-                } else if (trackMime.startsWith("audio/")) {
+                } else if (trackMime != null && trackMime.startsWith("audio/")) {
                     if (trackMime.contains("mp4a") || trackMime.contains("aac")) {
                         audioCodec = "AAC";
                     } else {
@@ -449,8 +455,18 @@ public class VideoPlayerActivity extends AppCompatActivity {
                 .show();
     }
 
+    private void setVideoUriCompat(String url) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            Map<String, String> headers = new HashMap<>();
+            headers.put("Referer", REFERER_HEADER_VALUE);
+            videoView.setVideoURI(Uri.parse(url), headers);
+        } else {
+            videoView.setVideoURI(Uri.parse(url));
+        }
+    }
+
     private void loadAndPlayVideo(String videoUrl) {
-        if (!videoUrl.startsWith("http://") && !videoUrl.startsWith("https://")) {
+        if (videoUrl != null && !videoUrl.startsWith("http://") && !videoUrl.startsWith("https://")) {
             loadedFile = new File(videoUrl);
             videoView.setVideoPath(videoUrl);
             return;
@@ -478,65 +494,58 @@ public class VideoPlayerActivity extends AppCompatActivity {
         downloadCall = ApiClient.getClient().newCall(reqBuilder.build());
         downloadCall.enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
-                runOnUiThread(() -> {
-                    Map<String, String> headers = new HashMap<>();
-                    headers.put("Referer", REFERER_HEADER_VALUE);
-                    videoView.setVideoURI(Uri.parse(videoUrl), headers);
-                });
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                Log.e(TAG, "downloadCall failed", e);
+                runOnUiThread(() -> setVideoUriCompat(videoUrl));
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 if (!response.isSuccessful() || response.body() == null) {
-                    runOnUiThread(() -> {
-                        Map<String, String> headers = new HashMap<>();
-                        headers.put("Referer", REFERER_HEADER_VALUE);
-                        videoView.setVideoURI(Uri.parse(videoUrl), headers);
-                    });
+                    runOnUiThread(() -> setVideoUriCompat(videoUrl));
                     return;
                 }
 
                 File tmpFile = new File(cacheDir, fileName + ".tmp");
-                InputStream is = null;
-                FileOutputStream fos = null;
-                try {
-                    is = response.body().byteStream();
-                    fos = new FileOutputStream(tmpFile);
+                try (InputStream is = response.body().byteStream();
+                     FileOutputStream fos = new FileOutputStream(tmpFile)) {
                     byte[] buf = new byte[8192];
                     int len;
                     while ((len = is.read(buf)) != -1) {
                         fos.write(buf, 0, len);
                     }
                     fos.flush();
-                    tmpFile.renameTo(targetFile);
+                    boolean renamed = tmpFile.renameTo(targetFile);
+                    if (!renamed) {
+                        Log.w(TAG, "renameTo targetFile failed");
+                    }
 
                     loadedFile = targetFile;
                     runOnUiThread(() -> videoView.setVideoPath(targetFile.getAbsolutePath()));
                 } catch (Exception e) {
-                    runOnUiThread(() -> {
-                        Map<String, String> headers = new HashMap<>();
-                        headers.put("Referer", REFERER_HEADER_VALUE);
-                        videoView.setVideoURI(Uri.parse(videoUrl), headers);
-                    });
+                    Log.e(TAG, "cache video file error", e);
+                    runOnUiThread(() -> setVideoUriCompat(videoUrl));
                 } finally {
-                    if (is != null) try { is.close(); } catch (Exception ignored) {}
-                    if (fos != null) try { fos.close(); } catch (Exception ignored) {}
-                    if (response.body() != null) response.body().close();
+                    if (response.body() != null) {
+                        response.body().close();
+                    }
                 }
             }
         });
     }
 
     private String md5(String string) {
+        if (string == null) return "";
         try {
             MessageDigest digest = MessageDigest.getInstance("MD5");
-            digest.update(string.getBytes("UTF-8"));
+            digest.update(string.getBytes(StandardCharsets.UTF_8));
             byte[] messageDigest = digest.digest();
             StringBuilder hexString = new StringBuilder();
             for (byte b : messageDigest) {
                 String h = Integer.toHexString(0xFF & b);
-                while (h.length() < 2) h = "0" + h;
+                if (h.length() == 1) {
+                    hexString.append('0');
+                }
                 hexString.append(h);
             }
             return hexString.toString();

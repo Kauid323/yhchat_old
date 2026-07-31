@@ -17,7 +17,6 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
-import androidx.core.view.ViewCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.nago8.chat.old.ImagePreviewActivity;
@@ -265,6 +264,9 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             textView.setTextColor(ContextCompat.getColor(itemView.getContext(), group.mine ? android.R.color.white : R.color.bubble_text_left));
             textView.setGravity(Gravity.START);
 
+            int maxBubbleWidth = getMaxBubbleWidth(itemView.getContext());
+            textView.setMaxWidth(maxBubbleWidth);
+
             String quoteTextStr = (msg != null && msg.msg_delete_time <= 0) ? getQuoteText(msg) : null;
             boolean hasQuote = !TextUtils.isEmpty(quoteTextStr);
 
@@ -282,9 +284,6 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
 
                 LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 textParams.topMargin = dp(4);
-                if (isMarkdown) {
-                    textParams.width = dp(220);
-                }
                 textView.setLayoutParams(textParams);
                 container.addView(textView);
 
@@ -303,9 +302,6 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                 params.topMargin = dp(2);
                 params.leftMargin = group.mine ? dp(48) : 0;
                 params.rightMargin = group.mine ? 0 : dp(48);
-                if (isMarkdown) {
-                    params.width = dp(220);
-                }
                 params.gravity = group.mine ? Gravity.END : Gravity.START;
                 textView.setLayoutParams(params);
                 return textView;
@@ -313,10 +309,12 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
         }
 
         private View applyRecallIfNeeded(MessageGroup group, Msg msg, View bubbleView) {
-            if (msg == null || msg.msg_delete_time <= 0) {
+            if (msg == null) {
                 return bubbleView;
             }
-            bubbleView.setAlpha(0.55f);
+            if (msg.msg_delete_time > 0 || msg.content_type == 9) {
+                bubbleView.setAlpha(0.55f);
+            }
             return bubbleView;
         }
 
@@ -381,7 +379,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             tvVideo.setText(videoTitle);
             tvVideo.setTextSize(15);
             tvVideo.setTextColor(textColor);
-            tvVideo.setMaxWidth(dp(220));
+            tvVideo.setMaxWidth(getMaxBubbleWidth(ctx));
             tvVideo.setSingleLine(true);
             tvVideo.setEllipsize(android.text.TextUtils.TruncateAt.END);
             videoRow.addView(tvVideo);
@@ -433,7 +431,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             tvTitle.setText(!postTitle.isEmpty() ? postTitle : ctx.getString(R.string.preview_article));
             tvTitle.setTextSize(15);
             tvTitle.setTextColor(textColor);
-            tvTitle.setMaxWidth(dp(220));
+            tvTitle.setMaxWidth(getMaxBubbleWidth(ctx));
             tvTitle.setSingleLine(true);
             tvTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
             container.addView(tvTitle);
@@ -670,7 +668,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             quoteText.setTextSize(13);
             quoteText.setTextColor(ContextCompat.getColor(ctx, R.color.text_secondary));
             quoteText.setMaxLines(3);
-            quoteText.setMaxWidth(dp(220));
+            quoteText.setMaxWidth(getMaxBubbleWidth(ctx));
             quoteText.setEllipsize(android.text.TextUtils.TruncateAt.END);
             quoteBlock.addView(quoteText);
 
@@ -751,6 +749,14 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             if (!TextUtils.isEmpty(msg.content.sticker_url)) return itemView.getContext().getString(R.string.message_sticker);
             if (!TextUtils.isEmpty(msg.content.tip)) return msg.content.tip;
             return itemView.getContext().getString(R.string.message_unsupported);
+        }
+
+        private int getMaxBubbleWidth(Context ctx) {
+            if (ctx == null) return dp(260);
+            int screenWidth = ctx.getResources().getDisplayMetrics().widthPixels;
+            int maxW = (int) (screenWidth * 0.76f);
+            int minW = dp(220);
+            return Math.max(maxW, minW);
         }
 
         private int dp(int value) {

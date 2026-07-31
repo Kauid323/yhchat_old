@@ -1,18 +1,19 @@
 package com.nago8.chat.old;
 
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.InputType;
+import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.appcompat.app.AlertDialog;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.AppCompatImageButton;
@@ -45,6 +46,7 @@ import okhttp3.Response;
 
 public class GroupProfileActivity extends AppCompatActivity {
 
+    private static final String TAG = "GroupProfileActivity";
     public static final String EXTRA_GROUP_ID = "group_id";
 
     private AppCompatImageView ivAvatar;
@@ -71,6 +73,7 @@ public class GroupProfileActivity extends AppCompatActivity {
     private SwitchCompat swDoNotDisturb;
     private SwitchCompat swTop;
     private ProgressBar progressBar;
+
     private Call runningCall;
     private Call toggleCall;
     private Call editCall;
@@ -103,7 +106,7 @@ public class GroupProfileActivity extends AppCompatActivity {
         ivAvatar = findViewById(R.id.ivAvatar);
         if (ivAvatar != null) {
             ivAvatar.setOnClickListener(v -> {
-                if (currentGroup != null && currentGroup.avatar_url != null && currentGroup.avatar_url.length() > 0) {
+                if (currentGroup != null && currentGroup.avatar_url != null && !currentGroup.avatar_url.isEmpty()) {
                     Intent intent = new Intent(this, ImagePreviewActivity.class);
                     intent.putExtra(ImagePreviewActivity.EXTRA_IMAGE_URL, currentGroup.avatar_url);
                     startActivity(intent);
@@ -138,7 +141,7 @@ public class GroupProfileActivity extends AppCompatActivity {
 
         // 群成员点击进入成员列表
         findViewById(R.id.rowMembers).setOnClickListener(v -> {
-            if (groupId != null && groupId.length() > 0) {
+            if (groupId != null && !groupId.isEmpty()) {
                 Intent intent = new Intent(this, GroupMembersActivity.class);
                 intent.putExtra(GroupMembersActivity.EXTRA_GROUP_ID, groupId);
                 startActivity(intent);
@@ -164,7 +167,7 @@ public class GroupProfileActivity extends AppCompatActivity {
     }
 
     private void fetchGroupInfo(String groupId) {
-        if (groupId == null || groupId.length() == 0) {
+        if (groupId == null || groupId.isEmpty()) {
             Toast.makeText(this, R.string.group_profile_load_failed, Toast.LENGTH_SHORT).show();
             finish();
             return;
@@ -196,7 +199,7 @@ public class GroupProfileActivity extends AppCompatActivity {
         runningCall = ApiClient.getClient().newCall(request);
         runningCall.enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 runOnUiThread(() -> {
                     progressBar.setVisibility(View.GONE);
                     Toast.makeText(GroupProfileActivity.this, R.string.group_profile_load_failed, Toast.LENGTH_SHORT).show();
@@ -204,7 +207,7 @@ public class GroupProfileActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 if (response.isSuccessful() && response.body() != null) {
                     try {
                         final info result = info.ADAPTER.decode(response.body().source());
@@ -217,11 +220,13 @@ public class GroupProfileActivity extends AppCompatActivity {
                             bindGroup(result.data);
                         });
                     } catch (Exception e) {
-                        e.printStackTrace();
+                        Log.e(TAG, "decode info parse error", e);
                         runOnUiThread(() -> {
                             progressBar.setVisibility(View.GONE);
                             Toast.makeText(GroupProfileActivity.this, R.string.group_profile_load_failed, Toast.LENGTH_SHORT).show();
                         });
+                    } finally {
+                        response.body().close();
                     }
                 } else {
                     runOnUiThread(() -> {
@@ -235,16 +240,16 @@ public class GroupProfileActivity extends AppCompatActivity {
 
     private void bindGroup(info.Group_data data) {
         currentGroup = data;
-        tvName.setText(data.name != null && data.name.length() > 0 ? data.name : getString(R.string.unknown_user));
-        tvGroupId.setText("ID: " + data.group_id);
+        tvName.setText(data.name != null && !data.name.isEmpty() ? data.name : getString(R.string.unknown_user));
+        tvGroupId.setText(getString(R.string.user_id_format, data.group_id));
         ImageUtils.loadAvatar(this, data.avatar_url, ivAvatar);
 
-        String intro = data.introduction != null && data.introduction.length() > 0 ? data.introduction : getString(R.string.group_profile_no_ban);
+        String intro = data.introduction != null && !data.introduction.isEmpty() ? data.introduction : getString(R.string.group_profile_no_ban);
         tvIntroduction.setText(intro);
 
         tvMemberCount.setText(getString(R.string.group_profile_members_format, data.member));
 
-        String category = data.category_name != null && data.category_name.length() > 0 ? data.category_name : "";
+        String category = data.category_name != null && !data.category_name.isEmpty() ? data.category_name : "";
         tvCategory.setText(category);
         tvPrivate.setText(formatYesNo(data.private_ == 1));
         tvDirectJoin.setText(formatYesNo(data.direct_join == 1));
@@ -260,7 +265,7 @@ public class GroupProfileActivity extends AppCompatActivity {
         tvMyNickname.setText(data.my_group_nickname != null ? data.my_group_nickname : "");
 
         // 关联分区
-        if (data.community_name != null && data.community_name.length() > 0) {
+        if (data.community_name != null && !data.community_name.isEmpty()) {
             tvCommunity.setText(data.community_name);
             rowCommunity.setVisibility(View.VISIBLE);
         } else {
@@ -268,7 +273,7 @@ public class GroupProfileActivity extends AppCompatActivity {
         }
 
         // 禁言原因
-        if (data.ban_reason != null && data.ban_reason.length() > 0) {
+        if (data.ban_reason != null && !data.ban_reason.isEmpty()) {
             tvBanReason.setText(data.ban_reason);
             rowBanReason.setVisibility(View.VISIBLE);
         } else {
@@ -295,7 +300,7 @@ public class GroupProfileActivity extends AppCompatActivity {
 
     private void updateDoNotDisturb(boolean enabled) {
         String token = PrefUtils.getToken(this);
-        if (token == null || groupId == null || groupId.length() == 0) return;
+        if (token == null || groupId == null || groupId.isEmpty()) return;
 
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("chatId", groupId);
@@ -318,7 +323,7 @@ public class GroupProfileActivity extends AppCompatActivity {
 
     private void updateSticky(boolean enabled) {
         String token = PrefUtils.getToken(this);
-        if (token == null || groupId == null || groupId.length() == 0) return;
+        if (token == null || groupId == null || groupId.isEmpty()) return;
 
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("chatId", groupId);
@@ -353,7 +358,7 @@ public class GroupProfileActivity extends AppCompatActivity {
         showSingleInputDialog(
                 getString(R.string.group_profile_group_code),
                 currentGroup.group_code,
-                value -> updateGroupCode(value)
+                this::updateGroupCode
         );
     }
 
@@ -362,7 +367,7 @@ public class GroupProfileActivity extends AppCompatActivity {
         showSingleInputDialog(
                 getString(R.string.group_profile_my_nickname),
                 currentGroup.my_group_nickname,
-                value -> updateMyNickname(value)
+                this::updateMyNickname
         );
     }
 
@@ -430,12 +435,12 @@ public class GroupProfileActivity extends AppCompatActivity {
         categoryCall = ApiClient.getClient().newCall(request);
         categoryCall.enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 runOnUiThread(() -> Toast.makeText(GroupProfileActivity.this, R.string.group_profile_load_failed, Toast.LENGTH_SHORT).show());
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 if (!response.isSuccessful() || response.body() == null) {
                     runOnUiThread(() -> Toast.makeText(GroupProfileActivity.this, R.string.group_profile_load_failed, Toast.LENGTH_SHORT).show());
                     return;
@@ -445,7 +450,10 @@ public class GroupProfileActivity extends AppCompatActivity {
                     final List<CategoryItem> items = parseCategoryItems(json);
                     runOnUiThread(() -> showCategoryDialog(items));
                 } catch (Exception e) {
+                    Log.e(TAG, "parse category error", e);
                     runOnUiThread(() -> Toast.makeText(GroupProfileActivity.this, R.string.group_profile_load_failed, Toast.LENGTH_SHORT).show());
+                } finally {
+                    response.body().close();
                 }
             }
         });
@@ -463,14 +471,14 @@ public class GroupProfileActivity extends AppCompatActivity {
             String parentName = getJsonString(parent, "name");
             JsonArray subItems = parent.has("subItems") && !parent.get("subItems").isJsonNull()
                     ? parent.getAsJsonArray("subItems") : null;
-            if (subItems == null || subItems.size() == 0) {
+            if (subItems == null || subItems.isEmpty()) {
                 items.add(new CategoryItem(getJsonLong(parent, "id"), parentName));
                 continue;
             }
             for (JsonElement childElem : subItems) {
                 JsonObject child = childElem.getAsJsonObject();
                 String childName = getJsonString(child, "name");
-                String displayName = parentName.length() > 0 && childName.length() > 0
+                String displayName = !parentName.isEmpty() && !childName.isEmpty()
                         ? parentName + "-" + childName : childName;
                 items.add(new CategoryItem(getJsonLong(child, "id"), displayName));
             }
@@ -531,12 +539,12 @@ public class GroupProfileActivity extends AppCompatActivity {
         editCall = ApiClient.getClient().newCall(request);
         editCall.enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 runOnUiThread(() -> Toast.makeText(GroupProfileActivity.this, R.string.group_profile_update_failed, Toast.LENGTH_SHORT).show());
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 if (!response.isSuccessful() || response.body() == null) {
                     runOnUiThread(() -> Toast.makeText(GroupProfileActivity.this, R.string.group_profile_update_failed, Toast.LENGTH_SHORT).show());
                     return;
@@ -553,7 +561,10 @@ public class GroupProfileActivity extends AppCompatActivity {
                         tvCategory.setText(item.name);
                     });
                 } catch (Exception e) {
+                    Log.e(TAG, "edit group parse error", e);
                     runOnUiThread(() -> Toast.makeText(GroupProfileActivity.this, R.string.group_profile_update_failed, Toast.LENGTH_SHORT).show());
+                } finally {
+                    response.body().close();
                 }
             }
         });
@@ -573,11 +584,13 @@ public class GroupProfileActivity extends AppCompatActivity {
         editCall.enqueue(new SimpleJsonToggleCallback(onSuccess, () -> runOnUiThread(() -> Toast.makeText(GroupProfileActivity.this, R.string.group_profile_update_failed, Toast.LENGTH_SHORT).show())));
     }
 
+    @SuppressWarnings("SameParameterValue")
     private String getJsonString(JsonObject obj, String key) {
         if (obj.has(key) && !obj.get(key).isJsonNull()) return obj.get(key).getAsString();
         return "";
     }
 
+    @SuppressWarnings("SameParameterValue")
     private long getJsonLong(JsonObject obj, String key) {
         if (obj.has(key) && !obj.get(key).isJsonNull()) return obj.get(key).getAsLong();
         return 0L;
@@ -612,12 +625,12 @@ public class GroupProfileActivity extends AppCompatActivity {
         }
 
         @Override
-        public void onFailure(Call call, IOException e) {
+        public void onFailure(@NonNull Call call, @NonNull IOException e) {
             if (failureAction != null) failureAction.run();
         }
 
         @Override
-        public void onResponse(Call call, Response response) throws IOException {
+        public void onResponse(@NonNull Call call, @NonNull Response response) {
             boolean success = false;
             if (response.isSuccessful() && response.body() != null) {
                 try {
@@ -632,7 +645,8 @@ public class GroupProfileActivity extends AppCompatActivity {
                         success = codeSuccess || msgSuccess;
                     }
                 } catch (Exception ignored) {
-                    success = false;
+                } finally {
+                    response.body().close();
                 }
             }
             final boolean finalSuccess = success;

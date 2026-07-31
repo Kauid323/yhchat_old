@@ -78,7 +78,7 @@ public class StickyConversationsFragment extends Fragment {
                 intent.putExtra(ChatActivity.EXTRA_CHAT_AVATAR, data.avatar_url);
                 startActivity(intent);
 
-                dismissNotification(data.chat_id, position);
+                dismissNotification(data.chat_id);
             }
 
             @Override
@@ -91,7 +91,7 @@ public class StickyConversationsFragment extends Fragment {
             @Override
             public void onDeleteConversation(ConversationList.ConversationData data, int position) {
                 if (data == null || data.chat_id == null || data.chat_id.isEmpty()) return;
-                deleteConversation(data.chat_id, position);
+                deleteConversation(data.chat_id);
             }
         });
 
@@ -233,7 +233,7 @@ public class StickyConversationsFragment extends Fragment {
         });
     }
 
-    private void dismissNotification(String chatId, int position) {
+    private void dismissNotification(String chatId) {
         String token = PrefUtils.getToken(getContext());
         if (token == null) return;
 
@@ -310,7 +310,7 @@ public class StickyConversationsFragment extends Fragment {
         });
     }
 
-    private void deleteConversation(String chatId, int position) {
+    private void deleteConversation(String chatId) {
         String token = PrefUtils.getToken(getContext());
         if (token == null || token.isEmpty()) return;
 

@@ -46,6 +46,7 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
     }
 
     // Retain legacy method signature compatibility
+    @SuppressWarnings("unused")
     public void setOnConversationClickListener(OnConversationClickListener listener) {
         if (listener != null) {
             this.actionListener = new OnConversationActionListener() {
@@ -63,10 +64,12 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
         }
     }
 
+    @SuppressWarnings("unused")
     public interface OnConversationClickListener {
         void onConversationClick(ConversationList.ConversationData data, int position);
     }
 
+    @android.annotation.SuppressLint("NotifyDataSetChanged")
     public void setData(List<ConversationList.ConversationData> data) {
         this.dataList = new ArrayList<>(data);
         notifyDataSetChanged();
@@ -85,9 +88,11 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
     }
 
     private boolean isHeader(ConversationList.ConversationData data) {
-        return data.chat_id == null || data.chat_id.length() == 0;
+        return data.chat_id == null || data.chat_id.isEmpty();
     }
 
+    @SuppressWarnings("unused")
+    @android.annotation.SuppressLint("NotifyDataSetChanged")
     public void onPushMessage(WsMsg wsMsg, Context ctx) {
         if (wsMsg == null || ctx == null) return;
         if (com.nago8.chat.old.ws.WsClient.isBlockedMessage(wsMsg)) return;
@@ -124,12 +129,11 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
                     .timestamp_ms(wsMsg.timestamp)
                     .build();
         } else {
-            String name = (wsMsg.sender != null && wsMsg.sender.name != null) ? wsMsg.sender.name : "";
             String avatarUrl = (wsMsg.sender != null && wsMsg.sender.avatar_url != null) ? wsMsg.sender.avatar_url : "";
             newData = new ConversationList.ConversationData.Builder()
                     .chat_id(chatId)
                     .chat_type(wsMsg.chat_type != 0 ? wsMsg.chat_type : 1)
-                    .name(name)
+                    .name(senderName)
                     .avatar_url(avatarUrl)
                     .unread_message(isFromMe ? 0 : 1)
                     .chat_content(chatContent)
@@ -255,17 +259,6 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
                 }
             }
         });
-    }
-
-    private boolean isChatSticky(String chatId) {
-        if (chatId == null) return false;
-        List<ConversationList.ConversationData> stickyList = ConversationCache.getInstance().getStickyConversationDataList();
-        if (stickyList != null) {
-            for (ConversationList.ConversationData cd : stickyList) {
-                if (chatId.equals(cd.chat_id)) return true;
-            }
-        }
-        return false;
     }
 
     @Override

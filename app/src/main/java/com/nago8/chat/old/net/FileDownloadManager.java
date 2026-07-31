@@ -5,22 +5,28 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
+import android.util.Log;
 import android.webkit.MimeTypeMap;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.core.content.FileProvider;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import okhttp3.Call;
+import okhttp3.Callback;
 import okhttp3.Request;
 import okhttp3.Response;
 
 public class FileDownloadManager {
+
+    private static final String TAG = "FileDownloadManager";
 
     public interface DownloadCallback {
         void onProgress(int percent);
@@ -56,9 +62,9 @@ public class FileDownloadManager {
         activeCalls.put(url, call);
         progressMap.put(url, 0);
 
-        call.enqueue(new okhttp3.Callback() {
+        call.enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, java.io.IOException e) {
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 activeCalls.remove(url);
                 progressMap.remove(url);
                 if (call.isCanceled()) {
@@ -69,36 +75,30 @@ public class FileDownloadManager {
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws java.io.IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 if (!response.isSuccessful() || response.body() == null) {
                     activeCalls.remove(url);
                     progressMap.remove(url);
-                    callback.onError(new java.io.IOException("HTTP " + response.code()));
+                    callback.onError(new IOException("HTTP " + response.code()));
                     return;
                 }
 
                 File outputFile = getOutputFile(context, fileName);
-                if (outputFile == null) {
-                    activeCalls.remove(url);
-                    progressMap.remove(url);
-                    callback.onError(new java.io.IOException("cannot create output file"));
-                    return;
-                }
-
                 long totalBytes = response.body().contentLength();
-                InputStream is = response.body().byteStream();
-                FileOutputStream fos = new FileOutputStream(outputFile);
-                byte[] buffer = new byte[8192];
-                long downloaded = 0;
-                int lastPercent = -1;
 
-                try {
+                try (InputStream is = response.body().byteStream();
+                     FileOutputStream fos = new FileOutputStream(outputFile)) {
+                    byte[] buffer = new byte[8192];
+                    long downloaded = 0;
+                    int lastPercent = -1;
                     int len;
+
                     while ((len = is.read(buffer)) != -1) {
                         if (call.isCanceled()) {
-                            fos.close();
-                            is.close();
-                            outputFile.delete();
+                            boolean deleted = outputFile.delete();
+                            if (!deleted) {
+                                Log.w(TAG, "delete output file on cancel failed");
+                            }
                             activeCalls.remove(url);
                             progressMap.remove(url);
                             callback.onCancel();
@@ -115,21 +115,27 @@ public class FileDownloadManager {
                             }
                         }
                     }
-                    fos.close();
-                    is.close();
+                    fos.flush();
                     activeCalls.remove(url);
                     progressMap.remove(url);
                     callback.onComplete(outputFile);
                 } catch (Exception e) {
-                    try { fos.close(); } catch (Exception ignored) {}
-                    try { is.close(); } catch (Exception ignored) {}
-                    outputFile.delete();
+                    if (outputFile.exists()) {
+                        boolean deleted = outputFile.delete();
+                        if (!deleted) {
+                            Log.w(TAG, "delete output file on error failed");
+                        }
+                    }
                     activeCalls.remove(url);
                     progressMap.remove(url);
                     if (call.isCanceled()) {
                         callback.onCancel();
                     } else {
                         callback.onError(e);
+                    }
+                } finally {
+                    if (response.body() != null) {
+                        response.body().close();
                     }
                 }
             }
@@ -161,12 +167,18 @@ public class FileDownloadManager {
         }
         if (!dir.exists() && !dir.mkdirs()) {
             dir = new File(context.getFilesDir(), "Downloads");
-            if (!dir.exists()) dir.mkdirs();
+            if (!dir.exists()) {
+                boolean created = dir.mkdirs();
+                if (!created) {
+                    Log.w(TAG, "mkdirs failed for internal storage");
+                }
+            }
         }
-        String safeName = fileName != null && fileName.length() > 0 ? fileName : "download_file";
+        String safeName = fileName != null && !fileName.isEmpty() ? fileName : "download_file";
         return new File(dir, safeName);
     }
 
+    @SuppressWarnings("SpellCheckingInspection")
     public static void openFile(Context context, File file) {
         try {
             Intent intent = new Intent(Intent.ACTION_VIEW);

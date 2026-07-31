@@ -10,6 +10,7 @@ import com.nago8.chat.old.proto.list_message_by_seq_send;
 import com.nago8.chat.old.proto.list_message_send;
 import com.nago8.chat.old.proto.send_message;
 import com.nago8.chat.old.proto.send_message_send;
+import com.nago8.chat.old.utils.FileUploadUtils;
 import com.nago8.chat.old.utils.ImageUploadUtils;
 
 import java.io.IOException;
@@ -29,6 +30,13 @@ public class MessageRepository {
         void onProgress(int index, int total);
         void onImageSuccess(int index, int total);
         void onImageError(int index, int total, Exception error);
+        void onAllCompleted();
+    }
+
+    public interface FileUploadListener {
+        void onProgress(int index, int total);
+        void onFileSuccess(int index, int total, String fileName);
+        void onFileError(int index, int total, Exception error);
         void onAllCompleted();
     }
 
@@ -351,6 +359,136 @@ public class MessageRepository {
             @Override
             public void onError(Exception e) {
                 if (listener != null) listener.onImageError(0, uris.size(), e);
+            }
+        });
+    }
+
+    public Call sendFileMessage(String token, String chatId, int chatType,
+                                String fileName, String fileKey, String fileHash,
+                                long fileSize, String mimeType, String fileExtension,
+                                SendMessageCallback callback) {
+        if (token == null || token.isEmpty()) {
+            callback.onError(new IllegalArgumentException("token is empty"));
+            return null;
+        }
+        if (chatId == null || chatId.isEmpty()) {
+            callback.onError(new IllegalArgumentException("chatId is empty"));
+            return null;
+        }
+
+        String msgId = UUID.randomUUID().toString().replace("-", "");
+
+        send_message_send.Content content = new send_message_send.Content.Builder()
+                .file_name(fileName != null ? fileName : "")
+                .file(fileKey)
+                .file_size(fileSize)
+                .build();
+
+        send_message_send.Media media = new send_message_send.Media.Builder()
+                .file_key(fileKey)
+                .file_key2(fileKey)
+                .file_hash(fileHash != null ? fileHash : "")
+                .file_type(mimeType != null ? mimeType : "application/octet-stream")
+                .file_size(fileSize)
+                .file_suffix(fileExtension != null ? fileExtension : "dat")
+                .build();
+
+        send_message_send requestProto = new send_message_send.Builder()
+                .msg_id(msgId)
+                .chat_id(chatId)
+                .chat_type((long) chatType)
+                .content(content)
+                .media(media)
+                .content_type(4L) // 4 = 文件
+                .build();
+
+        RequestBody body = RequestBody.create(
+                MediaType.parse("application/x-protobuf"),
+                requestProto.encode()
+        );
+
+        Request request = new Request.Builder()
+                .url(ApiClient.BASE_URL + "/v1/msg/send-message")
+                .header("token", token)
+                .post(body)
+                .build();
+
+        Call call = ApiClient.getClient().newCall(request);
+        call.enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                callback.onError(e);
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                try {
+                    if (!response.isSuccessful() || response.body() == null) {
+                        callback.onError(new IOException("HTTP " + response.code()));
+                        return;
+                    }
+                    callback.onSuccess(send_message.ADAPTER.decode(response.body().source()));
+                } catch (Exception e) {
+                    callback.onError(e);
+                } finally {
+                    if (response.body() != null) {
+                        response.body().close();
+                    }
+                }
+            }
+        });
+        return call;
+    }
+
+    public void uploadAndSendFiles(Context context, String token, String chatId, int chatType,
+                                   List<Uri> uris, FileUploadListener listener) {
+        if (token == null || token.isEmpty()) {
+            if (listener != null) listener.onFileError(0, uris != null ? uris.size() : 0, new IllegalArgumentException("用户未登录"));
+            return;
+        }
+        if (uris == null || uris.isEmpty()) return;
+
+        FileUploadUtils.getQiniuFileUploadToken(token, new FileUploadUtils.TokenCallback() {
+            @Override
+            public void onSuccess(String uploadToken) {
+                final int total = uris.size();
+                for (int i = 0; i < total; i++) {
+                    Uri fileUri = uris.get(i);
+                    final int index = i + 1;
+                    if (listener != null) listener.onProgress(index, total);
+
+                    FileUploadUtils.uploadFile(context, fileUri, uploadToken, new FileUploadUtils.UploadCallback() {
+                        @Override
+                        public void onSuccess(FileUploadUtils.QiniuFileResult res) {
+                            sendFileMessage(token, chatId, chatType,
+                                    res.fileName, res.key, res.hash, res.fsize, res.mimeType, res.fileExtension,
+                                    new SendMessageCallback() {
+                                        @Override
+                                        public void onSuccess(send_message response) {
+                                            if (listener != null) {
+                                                listener.onFileSuccess(index, total, res.fileName);
+                                                if (index == total) listener.onAllCompleted();
+                                            }
+                                        }
+
+                                        @Override
+                                        public void onError(Exception error) {
+                                            if (listener != null) listener.onFileError(index, total, error);
+                                        }
+                                    });
+                        }
+
+                        @Override
+                        public void onError(Exception e) {
+                            if (listener != null) listener.onFileError(index, total, e);
+                        }
+                    });
+                }
+            }
+
+            @Override
+            public void onError(Exception e) {
+                if (listener != null) listener.onFileError(0, uris.size(), e);
             }
         });
     }

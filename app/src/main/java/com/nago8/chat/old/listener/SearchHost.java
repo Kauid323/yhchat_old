@@ -1,4 +1,4 @@
-package com.nago8.chat.old;
+package com.nago8.chat.old.listener;
 
 /**
  * 搜索回调接口，由会话 Fragment 实现。

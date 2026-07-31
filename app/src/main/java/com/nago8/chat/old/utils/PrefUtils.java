@@ -7,6 +7,7 @@ public class PrefUtils {
     private static final String PREF_NAME = "user_prefs";
     private static final String KEY_TOKEN = "secure_token";
     private static final String KEY_USER_ID = "user_id";
+    private static final String KEY_IS_VIP = "is_vip";
     private static final String KEY_LANGUAGE = "app_language";
     public static final String LANG_SYSTEM = "system";
     public static final String LANG_ZH = "zh";
@@ -55,5 +56,13 @@ public class PrefUtils {
 
     public static String getUserId(Context context) {
         return getPrefs(context).getString(KEY_USER_ID, "");
+    }
+
+    public static void saveIsVip(Context context, boolean isVip) {
+        getPrefs(context).edit().putBoolean(KEY_IS_VIP, isVip).apply();
+    }
+
+    public static boolean isVip(Context context) {
+        return getPrefs(context).getBoolean(KEY_IS_VIP, false);
     }
 }

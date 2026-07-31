@@ -1,5 +1,7 @@
 package com.nago8.chat.old.repository;
 
+import androidx.annotation.NonNull;
+
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.nago8.chat.old.net.ApiClient;
@@ -27,6 +29,7 @@ public class FriendRepository {
         void onError(Exception error);
     }
 
+    @SuppressWarnings("UnusedReturnValue")
     public Call getAddressBook(String token, String md5, AddressBookCallback callback) {
         address_book_list_send requestProto = new address_book_list_send.Builder()
                 .md5(md5 == null ? "" : md5)
@@ -46,14 +49,14 @@ public class FriendRepository {
         Call call = ApiClient.getClient().newCall(request);
         call.enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 if (callback != null) {
                     callback.onError(e);
                 }
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 try {
                     if (!response.isSuccessful() || response.body() == null) {
                         if (callback != null) {
@@ -82,6 +85,7 @@ public class FriendRepository {
     /**
      * 发送添加用户/群聊/机器人申请 (POST /v1/friend/apply)
      */
+    @SuppressWarnings("UnusedReturnValue")
     public Call applyFriend(String token, String chatId, int chatType, String remark, ApplyFriendCallback callback) {
         JsonObject json = new JsonObject();
         json.addProperty("chatId", chatId != null ? chatId : "");
@@ -102,14 +106,14 @@ public class FriendRepository {
         Call call = ApiClient.getClient().newCall(request);
         call.enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 if (callback != null) {
                     callback.onError(e);
                 }
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 try {
                     if (!response.isSuccessful() || response.body() == null) {
                         if (callback != null) {

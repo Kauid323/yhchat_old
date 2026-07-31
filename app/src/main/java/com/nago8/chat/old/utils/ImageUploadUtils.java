@@ -74,7 +74,7 @@ public class ImageUploadUtils {
             }
 
             @Override
-            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 if (!response.isSuccessful() || response.body() == null) {
                     callback.onError(new IOException("HTTP " + response.code()));
                     return;
@@ -119,13 +119,15 @@ public class ImageUploadUtils {
 
                 tempFile = new File(context.getCacheDir(), "img_up_" + System.currentTimeMillis() + "_" + imageUri.hashCode() + "." + extension);
 
-                InputStream inputStream = context.getContentResolver().openInputStream(imageUri);
-                if (inputStream == null) {
-                    callback.onError(new Exception("无法读取图片输入流"));
-                    return;
+                String md5;
+                try (InputStream inputStream = context.getContentResolver().openInputStream(imageUri)) {
+                    if (inputStream == null) {
+                        callback.onError(new Exception("无法读取图片输入流"));
+                        return;
+                    }
+                    md5 = copyToTempFileAndCalculateMD5(inputStream, tempFile);
                 }
 
-                String md5 = copyToTempFileAndCalculateMD5(inputStream, tempFile);
                 int[] bounds = decodeImageBounds(tempFile);
                 int width = bounds[0];
                 int height = bounds[1];
@@ -150,9 +152,12 @@ public class ImageUploadUtils {
                         JSONArray domains = up.getJSONArray("domains");
                         uploadHost = domains.getString(0);
                     } catch (Exception ignored) {
+                    } finally {
+                        queryResp.body().close();
                     }
+                } else if (queryResp.body() != null) {
+                    queryResp.body().close();
                 }
-                if (queryResp.body() != null) queryResp.body().close();
 
                 RequestBody formBody = new MultipartBody.Builder()
                         .setType(MultipartBody.FORM)
@@ -170,41 +175,48 @@ public class ImageUploadUtils {
 
                 Response uploadResp = ApiClient.getClient().newCall(uploadReq).execute();
                 if (uploadResp.isSuccessful() && uploadResp.body() != null) {
-                    String respStr = uploadResp.body().string();
-                    JSONObject json = new JSONObject(respStr);
+                    try {
+                        String respStr = uploadResp.body().string();
+                        JSONObject json = new JSONObject(respStr);
 
-                    QiniuResult res = new QiniuResult();
-                    res.key = json.optString("key", fileKey);
-                    res.hash = json.optString("hash", "");
-                    res.fsize = json.optLong("fsize", fsize);
-                    res.width = width;
-                    res.height = height;
-                    res.extension = extension;
+                        QiniuResult res = new QiniuResult();
+                        res.key = json.optString("key", fileKey);
+                        res.hash = json.optString("hash", "");
+                        res.fsize = json.optLong("fsize", fsize);
+                        res.width = width;
+                        res.height = height;
+                        res.extension = extension;
 
-                    if (json.has("avinfo")) {
-                        try {
-                            JSONObject avinfo = json.getJSONObject("avinfo");
-                            if (avinfo.has("video")) {
-                                JSONObject v = avinfo.getJSONObject("video");
-                                res.width = v.optInt("width", width);
-                                res.height = v.optInt("height", height);
-                            }
-                        } catch (Exception ignored) {}
+                        if (json.has("avinfo")) {
+                            try {
+                                JSONObject avinfo = json.getJSONObject("avinfo");
+                                if (avinfo.has("video")) {
+                                    JSONObject v = avinfo.getJSONObject("video");
+                                    res.width = v.optInt("width", width);
+                                    res.height = v.optInt("height", height);
+                                }
+                            } catch (Exception ignored) {}
+                        }
+
+                        callback.onSuccess(res);
+                    } finally {
+                        uploadResp.body().close();
                     }
-
-                    callback.onSuccess(res);
                 } else {
                     int errCode = uploadResp.code();
+                    if (uploadResp.body() != null) uploadResp.body().close();
                     callback.onError(new Exception("上传失败 HTTP " + errCode));
                 }
-                if (uploadResp.body() != null) uploadResp.body().close();
 
             } catch (Exception e) {
                 Log.e(TAG, "uploadImage failed", e);
                 callback.onError(e);
             } finally {
                 if (tempFile != null && tempFile.exists()) {
-                    tempFile.delete();
+                    boolean deleted = tempFile.delete();
+                    if (!deleted) {
+                        Log.w(TAG, "delete tempFile failed");
+                    }
                 }
             }
         }).start();
@@ -225,16 +237,12 @@ public class ImageUploadUtils {
         MessageDigest md5Digest = MessageDigest.getInstance("MD5");
         byte[] buffer = new byte[8192];
         int read;
-        long total = 0;
         try (FileOutputStream output = new FileOutputStream(tempFile)) {
             while ((read = input.read(buffer)) > 0) {
                 md5Digest.update(buffer, 0, read);
                 output.write(buffer, 0, read);
-                total += read;
             }
             output.flush();
-        } finally {
-            input.close();
         }
         byte[] md5Bytes = md5Digest.digest();
         StringBuilder sb = new StringBuilder();

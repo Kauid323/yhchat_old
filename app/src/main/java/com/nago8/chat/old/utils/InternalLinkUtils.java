@@ -8,6 +8,7 @@ import android.text.SpannableStringBuilder;
 import android.text.TextPaint;
 import android.text.method.LinkMovementMethod;
 import android.text.style.ClickableSpan;
+import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
 
@@ -20,11 +21,13 @@ import java.util.regex.Pattern;
 
 public class InternalLinkUtils {
 
+    private static final String TAG = "InternalLinkUtils";
+
     // 匹配 yunhu://post-detail?id=xxx
     private static final Pattern YUNHU_SCHEME_PATTERN = Pattern.compile("yunhu://post-detail\\?(?:.*&)?id=([^&\\s]+)");
 
     // 匹配 www.yhchat.com/c/p/xxx 或 https://www.yhchat.com/c/p/xxx 或 yhchat.com/c/p/xxx
-    private static final Pattern YHCHAT_POST_PATTERN = Pattern.compile("(?:https?://)?(?:[a-zA-Z0-9-]+\\.)?yhchat\\.com/c/p/([^/\\?\\s#]+)");
+    private static final Pattern YHCHAT_POST_PATTERN = Pattern.compile("(?:https?://)?(?:[a-zA-Z0-9-]+\\.)?yhchat\\.com/c/p/([^/?\\s#]+)");
 
     /**
      * 判断并解析链接中的文章 ID。
@@ -64,6 +67,7 @@ public class InternalLinkUtils {
     /**
      * 判断是否为文章内链
      */
+    @SuppressWarnings("unused")
     public static boolean isInternalLink(String url) {
         return parsePostId(url) != null;
     }
@@ -74,6 +78,7 @@ public class InternalLinkUtils {
      * @param url 目标链接
      * @return 是否已作为内链成功处理
      */
+    @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     public static boolean handleUrl(Context context, String url) {
         if (context == null || url == null) return false;
         String postId = parsePostId(url);
@@ -89,6 +94,7 @@ public class InternalLinkUtils {
     /**
      * 扫描 TextView 中的文本，自动识别内链及常用 URL 并加上高亮点击效果
      */
+    @SuppressWarnings("unused")
     public static void processTextViewLinks(TextView textView) {
         processTextViewLinks(textView, false);
     }
@@ -149,7 +155,7 @@ public class InternalLinkUtils {
                         Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(openUrl));
                         widget.getContext().startActivity(intent);
                     } catch (Exception e) {
-                        e.printStackTrace();
+                        Log.e(TAG, "Failed to open link: " + url, e);
                     }
                 }
             }

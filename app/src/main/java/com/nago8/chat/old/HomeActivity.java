@@ -25,7 +25,6 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.AppCompatImageView;
-import androidx.appcompat.widget.PopupMenu;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -44,6 +43,7 @@ import com.nago8.chat.old.fragments.CommunityFragment;
 import com.nago8.chat.old.fragments.ConversationsFragment;
 import com.nago8.chat.old.fragments.DiscoveryFragment;
 import com.nago8.chat.old.fragments.StickyConversationsFragment;
+import com.nago8.chat.old.listener.SearchHost;
 import com.nago8.chat.old.model.UserModels;
 import com.nago8.chat.old.net.ApiClient;
 import com.nago8.chat.old.proto.chat_ws_go.WsMsg;
@@ -53,7 +53,6 @@ import com.nago8.chat.old.utils.ImageUtils;
 import com.nago8.chat.old.utils.LocaleHelper;
 import com.nago8.chat.old.utils.NotificationHelper;
 import com.nago8.chat.old.utils.PrefUtils;
-import com.nago8.chat.old.utils.WsMsgConverter;
 import com.nago8.chat.old.ws.WsClient;
 import com.nago8.chat.old.ws.WsLogManager;
 
@@ -97,11 +96,6 @@ public class HomeActivity extends AppCompatActivity {
 
     private final Set<String> doNotDisturbChatIds = new HashSet<>();
     private final Map<String, String[]> convInfoCache = new HashMap<>();
-
-    public interface SearchHost {
-        void onSearch(String keyword);
-        void onSearchClosed();
-    }
 
     @Override
     protected void attachBaseContext(@NonNull Context newBase) {
@@ -153,13 +147,11 @@ public class HomeActivity extends AppCompatActivity {
 
         setupSpeedDialFab();
 
-        ConversationCache.getInstance().setOnUnreadCountChangeListener((totalUnread, stickyUnread) -> {
-            runOnUiThread(() -> {
-                this.conversationCount = totalUnread;
-                this.stickyCount = stickyUnread;
-                updateTabTexts();
-            });
-        });
+        ConversationCache.getInstance().setOnUnreadCountChangeListener((totalUnread, stickyUnread) -> runOnUiThread(() -> {
+            this.conversationCount = totalUnread;
+            this.stickyCount = stickyUnread;
+            updateTabTexts();
+        }));
 
         setupMenuClickListeners();
         initConversationTabs();
@@ -197,7 +189,7 @@ public class HomeActivity extends AppCompatActivity {
         if (!WsClient.getInstance().isConnected()) {
             String userId = PrefUtils.getUserId(this);
             String token = PrefUtils.getToken(this);
-            if (userId != null && !userId.isEmpty() && token != null && !token.isEmpty()) {
+            if (!userId.isEmpty() && token != null && !token.isEmpty()) {
                 WsLogManager.getInstance().logInfo("resuming: reconnecting WebSocket");
                 WsClient.getInstance().reconnect();
             }
@@ -309,6 +301,7 @@ public class HomeActivity extends AppCompatActivity {
         }
     }
 
+    @SuppressWarnings("unused")
     public void updateConversationCount(int count) {
         conversationCount = count;
         updateTabTexts();
@@ -419,6 +412,7 @@ public class HomeActivity extends AppCompatActivity {
         ConversationCache.getInstance().updateConversationList(list);
     }
 
+    @SuppressWarnings("unused")
     public void updateStickyList(List<ConversationCache.StickyInfo> stickyList) {
         ConversationCache.getInstance().updateStickyList(stickyList);
     }
@@ -631,6 +625,8 @@ public class HomeActivity extends AppCompatActivity {
                         if (userInfo != null && userInfo.data != null) {
                             runOnUiThread(() -> {
                                 PrefUtils.saveUserId(HomeActivity.this, userInfo.data.id);
+                                PrefUtils.saveIsVip(HomeActivity.this, userInfo.data.is_vip == 1);
+                                com.nago8.chat.old.utils.MiscSettingManager.getInstance().fetchSettings(HomeActivity.this);
                                 connectWebSocket();
                                 fetchStickyCount();
                                 if (tvUsername != null) tvUsername.setText(userInfo.data.name);
@@ -648,6 +644,7 @@ public class HomeActivity extends AppCompatActivity {
         });
     }
 
+    @android.annotation.SuppressLint("HardwareIds")
     private void performLogout() {
         String token = PrefUtils.getToken(this);
         if (token == null || token.isEmpty()) {
@@ -698,12 +695,13 @@ public class HomeActivity extends AppCompatActivity {
     private void connectWebSocket() {
         String userId = PrefUtils.getUserId(this);
         String token = PrefUtils.getToken(this);
-        if (userId != null && !userId.isEmpty() && token != null && !token.isEmpty()) {
+        if (!userId.isEmpty() && token != null && !token.isEmpty()) {
             WsLogManager.getInstance().logInfo("starting WebSocket client");
             WsClient.getInstance().connect(userId, token);
         }
     }
 
+    @SuppressWarnings("unused")
     public void setDoNotDisturb(String chatId, boolean dnd) {
         if (dnd) {
             doNotDisturbChatIds.add(chatId);
@@ -723,6 +721,7 @@ public class HomeActivity extends AppCompatActivity {
         return doNotDisturbChatIds.contains(chatId);
     }
 
+    @SuppressWarnings("unused")
     public void updateConvInfo(String chatId, String name, String avatarUrl) {
         if (chatId == null || chatId.isEmpty()) return;
         convInfoCache.put(chatId, new String[]{name, avatarUrl});

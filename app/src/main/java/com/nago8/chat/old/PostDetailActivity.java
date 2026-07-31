@@ -103,6 +103,7 @@ public class PostDetailActivity extends AppCompatActivity {
 
     private SwipeRefreshLayout swipeRefreshLayout;
     private CommunityRepository communityRepo;
+    private Call runningCommentCall;
 
     @Override
     protected void attachBaseContext(Context newBase) {
@@ -269,7 +270,11 @@ public class PostDetailActivity extends AppCompatActivity {
         }
 
         progressBar.setVisibility(View.VISIBLE);
-        scrollView.setVisibility(View.GONE);
+        TabLayout tabLayout = findViewById(R.id.tabLayout);
+        int selectedTab = tabLayout != null ? tabLayout.getSelectedTabPosition() : 0;
+        if (selectedTab == 0) {
+            scrollView.setVisibility(View.GONE);
+        }
 
         String json = "{\"id\":" + pid + "}";
         RequestBody body = RequestBody.create(MediaType.parse("application/json; charset=utf-8"), json);
@@ -326,7 +331,15 @@ public class PostDetailActivity extends AppCompatActivity {
 
     private void renderPost(JsonObject post) {
         progressBar.setVisibility(View.GONE);
-        scrollView.setVisibility(View.VISIBLE);
+        TabLayout tabLayout = findViewById(R.id.tabLayout);
+        int selectedTab = tabLayout != null ? tabLayout.getSelectedTabPosition() : 0;
+        if (selectedTab == 1) {
+            scrollView.setVisibility(View.GONE);
+            interactionLayout.setVisibility(View.VISIBLE);
+        } else {
+            scrollView.setVisibility(View.VISIBLE);
+            interactionLayout.setVisibility(View.GONE);
+        }
 
         String title = getJsonString(post, "title");
         String senderNickname = getJsonString(post, "senderNickname");
@@ -576,25 +589,31 @@ public class PostDetailActivity extends AppCompatActivity {
     // ==================== Comments ====================
 
     private void loadComments(boolean reset) {
-        if (commentLoading) return;
         String token = PrefUtils.getToken(this);
         if (token == null) return;
 
         if (reset) {
+            if (runningCommentCall != null) {
+                runningCommentCall.cancel();
+                runningCommentCall = null;
+            }
+            commentLoading = false;
             commentPage = 1;
             commentTotal = 0;
-            // Remove all comment views except progressBar, tvNoComment, tvLoadMoreComments
             removeCommentViews();
+        } else if (commentLoading) {
+            return;
         }
 
         commentLoading = true;
         commentProgressBar.setVisibility(View.VISIBLE);
         tvLoadMoreComments.setVisibility(View.GONE);
 
-        communityRepo.getCommentList(token, postId, commentPage, 20, new CommunityRepository.StringCallback() {
+        runningCommentCall = communityRepo.getCommentList(token, postId, commentPage, 20, new CommunityRepository.StringCallback() {
             @Override
             public void onSuccess(String body) {
                 runOnUiThread(() -> {
+                    runningCommentCall = null;
                     commentLoading = false;
                     commentProgressBar.setVisibility(View.GONE);
                     if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
@@ -612,6 +631,9 @@ public class PostDetailActivity extends AppCompatActivity {
                         }
                         tvNoComment.setVisibility(View.GONE);
                         com.google.gson.JsonArray comments = data.has("comments") ? data.getAsJsonArray("comments") : new com.google.gson.JsonArray();
+                        if (reset) {
+                            removeCommentViews();
+                        }
                         for (int i = 0; i < comments.size(); i++) {
                             addCommentView(comments.get(i).getAsJsonObject());
                         }
@@ -631,6 +653,7 @@ public class PostDetailActivity extends AppCompatActivity {
             @Override
             public void onError(String msg) {
                 runOnUiThread(() -> {
+                    runningCommentCall = null;
                     commentLoading = false;
                     commentProgressBar.setVisibility(View.GONE);
                     if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);

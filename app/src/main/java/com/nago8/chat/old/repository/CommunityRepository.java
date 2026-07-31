@@ -1,8 +1,12 @@
 package com.nago8.chat.old.repository;
 
+import androidx.annotation.NonNull;
+
 import com.nago8.chat.old.net.ApiClient;
 
 import org.json.JSONObject;
+
+import java.io.IOException;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -10,8 +14,6 @@ import okhttp3.MediaType;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
-
-import java.io.IOException;
 
 public class CommunityRepository {
 
@@ -32,6 +34,7 @@ public class CommunityRepository {
 
     // ==================== 内部工具 ====================
 
+    @SuppressWarnings("UnusedReturnValue")
     private Call post(String path, String token, String jsonBody, StringCallback cb) {
         RequestBody body = RequestBody.create(JSON, jsonBody);
         Request req = new Request.Builder()
@@ -42,16 +45,22 @@ public class CommunityRepository {
         Call call = ApiClient.getClient().newCall(req);
         call.enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 cb.onError(e.getMessage());
             }
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 if (!response.isSuccessful() || response.body() == null) {
                     cb.onError("HTTP " + response.code());
                     return;
                 }
-                cb.onSuccess(response.body().string());
+                try {
+                    cb.onSuccess(response.body().string());
+                } catch (Exception e) {
+                    cb.onError(e.getMessage());
+                } finally {
+                    response.body().close();
+                }
             }
         });
         return call;
@@ -82,6 +91,7 @@ public class CommunityRepository {
     // ==================== 文章互动 ====================
 
     /** 点赞/取消点赞文章（接口幂等，重复调用自动切换） */
+    @SuppressWarnings("UnusedReturnValue")
     public Call likePost(String token, long postId, SimpleCallback cb) {
         return post("/v1/community/posts/post-like", token,
                 "{\"id\":" + postId + "}", new StringCallback() {
@@ -97,6 +107,7 @@ public class CommunityRepository {
     }
 
     /** 收藏/取消收藏文章 */
+    @SuppressWarnings("UnusedReturnValue")
     public Call collectPost(String token, long postId, SimpleCallback cb) {
         return post("/v1/community/posts/post-collect", token,
                 "{\"id\":" + postId + "}", new StringCallback() {
@@ -112,6 +123,7 @@ public class CommunityRepository {
     }
 
     /** 投币文章 */
+    @SuppressWarnings("UnusedReturnValue")
     public Call rewardPost(String token, long postId, String recvId, double amount, SimpleCallback cb) {
         String json = "{\"postId\":" + postId + ",\"recvId\":\"" + recvId + "\",\"amount\":" + amount + "}";
         simplePost("/v1/community/posts/post-reward", token, json, cb);
@@ -121,12 +133,14 @@ public class CommunityRepository {
     // ==================== 评论 ====================
 
     /** 获取评论列表 */
+    @SuppressWarnings("UnusedReturnValue")
     public Call getCommentList(String token, long postId, int page, int size, StringCallback cb) {
         String json = "{\"postId\":" + postId + ",\"size\":" + size + ",\"page\":" + page + "}";
         return post("/v1/community/comment/comment-list", token, json, cb);
     }
 
     /** 发表评论，parentCommentId=0 表示直接评论文章，否则为楼中楼回复 */
+    @SuppressWarnings("UnusedReturnValue")
     public Call sendComment(String token, long postId, long parentCommentId, String content, SimpleCallback cb) {
         try {
             JSONObject json = new JSONObject();
@@ -141,6 +155,7 @@ public class CommunityRepository {
     }
 
     /** 点赞/取消点赞评论 */
+    @SuppressWarnings("UnusedReturnValue")
     public Call likeComment(String token, long commentId, SimpleCallback cb) {
         simplePost("/v1/community/comment/comment-like", token,
                 "{\"id\":" + commentId + "}", cb);

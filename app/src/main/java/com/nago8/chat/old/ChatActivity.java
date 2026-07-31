@@ -1,8 +1,14 @@
 package com.nago8.chat.old;
 
+import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.provider.MediaStore;
 import android.view.View;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -13,6 +19,9 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.AppCompatImageButton;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -33,6 +42,7 @@ import com.nago8.chat.old.proto.chat_ws_go.WsMsg;
 
 import java.io.File;
 import java.io.FileWriter;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -41,7 +51,6 @@ import java.util.List;
 import java.util.Set;
 
 import okhttp3.Call;
-import android.net.Uri;
 
 import com.nago8.chat.old.components.ChatInputBar;
 
@@ -51,6 +60,11 @@ public class ChatActivity extends AppCompatActivity {
     public static final String EXTRA_CHAT_NAME = "chat_name";
     public static final String EXTRA_CHAT_AVATAR = "chat_avatar";
     private static final int REQUEST_CODE_PICK_IMAGES = 2001;
+    private static final int REQUEST_CODE_PICK_FILES = 2002;
+    private static final int REQUEST_CODE_TAKE_PHOTO = 2003;
+    private static final int REQUEST_CODE_CAMERA_PERMISSION = 3002;
+
+    private Uri currentPhotoUri;
 
     private RecyclerView recyclerView;
     private ProgressBar progressBar;
@@ -228,10 +242,78 @@ public class ChatActivity extends AppCompatActivity {
         startActivityForResult(Intent.createChooser(intent, "选择图片"), REQUEST_CODE_PICK_IMAGES);
     }
 
+    @android.annotation.SuppressLint("InlinedApi")
+    private void openFilePicker() {
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        intent.setType("*/*");
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        startActivityForResult(Intent.createChooser(intent, "选择文件"), REQUEST_CODE_PICK_FILES);
+    }
+
+    private void openCamera() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, REQUEST_CODE_CAMERA_PERMISSION);
+                return;
+            }
+        }
+
+        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
+            File photoFile = null;
+            try {
+                String timeStamp = String.valueOf(System.currentTimeMillis());
+                File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+                if (storageDir == null) storageDir = getCacheDir();
+                photoFile = File.createTempFile("JPEG_" + timeStamp + "_", ".jpg", storageDir);
+            } catch (IOException ex) {
+                Toast.makeText(this, "创建照片文件失败", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (photoFile != null) {
+                currentPhotoUri = FileProvider.getUriForFile(
+                        this,
+                        getPackageName() + ".fileprovider",
+                        photoFile
+                );
+                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, currentPhotoUri);
+                takePictureIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                startActivityForResult(takePictureIntent, REQUEST_CODE_TAKE_PHOTO);
+            }
+        } else {
+            Toast.makeText(this, "未找到相机应用", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_CODE_CAMERA_PERMISSION) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                openCamera();
+            } else {
+                Toast.makeText(this, "需要相机权限才能拍照", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQUEST_CODE_PICK_IMAGES && resultCode == RESULT_OK && data != null) {
+        if (resultCode != RESULT_OK) return;
+
+        if (requestCode == REQUEST_CODE_TAKE_PHOTO) {
+            if (currentPhotoUri != null) {
+                uploadAndSendImages(Collections.singletonList(currentPhotoUri));
+            }
+            return;
+        }
+
+        if (data == null) return;
+
+        if (requestCode == REQUEST_CODE_PICK_IMAGES || requestCode == REQUEST_CODE_PICK_FILES) {
             List<Uri> selectedUris = new ArrayList<>();
             if (data.getClipData() != null) {
                 int count = data.getClipData().getItemCount();
@@ -244,7 +326,11 @@ public class ChatActivity extends AppCompatActivity {
             }
 
             if (!selectedUris.isEmpty()) {
-                uploadAndSendImages(selectedUris);
+                if (requestCode == REQUEST_CODE_PICK_IMAGES) {
+                    uploadAndSendImages(selectedUris);
+                } else {
+                    uploadAndSendFiles(selectedUris);
+                }
             }
         }
     }
@@ -256,9 +342,22 @@ public class ChatActivity extends AppCompatActivity {
             return;
         }
 
-        Toast.makeText(this, "准备发送 " + uris.size() + " 张图片...", Toast.LENGTH_SHORT).show();
+        List<Uri> validUris = new ArrayList<>();
+        for (Uri uri : uris) {
+            com.nago8.chat.old.utils.MiscSettingManager.SizeCheckResult check =
+                    com.nago8.chat.old.utils.MiscSettingManager.getInstance().checkMediaSize(this, uri, com.nago8.chat.old.utils.MiscSettingManager.MediaType.IMAGE);
+            if (!check.isAllowed) {
+                Toast.makeText(this, check.errorMessage, Toast.LENGTH_LONG).show();
+            } else {
+                validUris.add(uri);
+            }
+        }
 
-        repository.uploadAndSendImages(this, token, chatId, chatType, uris, new MessageRepository.ImageUploadListener() {
+        if (validUris.isEmpty()) return;
+
+        Toast.makeText(this, "准备发送 " + validUris.size() + " 张图片...", Toast.LENGTH_SHORT).show();
+
+        repository.uploadAndSendImages(this, token, chatId, chatType, validUris, new MessageRepository.ImageUploadListener() {
             @Override
             public void onProgress(int index, int total) {
             }
@@ -282,13 +381,68 @@ public class ChatActivity extends AppCompatActivity {
         });
     }
 
+    private void uploadAndSendFiles(List<Uri> uris) {
+        String token = PrefUtils.getToken(this);
+        if (token == null || token.isEmpty()) {
+            Toast.makeText(this, "用户未登录", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        List<Uri> validUris = new ArrayList<>();
+        for (Uri uri : uris) {
+            com.nago8.chat.old.utils.MiscSettingManager.MediaType type = com.nago8.chat.old.utils.MiscSettingManager.MediaType.FILE;
+            String mimeType = getContentResolver().getType(uri);
+            if (mimeType != null && mimeType.startsWith("video/")) {
+                type = com.nago8.chat.old.utils.MiscSettingManager.MediaType.VIDEO;
+            }
+            com.nago8.chat.old.utils.MiscSettingManager.SizeCheckResult check =
+                    com.nago8.chat.old.utils.MiscSettingManager.getInstance().checkMediaSize(this, uri, type);
+            if (!check.isAllowed) {
+                Toast.makeText(this, check.errorMessage, Toast.LENGTH_LONG).show();
+            } else {
+                validUris.add(uri);
+            }
+        }
+
+        if (validUris.isEmpty()) return;
+
+        Toast.makeText(this, "准备发送 " + validUris.size() + " 个文件...", Toast.LENGTH_SHORT).show();
+
+        repository.uploadAndSendFiles(this, token, chatId, chatType, validUris, new MessageRepository.FileUploadListener() {
+            @Override
+            public void onProgress(int index, int total) {
+            }
+
+            @Override
+            public void onFileSuccess(int index, int total, String fileName) {
+                runOnUiThread(() -> {
+                    Toast.makeText(ChatActivity.this, "文件 (" + index + "/" + total + ") " + fileName + " 发送成功", Toast.LENGTH_SHORT).show();
+                    fetchLatestMessage();
+                });
+            }
+
+            @Override
+            public void onFileError(int index, int total, Exception error) {
+                runOnUiThread(() -> Toast.makeText(ChatActivity.this, "文件发送失败: " + error.getMessage(), Toast.LENGTH_SHORT).show());
+            }
+
+            @Override
+            public void onAllCompleted() {
+            }
+        });
+    }
+
     private void setupComposeInput() {
         chatInputBar = findViewById(R.id.chatInputBar);
         if (chatInputBar != null) {
             chatInputBar.setOnSendClickListener(this::performSend);
             chatInputBar.setOnPanelActionClickListener(actionType -> {
-                if ("image".equals(actionType) || "camera".equals(actionType)) {
+                if ("image".equals(actionType)) {
                     openImagePicker();
+                } else if ("camera".equals(actionType)) {
+                    openCamera();
+                } else if ("file".equals(actionType)) {
+                    openFilePicker();
                 } else {
                     String actionName;
                     switch (actionType) {
@@ -297,9 +451,6 @@ public class ChatActivity extends AppCompatActivity {
                             break;
                         case "record":
                             actionName = "录制";
-                            break;
-                        case "file":
-                            actionName = "文件";
                             break;
                         case "card":
                             actionName = "名片";

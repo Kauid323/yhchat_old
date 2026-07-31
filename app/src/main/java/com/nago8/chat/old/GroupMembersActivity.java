@@ -1,8 +1,10 @@
 package com.nago8.chat.old;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -47,9 +49,9 @@ import okhttp3.Response;
 
 public class GroupMembersActivity extends AppCompatActivity {
 
+    private static final String TAG = "GroupMembersActivity";
     public static final String EXTRA_GROUP_ID = "group_id";
 
-    private RecyclerView recyclerView;
     private ProgressBar progressBar;
     private MemberAdapter adapter;
     private Call runningCall;
@@ -74,7 +76,7 @@ public class GroupMembersActivity extends AppCompatActivity {
         groupRepository = new GroupRepository();
 
         AppCompatImageButton btnBack = findViewById(R.id.btnBack);
-        recyclerView = findViewById(R.id.recyclerView);
+        RecyclerView recyclerView = findViewById(R.id.recyclerView);
         progressBar = findViewById(R.id.progressBar);
 
         btnBack.setOnClickListener(v -> onBackPressed());
@@ -95,7 +97,7 @@ public class GroupMembersActivity extends AppCompatActivity {
     }
 
     private void fetchGroupRoleInfo() {
-        if (groupId == null || groupId.length() == 0) return;
+        if (groupId == null || groupId.isEmpty()) return;
 
         String token = PrefUtils.getToken(this);
         if (token == null) return;
@@ -118,11 +120,13 @@ public class GroupMembersActivity extends AppCompatActivity {
         infoCall = ApiClient.getClient().newCall(request);
         infoCall.enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                Log.e(TAG, "fetchGroupRoleInfo failed", e);
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            @SuppressLint("NotifyDataSetChanged")
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 if (!response.isSuccessful() || response.body() == null) return;
                 try {
                     final info result = info.ADAPTER.decode(response.body().source());
@@ -131,14 +135,17 @@ public class GroupMembersActivity extends AppCompatActivity {
                     adminIds.clear();
                     if (result.data.admin != null) adminIds.addAll(result.data.admin);
                     runOnUiThread(() -> adapter.notifyDataSetChanged());
-                } catch (Exception ignored) {
+                } catch (Exception e) {
+                    Log.e(TAG, "fetchGroupRoleInfo decode error", e);
+                } finally {
+                    response.body().close();
                 }
             }
         });
     }
 
     private void fetchMembers() {
-        if (groupId == null || groupId.length() == 0) {
+        if (groupId == null || groupId.isEmpty()) {
             finish();
             return;
         }
@@ -171,7 +178,7 @@ public class GroupMembersActivity extends AppCompatActivity {
         runningCall = ApiClient.getClient().newCall(request);
         runningCall.enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 runOnUiThread(() -> {
                     progressBar.setVisibility(View.GONE);
                     Toast.makeText(GroupMembersActivity.this, R.string.group_members_load_failed, Toast.LENGTH_SHORT).show();
@@ -179,7 +186,7 @@ public class GroupMembersActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 if (response.isSuccessful() && response.body() != null) {
                     try {
                         final list_member result = list_member.ADAPTER.decode(response.body().source());
@@ -190,11 +197,13 @@ public class GroupMembersActivity extends AppCompatActivity {
                             }
                         });
                     } catch (Exception e) {
-                        e.printStackTrace();
+                        Log.e(TAG, "fetchMembers parse error", e);
                         runOnUiThread(() -> {
                             progressBar.setVisibility(View.GONE);
                             Toast.makeText(GroupMembersActivity.this, R.string.group_members_load_failed, Toast.LENGTH_SHORT).show();
                         });
+                    } finally {
+                        response.body().close();
                     }
                 } else {
                     runOnUiThread(() -> {
@@ -210,6 +219,7 @@ public class GroupMembersActivity extends AppCompatActivity {
 
         private final List<User> members = new ArrayList<>();
 
+        @SuppressLint("NotifyDataSetChanged")
         void setData(List<User> data) {
             members.clear();
             if (data != null) members.addAll(data);
@@ -239,8 +249,8 @@ public class GroupMembersActivity extends AppCompatActivity {
             holder.tvName.setText(name);
             ImageUtils.loadAvatar(holder.itemView.getContext(), avatarUrl, holder.ivAvatar);
 
-            boolean isOwner = userId.length() > 0 && ownerId != null && ownerId.length() > 0 && ownerId.equals(userId);
-            boolean isAdmin = !isOwner && userId.length() > 0 && adminIds.contains(userId);
+            boolean isOwner = !userId.isEmpty() && ownerId != null && !ownerId.isEmpty() && ownerId.equals(userId);
+            boolean isAdmin = !isOwner && !userId.isEmpty() && adminIds.contains(userId);
             if (!isOwner && !isAdmin) {
                 if (member.permission_level == 2) {
                     isOwner = true;
@@ -257,9 +267,9 @@ public class GroupMembersActivity extends AppCompatActivity {
                 tag = getString(R.string.group_member_admin);
             }
             if (member.is_gag == 1) {
-                tag = tag.length() > 0 ? tag + " · " + getString(R.string.group_member_gagged) : getString(R.string.group_member_gagged);
+                tag = !tag.isEmpty() ? tag + " · " + getString(R.string.group_member_gagged) : getString(R.string.group_member_gagged);
             }
-            if (tag.length() > 0) {
+            if (!tag.isEmpty()) {
                 holder.tvTag.setText(tag);
                 holder.tvTag.setVisibility(View.VISIBLE);
             } else {
@@ -267,8 +277,8 @@ public class GroupMembersActivity extends AppCompatActivity {
             }
 
             String currentUserId = PrefUtils.getUserId(GroupMembersActivity.this);
-            boolean isMyselfOwner = currentUserId != null && ownerId != null && currentUserId.equals(ownerId);
-            boolean isMyselfAdmin = currentUserId != null && adminIds.contains(currentUserId);
+            boolean isMyselfOwner = ownerId != null && ownerId.equals(currentUserId);
+            boolean isMyselfAdmin = adminIds.contains(currentUserId);
             boolean isMyselfManager = isMyselfOwner || isMyselfAdmin;
 
             // 规则：不在 群主/管理员 列表的话，都不显示；如果是群主本身(Target是群主)，也不显示 more 菜单
@@ -284,10 +294,10 @@ public class GroupMembersActivity extends AppCompatActivity {
             final boolean finalIsGag = (member.is_gag == 1);
             final int itemPos = position;
 
-            holder.ibMore.setOnClickListener(v -> showMemberActionMenu(v, finalUserId, finalName, finalIsAdmin, finalIsGag, isMyselfOwner, itemPos, member));
+            holder.ibMore.setOnClickListener(v -> showMemberActionMenu(v, finalUserId, finalName, finalIsAdmin, finalIsGag, isMyselfOwner, itemPos));
 
             holder.itemView.setOnClickListener(v -> {
-                if (finalUserId.length() > 0) {
+                if (!finalUserId.isEmpty()) {
                     Intent intent = new Intent(v.getContext(), UserProfileActivity.class);
                     intent.putExtra(UserProfileActivity.EXTRA_USER_ID, finalUserId);
                     v.getContext().startActivity(intent);
@@ -295,7 +305,7 @@ public class GroupMembersActivity extends AppCompatActivity {
             });
         }
 
-        private void showMemberActionMenu(View anchor, String targetUserId, String targetName, boolean isTargetAdmin, boolean isTargetGagged, boolean isMyselfOwner, int position, User member) {
+        private void showMemberActionMenu(View anchor, String targetUserId, String targetName, boolean isTargetAdmin, boolean isTargetGagged, boolean isMyselfOwner, int position) {
             PopupMenu popup = new PopupMenu(GroupMembersActivity.this, anchor);
             popup.getMenu().add(0, 1, 0, "踢出成员");
             popup.getMenu().add(0, 2, 0, isTargetGagged ? "取消禁言" : "禁言成员");

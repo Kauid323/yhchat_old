@@ -21,7 +21,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.nago8.chat.old.ChatActivity;
 import com.nago8.chat.old.HomeActivity;
-import com.nago8.chat.old.SearchHost;
+import com.nago8.chat.old.listener.SearchHost;
 import com.nago8.chat.old.R;
 import com.nago8.chat.old.net.ApiClient;
 import com.nago8.chat.old.proto.chat_ws_go.WsMsg;
@@ -46,7 +46,6 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 public class ConversationsFragment extends Fragment implements SearchHost {
 
-    private RecyclerView recyclerView;
     private ProgressBar progressBar;
     private SwipeRefreshLayout swipeRefreshLayout;
     private ConversationsAdapter adapter;
@@ -57,12 +56,12 @@ public class ConversationsFragment extends Fragment implements SearchHost {
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_conversations, container, false);
-        recyclerView = view.findViewById(R.id.recyclerView);
+        RecyclerView recyclerView = view.findViewById(R.id.recyclerView);
         progressBar = view.findViewById(R.id.progressBar);
         swipeRefreshLayout = view.findViewById(R.id.swipeRefreshLayout);
 
         if (swipeRefreshLayout != null) {
-            swipeRefreshLayout.setOnRefreshListener(() -> refreshData());
+            swipeRefreshLayout.setOnRefreshListener(this::refreshData);
         }
 
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
@@ -75,7 +74,7 @@ public class ConversationsFragment extends Fragment implements SearchHost {
         adapter.setOnConversationActionListener(new ConversationsAdapter.OnConversationActionListener() {
             @Override
             public void onConversationClick(ConversationList.ConversationData data, int position) {
-                if (data.chat_id == null || data.chat_id.length() == 0) return;
+                if (data.chat_id == null || data.chat_id.isEmpty()) return;
 
                 if (searchMode) {
                     openChatFromSearch(data);
@@ -113,20 +112,17 @@ public class ConversationsFragment extends Fragment implements SearchHost {
         loadConversationsData();
         // 如果 listener 还没注册（首次 onResume），则注册
         if (wsListener == null) {
-            wsListener = new WsClient.MessageListener() {
-                @Override
-                public void onPushMessage(WsMsg msg) {
-                    if (getActivity() != null) {
-                        getActivity().runOnUiThread(() -> {
-                            if (getActivity() instanceof HomeActivity) {
-                                HomeActivity home = (HomeActivity) getActivity();
-                                home.onPushMessageInMemory(msg, getContext());
-                                if (adapter != null) {
-                                    adapter.setData(home.getCachedConversationList());
-                                }
+            wsListener = msg -> {
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        if (getActivity() instanceof HomeActivity) {
+                            HomeActivity home = (HomeActivity) getActivity();
+                            home.onPushMessageInMemory(msg, getContext());
+                            if (adapter != null) {
+                                adapter.setData(home.getCachedConversationList());
                             }
-                        });
-                    }
+                        }
+                    });
                 }
             };
             WsClient.getInstance().addMessageListener(wsListener);
@@ -191,7 +187,7 @@ public class ConversationsFragment extends Fragment implements SearchHost {
 
         ApiClient.getClient().newCall(request).enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 if (getActivity() != null) {
                     getActivity().runOnUiThread(() -> {
                         progressBar.setVisibility(View.GONE);
@@ -202,7 +198,7 @@ public class ConversationsFragment extends Fragment implements SearchHost {
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 if (getActivity() != null) {
                     getActivity().runOnUiThread(() -> {
                         progressBar.setVisibility(View.GONE);
@@ -235,7 +231,7 @@ public class ConversationsFragment extends Fragment implements SearchHost {
                             });
                         }
                     } catch (Exception e) {
-                        e.printStackTrace();
+                        Log.e("ConversationsFragment", "fetchConversations parse error", e);
                     }
                 }
             }
@@ -249,7 +245,7 @@ public class ConversationsFragment extends Fragment implements SearchHost {
      */
     @Override
     public void onSearch(String word) {
-        if (word.length() == 0) return;
+        if (word.isEmpty()) return;
         searchMode = true;
 
         String token = PrefUtils.getToken(getContext());
@@ -272,7 +268,7 @@ public class ConversationsFragment extends Fragment implements SearchHost {
 
         ApiClient.getClient().newCall(request).enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 if (getActivity() != null) {
                     Log.e("ConvSearch", "onFailure", e);
                     getActivity().runOnUiThread(() -> {
@@ -283,7 +279,7 @@ public class ConversationsFragment extends Fragment implements SearchHost {
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 if (getActivity() == null) return;
                 if (response.isSuccessful() && response.body() != null) {
                     try {
@@ -300,7 +296,6 @@ public class ConversationsFragment extends Fragment implements SearchHost {
                         });
                     } catch (Exception e) {
                         Log.e("ConvSearch", "parse error", e);
-                        e.printStackTrace();
                         getActivity().runOnUiThread(() -> {
                             progressBar.setVisibility(View.GONE);
                             Toast.makeText(getContext(), R.string.search_failed, Toast.LENGTH_SHORT).show();
@@ -343,7 +338,7 @@ public class ConversationsFragment extends Fragment implements SearchHost {
             JsonObject cat = catElem.getAsJsonObject();
             if (!cat.has("list") || cat.get("list").isJsonNull()) continue;
             JsonArray items = cat.getAsJsonArray("list");
-            if (items.size() == 0) continue;
+            if (items.isEmpty()) continue;
 
             // 插入分组标题项（chat_id 为空标记为标题）
             String title = getJsonString(cat, "title");
@@ -362,7 +357,7 @@ public class ConversationsFragment extends Fragment implements SearchHost {
                 String avatarUrl = getJsonString(item, "avatarUrl");
 
                 // 显示名优先 nickname，其次 name
-                String displayName = nickname.length() > 0 ? nickname : name;
+                String displayName = !nickname.isEmpty() ? nickname : name;
 
                 ConversationList.ConversationData cd = new ConversationList.ConversationData.Builder()
                         .chat_id(friendId)
@@ -386,6 +381,7 @@ public class ConversationsFragment extends Fragment implements SearchHost {
         return "";
     }
 
+    @SuppressWarnings("SameParameterValue")
     private int getJsonInt(JsonObject obj, String key, int def) {
         if (obj.has(key) && !obj.get(key).isJsonNull()) {
             return obj.get(key).getAsInt();
@@ -434,14 +430,14 @@ public class ConversationsFragment extends Fragment implements SearchHost {
 
         ApiClient.getClient().newCall(request).enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 if (getActivity() != null) {
                     getActivity().runOnUiThread(() -> Toast.makeText(getContext(), "请求失败", Toast.LENGTH_SHORT).show());
                 }
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 if (getActivity() != null) {
                     getActivity().runOnUiThread(() -> {
                         Toast.makeText(getContext(), "气泡：啊~我没了", Toast.LENGTH_SHORT).show();
@@ -496,7 +492,7 @@ public class ConversationsFragment extends Fragment implements SearchHost {
         });
     }
 
-    private void deleteConversation(String chatId, int position) {
+    private void deleteConversation(String chatId, @SuppressWarnings("unused") int position) {
         String token = PrefUtils.getToken(getContext());
         if (token == null || token.isEmpty()) return;
 

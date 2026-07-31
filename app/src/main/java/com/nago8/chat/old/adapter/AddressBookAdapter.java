@@ -1,5 +1,6 @@
 package com.nago8.chat.old.adapter;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.Intent;
 import android.view.LayoutInflater;
@@ -29,6 +30,7 @@ public class AddressBookAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         this.context = context;
     }
 
+    @SuppressLint("NotifyDataSetChanged")
     public void setData(List<AddressBookItem> newItems) {
         this.items.clear();
         if (newItems != null) {
