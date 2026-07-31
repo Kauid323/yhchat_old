@@ -183,19 +183,25 @@ public class ConversationCache {
      * 收到 WebSocket 实时推送消息处理
      */
     public synchronized void onPushMessage(WsMsg wsMsg, Context ctx) {
-        if (wsMsg == null || wsMsg.chat_id == null || wsMsg.chat_id.isEmpty()) return;
-
+        if (wsMsg == null) return;
         if (WsClient.isBlockedMessage(wsMsg)) return;
 
-        String chatId = wsMsg.chat_id;
         String myUserId = PrefUtils.getUserId(ctx);
+        String chatId = WsClient.getTargetChatId(wsMsg, myUserId);
+        if (chatId == null || chatId.isEmpty()) return;
+
         boolean isFromMe = (wsMsg.sender != null && wsMsg.sender.chat_id != null && wsMsg.sender.chat_id.equals(myUserId));
         String activeChatId = WsClient.getInstance().getActiveChatId();
         boolean isActiveChat = (activeChatId != null && activeChatId.equals(chatId));
 
         String senderName = (wsMsg.sender != null && wsMsg.sender.name != null) ? wsMsg.sender.name : "";
         String preview = WsMsgConverter.toPreviewText(wsMsg, ctx);
-        String chatContent = !senderName.isEmpty() ? senderName + ":" + preview : preview;
+        String chatContent;
+        if (preview != null && preview.startsWith("该消息已于")) {
+            chatContent = preview;
+        } else {
+            chatContent = !senderName.isEmpty() ? senderName + ":" + preview : preview;
+        }
 
         ConversationList.ConversationData oldData = conversationMap.get(chatId);
         int newUnread;
@@ -214,12 +220,11 @@ public class ConversationCache {
                     .timestamp_ms(wsMsg.timestamp)
                     .build();
         } else {
-            String name = senderName;
             String avatarUrl = (wsMsg.sender != null && wsMsg.sender.avatar_url != null) ? wsMsg.sender.avatar_url : "";
             newData = new ConversationList.ConversationData.Builder()
                     .chat_id(chatId)
                     .chat_type(wsMsg.chat_type != 0 ? wsMsg.chat_type : 1)
-                    .name(name)
+                    .name(senderName)
                     .avatar_url(avatarUrl)
                     .unread_message(newUnread)
                     .chat_content(chatContent)

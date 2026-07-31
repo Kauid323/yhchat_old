@@ -2,8 +2,6 @@ package com.nago8.chat.old.utils;
 
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.drawable.BitmapDrawable;
-import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.widget.ImageView;
 
@@ -88,19 +86,22 @@ public class ImageUtils {
                     @Override
                     public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Bitmap> target, boolean isFirstResource) {
                         if (originalUrl != null && originalUrl.startsWith("https://") && model instanceof GlideUrl) {
-                            String httpUrl = "http://" + originalUrl.substring(8);
-                            GlideUrl retryUrl = new GlideUrl(httpUrl, new LazyHeaders.Builder()
+                            final String httpUrl = "http://" + originalUrl.substring(8);
+                            final GlideUrl retryUrl = new GlideUrl(httpUrl, new LazyHeaders.Builder()
                                     .addHeader("Referer", "http://myapp.jwznb.com")
                                     .build());
-                            Glide.with(context)
-                                    .asBitmap()
-                                    .load(retryUrl)
-                                    .placeholder(android.R.drawable.ic_menu_gallery)
-                                    .error(android.R.drawable.ic_menu_report_image)
-                                    .diskCacheStrategy(DiskCacheStrategy.ALL)
-                                    .circleCrop()
-                                    .into(imageView);
-                            return true;
+                            new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                                try {
+                                    Glide.with(context)
+                                            .asBitmap()
+                                            .load(retryUrl)
+                                            .placeholder(android.R.drawable.ic_menu_gallery)
+                                            .error(android.R.drawable.ic_menu_report_image)
+                                            .diskCacheStrategy(DiskCacheStrategy.ALL)
+                                            .circleCrop()
+                                            .into(imageView);
+                                } catch (Exception ignored) {}
+                            });
                         }
                         return false;
                     }

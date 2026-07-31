@@ -367,6 +367,27 @@ public class WsClient {
     }
 
     /**
+     * 根据 WsMsg 及当前用户 ID 解析真实的会话 ID。
+     * 单聊 (type=1) 且来自对方时，真实会话 ID 为 senderId，避免生成自己 ID 的重复错误会话。
+     */
+    public static String getTargetChatId(WsMsg msg, String currentUserId) {
+        if (msg == null) return "";
+        int chatType = msg.chat_type;
+        // 单聊 (chatType == 1) 或 机器人 (chatType == 3)
+        if (chatType == 1 || chatType == 3) {
+            String senderId = (msg.sender != null && msg.sender.chat_id != null) ? msg.sender.chat_id : "";
+            if (!senderId.isEmpty() && currentUserId != null && !currentUserId.isEmpty()) {
+                if (!senderId.equals(currentUserId)) {
+                    // 对方发给我的单聊消息，会话 ID 是对方的 senderId
+                    return senderId;
+                }
+            }
+        }
+        // 群聊 (chatType == 2) 或 自己发出的单聊消息：使用 msg.chat_id
+        return msg.chat_id != null ? msg.chat_id : "";
+    }
+
+    /**
      * 通知逻辑：收到消息时判断是否需要发系统通知。
      * - 当前正在聊天的会话不发
      * - 免打扰会话不发
@@ -374,18 +395,21 @@ public class WsClient {
      * - 内容为空的消息绝对不发
      */
     private void handleNotification(WsMsg msg) {
-        if (appContext == null || msg == null || msg.chat_id == null || msg.chat_id.isEmpty()) return;
+        if (appContext == null || msg == null) return;
         if (isBlockedMessage(msg)) return;
 
         // 自己发送的消息 / 无发送者的回显消息，一律过滤
         String currentUserId = userId != null ? userId : PrefUtils.getUserId(appContext);
+        String targetChatId = getTargetChatId(msg, currentUserId);
+        if (targetChatId.isEmpty()) return;
+
         if (isMyMessage(msg, currentUserId)) return;
 
         // 正在聊天的会话不通知
-        if (msg.chat_id.equals(activeChatId)) return;
+        if (targetChatId.equals(activeChatId)) return;
 
         // 免打扰会话不通知
-        if (dndChecker != null && dndChecker.isDoNotDisturb(msg.chat_id)) return;
+        if (dndChecker != null && dndChecker.isDoNotDisturb(targetChatId)) return;
 
         // 构建通知内容
         String preview = WsMsgConverter.toPreviewText(msg, appContext);
@@ -403,12 +427,12 @@ public class WsClient {
         String title = appContext.getString(R.string.notification_new_message);
         String avatarUrl = null;
         if (convInfoProvider != null) {
-            String convName = convInfoProvider.getConvName(msg.chat_id);
+            String convName = convInfoProvider.getConvName(targetChatId);
             if (convName != null && !convName.isEmpty()) title = convName;
-            avatarUrl = convInfoProvider.getConvAvatar(msg.chat_id);
+            avatarUrl = convInfoProvider.getConvAvatar(targetChatId);
         }
 
-        NotificationHelper.showMessageNotification(appContext, msg.chat_id, chatType, title, content, avatarUrl);
+        NotificationHelper.showMessageNotification(appContext, targetChatId, chatType, title, content, avatarUrl);
     }
 
     private String tryDecodeMessage(byte[] raw) {

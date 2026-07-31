@@ -1,6 +1,7 @@
 package com.nago8.chat.old.fragments;
 
 import android.content.Context;
+import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -88,11 +89,13 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
     }
 
     public void onPushMessage(WsMsg wsMsg, Context ctx) {
-        if (wsMsg == null || wsMsg.chat_id == null || ctx == null) return;
-
+        if (wsMsg == null || ctx == null) return;
         if (com.nago8.chat.old.ws.WsClient.isBlockedMessage(wsMsg)) return;
 
-        String chatId = wsMsg.chat_id;
+        String myUserId = com.nago8.chat.old.utils.PrefUtils.getUserId(ctx);
+        String chatId = com.nago8.chat.old.ws.WsClient.getTargetChatId(wsMsg, myUserId);
+        if (chatId == null || chatId.isEmpty()) return;
+
         int foundIndex = -1;
         for (int i = 0; i < dataList.size(); i++) {
             if (chatId.equals(dataList.get(i).chat_id)) {
@@ -103,9 +106,12 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
 
         String senderName = (wsMsg.sender != null && wsMsg.sender.name != null) ? wsMsg.sender.name : "";
         String preview = WsMsgConverter.toPreviewText(wsMsg, ctx);
-        String chatContent = (senderName != null && !senderName.isEmpty()) ? senderName + ":" + preview : preview;
-
-        String myUserId = com.nago8.chat.old.utils.PrefUtils.getUserId(ctx);
+        String chatContent;
+        if (preview != null && preview.startsWith("该消息已于")) {
+            chatContent = preview;
+        } else {
+            chatContent = (!TextUtils.isEmpty(senderName)) ? senderName + ":" + preview : preview;
+        }
         boolean isFromMe = (wsMsg.sender != null && wsMsg.sender.chat_id != null && wsMsg.sender.chat_id.equals(myUserId));
 
         ConversationList.ConversationData newData;
@@ -172,6 +178,11 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
 
         h.tvName.setText(data.name);
         h.tvContent.setText(data.chat_content);
+        if (data.chat_content != null && (data.chat_content.startsWith("该消息已于") || data.chat_content.contains("撤回"))) {
+            h.tvContent.setAlpha(0.55f);
+        } else {
+            h.tvContent.setAlpha(1.0f);
+        }
         if (data.timestamp_ms > 0) {
             h.tvTime.setVisibility(View.VISIBLE);
             h.tvTime.setText(TimeUtils.formatChatTime(data.timestamp_ms));

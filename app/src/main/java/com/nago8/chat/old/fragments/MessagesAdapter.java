@@ -2,8 +2,10 @@ package com.nago8.chat.old.fragments;
 
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
+import android.text.TextUtils;
 import android.text.format.Formatter;
-import android.graphics.Color;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -14,26 +16,33 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
+import androidx.core.view.ViewCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.nago8.chat.old.R;
 import com.nago8.chat.old.ImagePreviewActivity;
 import com.nago8.chat.old.PostDetailActivity;
+import com.nago8.chat.old.R;
 import com.nago8.chat.old.VideoPlayerActivity;
-import com.nago8.chat.old.net.FileDownloadManager;
 import com.nago8.chat.old.model.MessageGroup;
+import com.nago8.chat.old.net.FileDownloadManager;
 import com.nago8.chat.old.proto.Msg;
 import com.nago8.chat.old.utils.FengEmojiRenderer;
 import com.nago8.chat.old.utils.ImageUtils;
+import com.nago8.chat.old.utils.InternalLinkUtils;
 import com.nago8.chat.old.utils.TimeUtils;
 
 import java.io.File;
-
-import io.noties.markwon.Markwon;
-import io.noties.markwon.ext.strikethrough.StrikethroughPlugin;
-
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
+import java.util.Locale;
+
+import io.noties.markwon.AbstractMarkwonPlugin;
+import io.noties.markwon.Markwon;
+import io.noties.markwon.MarkwonConfiguration;
+import io.noties.markwon.ext.strikethrough.StrikethroughPlugin;
 
 public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHolder> {
     private final List<MessageGroup> groups = new ArrayList<>();
@@ -68,20 +77,20 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
         if (markwon == null) {
             markwon = Markwon.builder(context)
                     .usePlugin(StrikethroughPlugin.create())
-                    .usePlugin(new io.noties.markwon.AbstractMarkwonPlugin() {
+                    .usePlugin(new AbstractMarkwonPlugin() {
                         @Override
-                        public void configureConfiguration(@NonNull io.noties.markwon.MarkwonConfiguration.Builder builder) {
+                        public void configureConfiguration(@NonNull MarkwonConfiguration.Builder builder) {
                             builder.linkResolver((view, link) -> {
-                                if (!com.nago8.chat.old.utils.InternalLinkUtils.handleUrl(view.getContext(), link)) {
+                                if (!InternalLinkUtils.handleUrl(view.getContext(), link)) {
                                     try {
                                         String openUrl = link;
                                         if (!openUrl.startsWith("http://") && !openUrl.startsWith("https://") && !openUrl.startsWith("yunhu://")) {
                                             openUrl = "http://" + openUrl;
                                         }
-                                        android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(openUrl));
+                                        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(openUrl));
                                         view.getContext().startActivity(intent);
                                     } catch (Exception e) {
-                                        e.printStackTrace();
+                                        Log.e("MessagesAdapter", "Failed to resolve link: " + link, e);
                                     }
                                 }
                             });
@@ -95,7 +104,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         MessageGroup group = groups.get(position);
-        holder.bind(group, avatarClickListener);
+        holder.bind(group, avatarClickListener, getMarkwon(holder.itemView.getContext()));
     }
 
     @Override
@@ -103,7 +112,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
         return groups.size();
     }
 
-    class ViewHolder extends RecyclerView.ViewHolder {
+    public static class ViewHolder extends RecyclerView.ViewHolder {
         LinearLayout root;
         LinearLayout groupContainer;
         LinearLayout headerRow;
@@ -129,32 +138,30 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             tvOwnerTag = itemView.findViewById(R.id.tvOwnerTag);
         }
 
-        void bind(MessageGroup group, OnAvatarClickListener listener) {
-            root.setGravity(group.mine ? Gravity.RIGHT : Gravity.LEFT);
-            groupContainer.setGravity(group.mine ? Gravity.RIGHT : Gravity.LEFT);
-            headerRow.setGravity(group.mine ? Gravity.RIGHT : Gravity.LEFT);
-            contentColumn.setGravity(group.mine ? Gravity.RIGHT : Gravity.LEFT);
-            messageColumn.setGravity(group.mine ? Gravity.RIGHT : Gravity.LEFT);
+        void bind(MessageGroup group, OnAvatarClickListener listener, Markwon markwon) {
+            root.setGravity(group.mine ? Gravity.END : Gravity.START);
+            groupContainer.setGravity(group.mine ? Gravity.END : Gravity.START);
+            headerRow.setGravity(group.mine ? Gravity.END : Gravity.START);
+            contentColumn.setGravity(group.mine ? Gravity.END : Gravity.START);
+            messageColumn.setGravity(group.mine ? Gravity.END : Gravity.START);
             applyGroupOrder(group.mine);
             applyHeaderOrder(group.mine);
 
-            tvName.setText(group.senderName == null || group.senderName.length() == 0 ? itemView.getContext().getString(R.string.unknown_user) : group.senderName);
+            tvName.setText(TextUtils.isEmpty(group.senderName) ? itemView.getContext().getString(R.string.unknown_user) : group.senderName);
             tvTime.setText(TimeUtils.formatMessageTime(group.firstSendTime));
             ImageUtils.loadAvatar(itemView.getContext(), group.avatarUrl, ivAvatar);
-            // 管理员标签：仅在群聊且 sender 是管理员时显示
             tvAdminTag.setVisibility(group.isAdmin ? View.VISIBLE : View.GONE);
-            // 群主标签：sender 是群主时显示
             tvOwnerTag.setVisibility(group.isOwner ? View.VISIBLE : View.GONE);
 
             ivAvatar.setOnClickListener(v -> {
-                if (listener != null && group.senderId != null && group.senderId.length() > 0 && group.senderChatType > 0) {
+                if (listener != null && !TextUtils.isEmpty(group.senderId) && group.senderChatType > 0) {
                     listener.onAvatarClick(group.senderId, group.senderChatType);
                 }
             });
 
             contentColumn.removeAllViews();
             for (int i = 0; i < group.messages.size(); i++) {
-                View bubble = createBubble(group, group.messages.get(i), i, group.messages.size());
+                View bubble = createBubble(group, group.messages.get(i), i, group.messages.size(), markwon);
                 contentColumn.addView(bubble);
             }
         }
@@ -221,19 +228,25 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             view.setLayoutParams(params);
         }
 
-        private View createBubble(MessageGroup group, Msg msg, int index, int count) {
-            if (msg != null && msg.content != null && msg.content.video_url != null && msg.content.video_url.length() > 0) {
-                return createVideoBubble(group, msg, index, count);
-            }
-            if (msg != null && msg.content != null && msg.content.image_url != null && msg.content.image_url.length() > 0) {
-                return createImageBubble(group, msg, index, count);
-            }
-            if (msg != null && msg.content != null && msg.content.file_name != null && msg.content.file_name.length() > 0 && msg.content.file_url != null && msg.content.file_url.length() > 0) {
-                return createFileBubble(group, msg, index, count);
-            }
-            // content_type=6 为文章消息
-            if (msg != null && msg.content_type == 6 && msg.content != null && msg.content.post_id != null && msg.content.post_id.length() > 0) {
-                return createPostBubble(group, msg, index, count);
+        private View createBubble(MessageGroup group, Msg msg, int index, int count, Markwon markwon) {
+            View rawBubble = createRawBubble(group, msg, index, count, markwon);
+            return applyRecallIfNeeded(group, msg, rawBubble);
+        }
+
+        private View createRawBubble(MessageGroup group, Msg msg, int index, int count, Markwon markwon) {
+            if (msg != null && msg.msg_delete_time <= 0) {
+                if (msg.content != null && msg.content.video_url != null && !msg.content.video_url.isEmpty()) {
+                    return createVideoBubble(group, msg, index, count);
+                }
+                if (msg.content != null && msg.content.image_url != null && !msg.content.image_url.isEmpty()) {
+                    return createImageBubble(group, msg, index, count);
+                }
+                if (msg.content != null && msg.content.file_name != null && !msg.content.file_name.isEmpty() && msg.content.file_url != null && !msg.content.file_url.isEmpty()) {
+                    return createFileBubble(group, msg, index, count);
+                }
+                if (msg.content_type == 6 && msg.content != null && msg.content.post_id != null && !msg.content.post_id.isEmpty()) {
+                    return createPostBubble(group, msg, index, count);
+                }
             }
             TextView textView = new TextView(itemView.getContext());
             int emojiSize = dp(22);
@@ -241,23 +254,21 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             int linkColor = group.mine ? 0xFFE0F2FE : 0xFF1A73E8;
             textView.setLinkTextColor(linkColor);
 
-            boolean isMarkdown = msg != null && msg.content_type == 3;
-            if (isMarkdown) {
-                getMarkwon(itemView.getContext()).setMarkdown(textView, getMessageText(msg));
+            boolean isMarkdown = msg != null && msg.content_type == 3 && msg.msg_delete_time <= 0;
+            if (isMarkdown && markwon != null) {
+                markwon.setMarkdown(textView, getMessageText(msg));
             } else {
                 textView.setText(displayText, TextView.BufferType.SPANNABLE);
-                com.nago8.chat.old.utils.InternalLinkUtils.processTextViewLinks(textView, group.mine);
+                InternalLinkUtils.processTextViewLinks(textView, group.mine);
             }
             textView.setTextSize(15);
-            textView.setTextColor(itemView.getResources().getColor(group.mine ? android.R.color.white : R.color.bubble_text_left));
-            textView.setGravity(Gravity.LEFT);
+            textView.setTextColor(ContextCompat.getColor(itemView.getContext(), group.mine ? android.R.color.white : R.color.bubble_text_left));
+            textView.setGravity(Gravity.START);
 
-            // 判断是否有引用消息
-            String quoteTextStr = getQuoteText(msg);
-            boolean hasQuote = quoteTextStr != null && quoteTextStr.length() > 0;
+            String quoteTextStr = (msg != null && msg.msg_delete_time <= 0) ? getQuoteText(msg) : null;
+            boolean hasQuote = !TextUtils.isEmpty(quoteTextStr);
 
             if (hasQuote) {
-                // 带引用的消息：垂直布局，气泡宽度由引用内容与消息内容共同自适应决定
                 Context ctx = itemView.getContext();
                 LinearLayout container = new LinearLayout(ctx);
                 container.setOrientation(LinearLayout.VERTICAL);
@@ -281,11 +292,10 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                 params.topMargin = dp(2);
                 params.leftMargin = group.mine ? dp(48) : 0;
                 params.rightMargin = group.mine ? 0 : dp(48);
-                params.gravity = group.mine ? Gravity.RIGHT : Gravity.LEFT;
+                params.gravity = group.mine ? Gravity.END : Gravity.START;
                 container.setLayoutParams(params);
                 return container;
             } else {
-                // 普通文本消息：气泡宽度严格根据消息内容文本长度自适应包裹
                 textView.setBackgroundResource(getBubbleBackground(group.mine, index, count));
                 textView.setPadding(dp(12), dp(8), dp(12), dp(8));
 
@@ -296,21 +306,43 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                 if (isMarkdown) {
                     params.width = dp(220);
                 }
-                params.gravity = group.mine ? Gravity.RIGHT : Gravity.LEFT;
+                params.gravity = group.mine ? Gravity.END : Gravity.START;
                 textView.setLayoutParams(params);
                 return textView;
             }
         }
 
-        /**
-         * 视频消息气泡：视频图标 + 文件名，引用消息，点击跳转 VideoPlayerActivity 播放视频
-         */
+        private View applyRecallIfNeeded(MessageGroup group, Msg msg, View bubbleView) {
+            if (msg == null || msg.msg_delete_time <= 0) {
+                return bubbleView;
+            }
+            bubbleView.setAlpha(0.55f);
+            return bubbleView;
+        }
+
+        private String formatRecallTime(long deleteTime) {
+            long tsMs = deleteTime > 100000000000L ? deleteTime : deleteTime * 1000L;
+            Calendar nowCal = Calendar.getInstance();
+            Calendar msgCal = Calendar.getInstance();
+            msgCal.setTimeInMillis(tsMs);
+
+            String pattern;
+            if (msgCal.get(Calendar.YEAR) < nowCal.get(Calendar.YEAR)) {
+                pattern = "yyyy年M月d日 HH:mm";
+            } else {
+                pattern = "M月d日 HH:mm";
+            }
+
+            SimpleDateFormat sdf = new SimpleDateFormat(pattern, Locale.getDefault());
+            return "该消息已于 " + sdf.format(msgCal.getTime()) + " 撤回";
+        }
+
         private View createVideoBubble(MessageGroup group, Msg msg, int index, int count) {
             final Context ctx = itemView.getContext();
             final String videoUrl = msg.content.video_url;
-            final String videoTitle = msg.content.file_name != null && msg.content.file_name.length() > 0 ? msg.content.file_name : ctx.getString(R.string.preview_video);
+            final String videoTitle = !TextUtils.isEmpty(msg.content.file_name) ? msg.content.file_name : ctx.getString(R.string.preview_video);
 
-            int textColor = itemView.getResources().getColor(group.mine ? android.R.color.white : R.color.bubble_text_left);
+            int textColor = ContextCompat.getColor(ctx, group.mine ? android.R.color.white : R.color.bubble_text_left);
 
             LinearLayout container = new LinearLayout(ctx);
             container.setOrientation(LinearLayout.VERTICAL);
@@ -320,7 +352,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             container.setFocusable(true);
 
             String quoteTextStr = getQuoteText(msg);
-            if (quoteTextStr != null && quoteTextStr.length() > 0) {
+            if (!TextUtils.isEmpty(quoteTextStr)) {
                 View quoteView = createQuoteView(ctx, quoteTextStr);
                 if (quoteView != null) {
                     container.addView(quoteView);
@@ -331,7 +363,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             videoRow.setOrientation(LinearLayout.HORIZONTAL);
             videoRow.setGravity(Gravity.CENTER_VERTICAL);
             LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            if (quoteTextStr != null && quoteTextStr.length() > 0) {
+            if (!TextUtils.isEmpty(quoteTextStr)) {
                 rowParams.topMargin = dp(4);
             }
             videoRow.setLayoutParams(rowParams);
@@ -367,21 +399,18 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             params.topMargin = dp(2);
             params.leftMargin = group.mine ? dp(48) : 0;
             params.rightMargin = group.mine ? 0 : dp(48);
-            params.gravity = group.mine ? Gravity.RIGHT : Gravity.LEFT;
+            params.gravity = group.mine ? Gravity.END : Gravity.START;
             container.setLayoutParams(params);
 
             return container;
         }
 
-        /**
-         * 文章消息气泡：文章图标 + 标题，点击进入文章详情。
-         */
         private View createPostBubble(MessageGroup group, Msg msg, int index, int count) {
             final Context ctx = itemView.getContext();
             final String postId = msg.content.post_id;
             final String postTitle = msg.content.post_title != null ? msg.content.post_title : "";
 
-            int textColor = itemView.getResources().getColor(group.mine ? android.R.color.white : R.color.bubble_text_left);
+            int textColor = ContextCompat.getColor(ctx, group.mine ? android.R.color.white : R.color.bubble_text_left);
 
             LinearLayout container = new LinearLayout(ctx);
             container.setOrientation(LinearLayout.HORIZONTAL);
@@ -391,7 +420,6 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             container.setClickable(true);
             container.setFocusable(true);
 
-            // 文章图标
             ImageView icon = new ImageView(ctx);
             int iconSize = dp(22);
             LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(iconSize, iconSize);
@@ -401,9 +429,8 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             icon.setColorFilter(textColor);
             container.addView(icon);
 
-            // 文章标题
             TextView tvTitle = new TextView(ctx);
-            tvTitle.setText(postTitle.length() > 0 ? postTitle : ctx.getString(R.string.preview_article));
+            tvTitle.setText(!postTitle.isEmpty() ? postTitle : ctx.getString(R.string.preview_article));
             tvTitle.setTextSize(15);
             tvTitle.setTextColor(textColor);
             tvTitle.setMaxWidth(dp(220));
@@ -411,7 +438,6 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             tvTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
             container.addView(tvTitle);
 
-            // 点击跳转文章详情
             container.setOnClickListener(v -> {
                 Intent intent = new Intent(ctx, PostDetailActivity.class);
                 intent.putExtra(PostDetailActivity.EXTRA_POST_ID, postId);
@@ -423,7 +449,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             params.topMargin = dp(2);
             params.leftMargin = group.mine ? dp(48) : 0;
             params.rightMargin = group.mine ? 0 : dp(48);
-            params.gravity = group.mine ? Gravity.RIGHT : Gravity.LEFT;
+            params.gravity = group.mine ? Gravity.END : Gravity.START;
             container.setLayoutParams(params);
 
             return container;
@@ -440,9 +466,8 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             container.setBackgroundResource(getBubbleBackground(group.mine, index, count));
             container.setPadding(dp(12), dp(8), dp(12), dp(8));
 
-            int textColor = itemView.getResources().getColor(group.mine ? android.R.color.white : R.color.bubble_text_left);
+            int textColor = ContextCompat.getColor(ctx, group.mine ? android.R.color.white : R.color.bubble_text_left);
 
-            // 文件信息行：图标 + 文件名 + 大小
             LinearLayout infoRow = new LinearLayout(ctx);
             infoRow.setOrientation(LinearLayout.HORIZONTAL);
             infoRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -482,7 +507,6 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             infoRow.addView(textCol);
             container.addView(infoRow);
 
-            // 操作行：下载按钮 / 进度条+取消按钮 / 打开按钮
             final LinearLayout actionRow = new LinearLayout(ctx);
             actionRow.setOrientation(LinearLayout.HORIZONTAL);
             actionRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -513,97 +537,84 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             actionRow.addView(btnIcon);
             container.addView(actionRow);
 
-            // 状态管理
             final FileDownloadManager dm = FileDownloadManager.getInstance();
             final boolean[] isDownloading = {dm.isDownloading(fileUrl)};
 
-            Runnable updateUI = new Runnable() {
-                @Override
-                public void run() {
-                    if (isDownloading[0]) {
-                        btnAction.setVisibility(View.GONE);
-                        progressBar.setVisibility(View.VISIBLE);
-                        btnIcon.setVisibility(View.VISIBLE);
-                        btnIcon.setImageResource(R.drawable.ic_close);
-                        int p = dm.getProgress(fileUrl);
-                        if (p >= 0) progressBar.setProgress(p);
-                    } else {
-                        progressBar.setVisibility(View.GONE);
-                        btnAction.setVisibility(View.VISIBLE);
-                        btnIcon.setVisibility(View.VISIBLE);
-                        btnAction.setText(R.string.message_file_download);
-                        btnIcon.setImageResource(R.drawable.ic_download);
-                    }
+            Runnable updateUI = () -> {
+                if (isDownloading[0]) {
+                    btnAction.setVisibility(View.GONE);
+                    progressBar.setVisibility(View.VISIBLE);
+                    btnIcon.setVisibility(View.VISIBLE);
+                    btnIcon.setImageResource(R.drawable.ic_close);
+                    int p = dm.getProgress(fileUrl);
+                    if (p >= 0) progressBar.setProgress(p);
+                } else {
+                    progressBar.setVisibility(View.GONE);
+                    btnAction.setVisibility(View.VISIBLE);
+                    btnIcon.setVisibility(View.VISIBLE);
+                    btnAction.setText(R.string.message_file_download);
+                    btnIcon.setImageResource(R.drawable.ic_download);
                 }
             };
             updateUI.run();
 
-            View.OnClickListener clickListener = new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    if (isDownloading[0]) {
-                        // 取消下载
-                        dm.cancel(fileUrl);
-                        isDownloading[0] = false;
-                        updateUI.run();
-                    } else {
-                        // 开始下载
-                        isDownloading[0] = true;
-                        updateUI.run();
-                        dm.download(ctx, fileUrl, fileName, new FileDownloadManager.DownloadCallback() {
-                            @Override
-                            public void onProgress(int percent) {
-                                ((android.app.Activity) ctx).runOnUiThread(() -> {
-                                    progressBar.setProgress(percent);
-                                    btnAction.setVisibility(View.VISIBLE);
-                                    btnAction.setText(ctx.getString(R.string.message_file_downloading, percent));
-                                    btnAction.setAlpha(0.7f);
-                                });
-                            }
+            View.OnClickListener clickListener = v -> {
+                if (isDownloading[0]) {
+                    dm.cancel(fileUrl);
+                    isDownloading[0] = false;
+                    updateUI.run();
+                } else {
+                    isDownloading[0] = true;
+                    updateUI.run();
+                    dm.download(ctx, fileUrl, fileName, new FileDownloadManager.DownloadCallback() {
+                        @Override
+                        public void onProgress(int percent) {
+                            ((android.app.Activity) ctx).runOnUiThread(() -> {
+                                progressBar.setProgress(percent);
+                                btnAction.setVisibility(View.VISIBLE);
+                                btnAction.setText(ctx.getString(R.string.message_file_downloading, percent));
+                                btnAction.setAlpha(0.7f);
+                            });
+                        }
 
-                            @Override
-                            public void onComplete(File file) {
-                                ((android.app.Activity) ctx).runOnUiThread(() -> {
-                                    isDownloading[0] = false;
-                                    progressBar.setVisibility(View.GONE);
-                                    btnAction.setText(R.string.message_file_open);
-                                    btnAction.setAlpha(1f);
-                                    btnIcon.setImageResource(R.drawable.ic_file);
-                                    btnIcon.setTag(file);
-                                });
-                            }
+                        @Override
+                        public void onComplete(File file) {
+                            ((android.app.Activity) ctx).runOnUiThread(() -> {
+                                isDownloading[0] = false;
+                                progressBar.setVisibility(View.GONE);
+                                btnAction.setText(R.string.message_file_open);
+                                btnAction.setAlpha(1f);
+                                btnIcon.setImageResource(R.drawable.ic_file);
+                                btnIcon.setTag(file);
+                            });
+                        }
 
-                            @Override
-                            public void onError(Exception error) {
-                                ((android.app.Activity) ctx).runOnUiThread(() -> {
-                                    isDownloading[0] = false;
-                                    updateUI.run();
-                                    btnAction.setText(R.string.message_file_failed);
-                                });
-                            }
+                        @Override
+                        public void onError(Exception error) {
+                            ((android.app.Activity) ctx).runOnUiThread(() -> {
+                                isDownloading[0] = false;
+                                updateUI.run();
+                                btnAction.setText(R.string.message_file_failed);
+                            });
+                        }
 
-                            @Override
-                            public void onCancel() {
-                                ((android.app.Activity) ctx).runOnUiThread(() -> {
-                                    isDownloading[0] = false;
-                                    updateUI.run();
-                                });
-                            }
-                        });
-                    }
+                        @Override
+                        public void onCancel() {
+                            ((android.app.Activity) ctx).runOnUiThread(() -> {
+                                isDownloading[0] = false;
+                                updateUI.run();
+                            });
+                        }
+                    });
                 }
             };
 
-            // 统一点击逻辑：下载中→取消，已下载→打开，未下载→开始下载
-            View.OnClickListener unifiedClickListener = new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
+            View.OnClickListener unifiedClickListener = v -> {
                 Object tag = btnIcon.getTag();
                 if (tag instanceof File) {
                     FileDownloadManager.openFile(ctx, (File) tag);
                 } else {
                     clickListener.onClick(v);
-                }
                 }
             };
             btnAction.setOnClickListener(unifiedClickListener);
@@ -613,30 +624,30 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             params.topMargin = dp(2);
             params.leftMargin = group.mine ? dp(48) : 0;
             params.rightMargin = group.mine ? 0 : dp(48);
-            params.gravity = group.mine ? Gravity.RIGHT : Gravity.LEFT;
+            params.gravity = group.mine ? Gravity.END : Gravity.START;
             container.setLayoutParams(params);
             return container;
         }
 
         private String getQuoteText(Msg msg) {
             if (msg == null || msg.content == null) return null;
-            if (msg.content.quote_msg_text != null && msg.content.quote_msg_text.length() > 0) {
+            if (!TextUtils.isEmpty(msg.content.quote_msg_text)) {
                 return msg.content.quote_msg_text;
             }
-            if (msg.content.quote_image_url != null && msg.content.quote_image_url.length() > 0) {
-                if (msg.content.quote_image_name != null && msg.content.quote_image_name.length() > 0) {
+            if (!TextUtils.isEmpty(msg.content.quote_image_url)) {
+                if (!TextUtils.isEmpty(msg.content.quote_image_name)) {
                     return "[图片] " + msg.content.quote_image_name;
                 }
                 return "[图片]";
             }
-            if (msg.content.quote_video_url != null && msg.content.quote_video_url.length() > 0) {
+            if (!TextUtils.isEmpty(msg.content.quote_video_url)) {
                 return "[视频]";
             }
             return null;
         }
 
         private View createQuoteView(Context ctx, String quoteMsgText) {
-            if (quoteMsgText == null || quoteMsgText.trim().isEmpty()) return null;
+            if (TextUtils.isEmpty(quoteMsgText) || quoteMsgText.trim().isEmpty()) return null;
 
             LinearLayout quoteBlock = new LinearLayout(ctx);
             quoteBlock.setOrientation(LinearLayout.HORIZONTAL);
@@ -651,13 +662,13 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             LinearLayout.LayoutParams barParams = new LinearLayout.LayoutParams(barW, barH);
             barParams.rightMargin = dp(8);
             quoteBar.setLayoutParams(barParams);
-            quoteBar.setBackgroundColor(ctx.getResources().getColor(R.color.divider_color));
+            quoteBar.setBackgroundColor(ContextCompat.getColor(ctx, R.color.divider_color));
             quoteBlock.addView(quoteBar);
 
             TextView quoteText = new TextView(ctx);
             quoteText.setText(FengEmojiRenderer.apply(ctx, quoteMsgText, dp(18)), TextView.BufferType.SPANNABLE);
             quoteText.setTextSize(13);
-            quoteText.setTextColor(ctx.getResources().getColor(R.color.text_secondary));
+            quoteText.setTextColor(ContextCompat.getColor(ctx, R.color.text_secondary));
             quoteText.setMaxLines(3);
             quoteText.setMaxWidth(dp(220));
             quoteText.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -676,7 +687,6 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             container.setPadding(dp(12), dp(8), dp(12), dp(8));
             container.setClickable(true);
 
-            // 解析并展示被引用的消息（如果存在）
             String quoteTextStr = getQuoteText(msg);
             View quoteView = createQuoteView(ctx, quoteTextStr);
             if (quoteView != null) {
@@ -693,13 +703,13 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             iconParams.rightMargin = dp(6);
             icon.setLayoutParams(iconParams);
             icon.setImageResource(R.drawable.ic_image);
-            icon.setColorFilter(itemView.getResources().getColor(group.mine ? android.R.color.white : R.color.bubble_text_left));
+            icon.setColorFilter(ContextCompat.getColor(ctx, group.mine ? android.R.color.white : R.color.bubble_text_left));
             imageRow.addView(icon);
 
             TextView text = new TextView(ctx);
             text.setText(R.string.message_image);
             text.setTextSize(15);
-            text.setTextColor(itemView.getResources().getColor(group.mine ? android.R.color.white : R.color.bubble_text_left));
+            text.setTextColor(ContextCompat.getColor(ctx, group.mine ? android.R.color.white : R.color.bubble_text_left));
             imageRow.addView(text);
 
             container.addView(imageRow);
@@ -708,11 +718,11 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             params.topMargin = dp(2);
             params.leftMargin = group.mine ? dp(48) : 0;
             params.rightMargin = group.mine ? 0 : dp(48);
-            params.gravity = group.mine ? Gravity.RIGHT : Gravity.LEFT;
+            params.gravity = group.mine ? Gravity.END : Gravity.START;
             container.setLayoutParams(params);
 
             container.setOnClickListener(v -> {
-                if (url != null && url.length() > 0) {
+                if (!TextUtils.isEmpty(url)) {
                     Intent intent = new Intent(ctx, ImagePreviewActivity.class);
                     intent.putExtra(ImagePreviewActivity.EXTRA_IMAGE_URL, url);
                     ctx.startActivity(intent);
@@ -731,12 +741,15 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
         }
 
         private String getMessageText(Msg msg) {
+            if (msg != null && msg.msg_delete_time > 0) {
+                return formatRecallTime(msg.msg_delete_time);
+            }
             if (msg == null || msg.content == null) return itemView.getContext().getString(R.string.message_unsupported);
-            if (msg.content.text != null && msg.content.text.length() > 0) return msg.content.text;
-            if (msg.content.image_url != null && msg.content.image_url.length() > 0) return itemView.getContext().getString(R.string.message_image);
-            if (msg.content.file_name != null && msg.content.file_name.length() > 0) return itemView.getContext().getString(R.string.message_file, msg.content.file_name);
-            if (msg.content.sticker_url != null && msg.content.sticker_url.length() > 0) return itemView.getContext().getString(R.string.message_sticker);
-            if (msg.content.tip != null && msg.content.tip.length() > 0) return msg.content.tip;
+            if (!TextUtils.isEmpty(msg.content.text)) return msg.content.text;
+            if (!TextUtils.isEmpty(msg.content.image_url)) return itemView.getContext().getString(R.string.message_image);
+            if (!TextUtils.isEmpty(msg.content.file_name)) return itemView.getContext().getString(R.string.message_file, msg.content.file_name);
+            if (!TextUtils.isEmpty(msg.content.sticker_url)) return itemView.getContext().getString(R.string.message_sticker);
+            if (!TextUtils.isEmpty(msg.content.tip)) return msg.content.tip;
             return itemView.getContext().getString(R.string.message_unsupported);
         }
 

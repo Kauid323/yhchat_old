@@ -75,7 +75,25 @@ public class WsMsgConverter {
      *               6-文章, 7-表情, 8-html, 11-语音, 13-语音通话
      */
     public static String toPreviewText(WsMsg wsMsg, Context ctx) {
-        if (wsMsg == null || wsMsg.content == null) {
+        if (wsMsg == null) {
+            return ctx.getString(R.string.preview_unknown);
+        }
+
+        if (wsMsg.delete_time > 0) {
+            long deleteTime = wsMsg.delete_time;
+            long tsMs = deleteTime > 100000000000L ? deleteTime : deleteTime * 1000L;
+            java.util.Calendar nowCal = java.util.Calendar.getInstance();
+            java.util.Calendar msgCal = java.util.Calendar.getInstance();
+            msgCal.setTimeInMillis(tsMs);
+
+            String pattern = msgCal.get(java.util.Calendar.YEAR) < nowCal.get(java.util.Calendar.YEAR)
+                    ? "yyyy年M月d日 HH:mm" : "M月d日 HH:mm";
+
+            java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat(pattern, java.util.Locale.getDefault());
+            return "该消息已于 " + sdf.format(msgCal.getTime()) + " 撤回";
+        }
+
+        if (wsMsg.content == null) {
             return ctx.getString(R.string.preview_unknown);
         }
 

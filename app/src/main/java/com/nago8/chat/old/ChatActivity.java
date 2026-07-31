@@ -3,16 +3,12 @@ package com.nago8.chat.old;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
-import android.text.Editable;
-import android.text.TextWatcher;
 import android.view.View;
-import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
-import androidx.appcompat.widget.AppCompatEditText;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.AppCompatImageButton;
@@ -23,21 +19,17 @@ import com.nago8.chat.old.fragments.MessagesAdapter;
 import com.nago8.chat.old.model.MessageGroup;
 import com.nago8.chat.old.repository.MessageRepository;
 import com.nago8.chat.old.repository.GroupRepository;
-import com.nago8.chat.old.net.ApiClient;
 import com.nago8.chat.old.proto.Msg;
 import com.nago8.chat.old.proto.send_message;
 import com.nago8.chat.old.proto.list_message;
 import com.nago8.chat.old.proto.list_message_by_seq;
 import com.nago8.chat.old.proto.group.info;
-import com.nago8.chat.old.proto.group.info_send;
 import com.nago8.chat.old.utils.PrefUtils;
 import com.nago8.chat.old.utils.LocaleHelper;
 import com.nago8.chat.old.utils.WsMsgConverter;
 import com.nago8.chat.old.ws.WsClient;
 import com.nago8.chat.old.proto.chat_ws_go.WsMsg;
 
-
-import java.io.IOException;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.PrintWriter;
@@ -49,15 +41,9 @@ import java.util.List;
 import java.util.Set;
 
 import okhttp3.Call;
-import okhttp3.Callback;
-import okhttp3.MediaType;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
 import android.net.Uri;
 
 import com.nago8.chat.old.components.ChatInputBar;
-import com.nago8.chat.old.utils.ImageUploadUtils;
 
 public class ChatActivity extends AppCompatActivity {
     public static final String EXTRA_CHAT_ID = "chat_id";
@@ -206,11 +192,12 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     private void handlePushMessage(WsMsg wsMsg) {
-        if (wsMsg == null || wsMsg.chat_id == null) return;
-        // 只处理当前聊天界面的消息
-        if (!chatId.equals(wsMsg.chat_id)) return;
-
+        if (wsMsg == null) return;
         String myUserId = PrefUtils.getUserId(this);
+        String targetChatId = WsClient.getTargetChatId(wsMsg, myUserId);
+        // 只处理当前聊天界面的消息
+        if (targetChatId == null || !chatId.equals(targetChatId)) return;
+
         Msg msg = WsMsgConverter.convert(wsMsg, myUserId);
         if (msg == null) return;
 
