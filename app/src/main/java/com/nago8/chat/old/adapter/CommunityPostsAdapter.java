@@ -29,9 +29,11 @@ public class CommunityPostsAdapter extends RecyclerView.Adapter<RecyclerView.Vie
 
     private static final int VIEW_TYPE_ITEM = 0;
     private static final int VIEW_TYPE_FOOTER = 1;
+    private static final int VIEW_TYPE_HEADER = 2;
 
     private final Context context;
     private final List<CommunityPostModel> postList = new ArrayList<>();
+    private View headerView;
     private int footerState = STATE_LOADING;
     private OnLoadMoreClickListener onLoadMoreClickListener;
 
@@ -44,13 +46,25 @@ public class CommunityPostsAdapter extends RecyclerView.Adapter<RecyclerView.Vie
         setHasStableIds(false);
     }
 
+    public void setHeaderView(View headerView) {
+        this.headerView = headerView;
+        notifyDataSetChanged();
+    }
+
     public void setOnLoadMoreClickListener(OnLoadMoreClickListener listener) {
         this.onLoadMoreClickListener = listener;
     }
 
     public void setPosts(List<CommunityPostModel> newPosts) {
         if (newPosts == null) newPosts = new ArrayList<>();
-        
+
+        if (headerView != null) {
+            this.postList.clear();
+            this.postList.addAll(newPosts);
+            notifyDataSetChanged();
+            return;
+        }
+
         DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new PostDiffCallback(this.postList, newPosts));
         this.postList.clear();
         this.postList.addAll(newPosts);
@@ -59,7 +73,7 @@ public class CommunityPostsAdapter extends RecyclerView.Adapter<RecyclerView.Vie
 
     public void addPosts(List<CommunityPostModel> newPosts) {
         if (newPosts != null && !newPosts.isEmpty()) {
-            int start = this.postList.size();
+            int start = (headerView != null ? 1 : 0) + this.postList.size();
             this.postList.addAll(newPosts);
             notifyItemRangeInserted(start, newPosts.size());
         }
@@ -78,7 +92,11 @@ public class CommunityPostsAdapter extends RecyclerView.Adapter<RecyclerView.Vie
 
     @Override
     public int getItemViewType(int position) {
-        if (position == postList.size()) {
+        if (headerView != null && position == 0) {
+            return VIEW_TYPE_HEADER;
+        }
+        int footerPos = (headerView != null ? 1 : 0) + postList.size();
+        if (position == footerPos) {
             return VIEW_TYPE_FOOTER;
         }
         return VIEW_TYPE_ITEM;
@@ -87,6 +105,9 @@ public class CommunityPostsAdapter extends RecyclerView.Adapter<RecyclerView.Vie
     @NonNull
     @Override
     public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        if (viewType == VIEW_TYPE_HEADER) {
+            return new HeaderViewHolder(headerView);
+        }
         if (viewType == VIEW_TYPE_FOOTER) {
             View view = LayoutInflater.from(context).inflate(R.layout.item_community_footer, parent, false);
             return new FooterViewHolder(view);
@@ -98,7 +119,10 @@ public class CommunityPostsAdapter extends RecyclerView.Adapter<RecyclerView.Vie
     @Override
     public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
         if (holder instanceof PostViewHolder) {
-            ((PostViewHolder) holder).bind(postList.get(position));
+            int realPos = position - (headerView != null ? 1 : 0);
+            if (realPos >= 0 && realPos < postList.size()) {
+                ((PostViewHolder) holder).bind(postList.get(realPos));
+            }
         } else if (holder instanceof FooterViewHolder) {
             ((FooterViewHolder) holder).bind(footerState);
         }
@@ -106,7 +130,15 @@ public class CommunityPostsAdapter extends RecyclerView.Adapter<RecyclerView.Vie
 
     @Override
     public int getItemCount() {
-        return postList.isEmpty() ? 0 : postList.size() + 1;
+        int headerCount = (headerView != null ? 1 : 0);
+        int footerCount = postList.isEmpty() ? 0 : 1;
+        return headerCount + postList.size() + footerCount;
+    }
+
+    private static class HeaderViewHolder extends RecyclerView.ViewHolder {
+        public HeaderViewHolder(@NonNull View itemView) {
+            super(itemView);
+        }
     }
 
     private static class PostDiffCallback extends DiffUtil.Callback {
@@ -170,11 +202,11 @@ public class CommunityPostsAdapter extends RecyclerView.Adapter<RecyclerView.Vie
                     break;
                 case STATE_CLICK_TO_LOAD:
                     if (progressBar != null) progressBar.setVisibility(View.GONE);
-                    tvFooterText.setText("点击加载更多");
+                    tvFooterText.setText(R.string.load_more_click);
                     break;
                 case STATE_NO_MORE:
                     if (progressBar != null) progressBar.setVisibility(View.GONE);
-                    tvFooterText.setText("已加载全部文章");
+                    tvFooterText.setText(R.string.loaded_all_posts);
                     break;
             }
         }
@@ -208,8 +240,9 @@ public class CommunityPostsAdapter extends RecyclerView.Adapter<RecyclerView.Vie
 
             itemView.setOnClickListener(v -> {
                 int pos = getAdapterPosition();
-                if (pos != RecyclerView.NO_POSITION && pos < postList.size()) {
-                    CommunityPostModel item = postList.get(pos);
+                int realPos = pos - (headerView != null ? 1 : 0);
+                if (pos != RecyclerView.NO_POSITION && realPos >= 0 && realPos < postList.size()) {
+                    CommunityPostModel item = postList.get(realPos);
                     Intent intent = new Intent(context, PostDetailActivity.class);
                     intent.putExtra(PostDetailActivity.EXTRA_POST_ID, String.valueOf(item.getId()));
                     intent.putExtra(PostDetailActivity.EXTRA_POST_TITLE, item.getTitle());
@@ -221,15 +254,14 @@ public class CommunityPostsAdapter extends RecyclerView.Adapter<RecyclerView.Vie
         public void bind(CommunityPostModel item) {
             if (item == null) return;
 
-            tvPostAuthorName.setText(item.getSenderNickname() != null && !item.getSenderNickname().isEmpty()
-                    ? item.getSenderNickname() : item.getSenderId());
+            tvPostAuthorName.setText(item.getDisplayAuthorName());
             tvPostTime.setText(item.getCreateTimeText() != null ? item.getCreateTimeText() : "");
             tvPostTitle.setText(item.getTitle() != null ? item.getTitle() : "");
             tvPostContent.setText(item.getContent() != null ? item.getContent() : "");
 
-            tvLikeCount.setText(String.valueOf(item.getLikeNum()));
-            tvCommentCount.setText(String.valueOf(item.getCommentNum()));
-            tvCollectCount.setText(String.valueOf(item.getCollectNum()));
+            tvLikeCount.setText(item.getLikeNumStr());
+            tvCommentCount.setText(item.getCommentNumStr());
+            tvCollectCount.setText(item.getCollectNumStr());
 
             ivLikeIcon.setImageResource(item.isLiked() ? R.drawable.ic_like_filled : R.drawable.ic_like_outline);
             ivCollectIcon.setImageResource(item.isCollected() ? R.drawable.ic_star_filled : R.drawable.ic_star_outline);

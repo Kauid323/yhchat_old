@@ -157,7 +157,7 @@ message send_message_send {
         string room_name = 29; // 语音房间发送显示信息的文本
         string bot_llm_params = 36; // 机器人大模型参数
     }
-    int64 content_type = 6; // 信息类别，1-文本，2-图片，3-markdown，4-文件，5-表单，6-文章，7-表情，8-html，11-语音，13-语音通话
+    int32 content_type = 6; // 信息类别，1-文本，2-图片，3-markdown，4-文件，5-表单，6-文章，7-表情，8-html，10-视频，11-语音，13-语音通话
     int64 command_id = 7; // 所使用命令ID
     string quote_msg_id = 8; // 引用信息ID
     Media media = 9;
@@ -241,7 +241,7 @@ message edit_message_send {
         int64 sticker_pack_id = 26; // 表情包ID
         string room_name = 29; // 语音房间发送显示信息的文本
     }
-    int64 content_type = 6; // 信息类别，1-文本，3-markdown，8-html
+    int32 content_type = 6; // 信息类别，1-文本，3-markdown，8-html
     string quote_msg_id = 8; // 引用信息ID
 }
 

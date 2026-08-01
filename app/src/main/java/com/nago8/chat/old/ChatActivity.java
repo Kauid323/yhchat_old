@@ -1,14 +1,18 @@
 package com.nago8.chat.old;
 
 import android.Manifest;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.view.Menu;
 import android.view.View;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -19,6 +23,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.AppCompatImageButton;
+import androidx.appcompat.widget.PopupMenu;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
@@ -62,6 +67,7 @@ public class ChatActivity extends AppCompatActivity {
     private static final int REQUEST_CODE_PICK_IMAGES = 2001;
     private static final int REQUEST_CODE_PICK_FILES = 2002;
     private static final int REQUEST_CODE_TAKE_PHOTO = 2003;
+    private static final int REQUEST_CODE_PICK_VIDEOS = 2004;
     private static final int REQUEST_CODE_CAMERA_PERMISSION = 3002;
 
     private Uri currentPhotoUri;
@@ -166,6 +172,8 @@ public class ChatActivity extends AppCompatActivity {
             }
         });
 
+        adapter.setOnMessageClickListener((anchorView, msg, group) -> showMessageDropMenu(anchorView, msg, group));
+
         setupComposeInput();
         fetchMessages();
     }
@@ -251,6 +259,15 @@ public class ChatActivity extends AppCompatActivity {
         startActivityForResult(Intent.createChooser(intent, getString(R.string.chat_pick_file_title)), REQUEST_CODE_PICK_FILES);
     }
 
+    @android.annotation.SuppressLint("InlinedApi")
+    private void openVideoPicker() {
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        intent.setType("video/*");
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        startActivityForResult(Intent.createChooser(intent, getString(R.string.chat_pick_video_title)), REQUEST_CODE_PICK_VIDEOS);
+    }
+
     private void openCamera() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
@@ -273,13 +290,27 @@ public class ChatActivity extends AppCompatActivity {
             }
 
             if (photoFile != null) {
-                currentPhotoUri = FileProvider.getUriForFile(
-                        this,
-                        getPackageName() + ".fileprovider",
-                        photoFile
-                );
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    currentPhotoUri = FileProvider.getUriForFile(
+                            this,
+                            getPackageName() + ".fileprovider",
+                            photoFile
+                    );
+                } else {
+                    currentPhotoUri = Uri.fromFile(photoFile);
+                }
+
                 takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, currentPhotoUri);
-                takePictureIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    takePictureIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                    List<ResolveInfo> resInfoList = getPackageManager().queryIntentActivities(takePictureIntent, PackageManager.MATCH_DEFAULT_ONLY);
+                    for (ResolveInfo resolveInfo : resInfoList) {
+                        String packageName = resolveInfo.activityInfo.packageName;
+                        grantUriPermission(packageName, currentPhotoUri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    }
+                }
+
                 startActivityForResult(takePictureIntent, REQUEST_CODE_TAKE_PHOTO);
             }
         } else {
@@ -313,7 +344,7 @@ public class ChatActivity extends AppCompatActivity {
 
         if (data == null) return;
 
-        if (requestCode == REQUEST_CODE_PICK_IMAGES || requestCode == REQUEST_CODE_PICK_FILES) {
+        if (requestCode == REQUEST_CODE_PICK_IMAGES || requestCode == REQUEST_CODE_PICK_FILES || requestCode == REQUEST_CODE_PICK_VIDEOS) {
             List<Uri> selectedUris = new ArrayList<>();
             if (data.getClipData() != null) {
                 int count = data.getClipData().getItemCount();
@@ -328,6 +359,8 @@ public class ChatActivity extends AppCompatActivity {
             if (!selectedUris.isEmpty()) {
                 if (requestCode == REQUEST_CODE_PICK_IMAGES) {
                     uploadAndSendImages(selectedUris);
+                } else if (requestCode == REQUEST_CODE_PICK_VIDEOS) {
+                    uploadAndSendVideos(selectedUris);
                 } else {
                     uploadAndSendFiles(selectedUris);
                 }
@@ -432,10 +465,57 @@ public class ChatActivity extends AppCompatActivity {
         });
     }
 
+    private void uploadAndSendVideos(List<Uri> uris) {
+        String token = PrefUtils.getToken(this);
+        if (token == null || token.isEmpty()) {
+            Toast.makeText(this, R.string.chat_not_logged_in, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        List<Uri> validUris = new ArrayList<>();
+        for (Uri uri : uris) {
+            com.nago8.chat.old.utils.MiscSettingManager.SizeCheckResult check =
+                    com.nago8.chat.old.utils.MiscSettingManager.getInstance().checkMediaSize(this, uri, com.nago8.chat.old.utils.MiscSettingManager.MediaType.VIDEO);
+            if (!check.isAllowed) {
+                Toast.makeText(this, check.errorMessage, Toast.LENGTH_LONG).show();
+            } else {
+                validUris.add(uri);
+            }
+        }
+
+        if (validUris.isEmpty()) return;
+
+        Toast.makeText(this, "正在准备发送 " + validUris.size() + " 个视频...", Toast.LENGTH_SHORT).show();
+
+        repository.uploadAndSendVideos(this, token, chatId, chatType, validUris, new MessageRepository.VideoUploadListener() {
+            @Override
+            public void onProgress(int index, int total) {
+            }
+
+            @Override
+            public void onVideoSuccess(int index, int total, String fileName) {
+                runOnUiThread(() -> {
+                    Toast.makeText(ChatActivity.this, "视频发送成功", Toast.LENGTH_SHORT).show();
+                    fetchLatestMessage();
+                });
+            }
+
+            @Override
+            public void onVideoError(int index, int total, Exception error) {
+                runOnUiThread(() -> Toast.makeText(ChatActivity.this, getString(R.string.chat_video_failed_format, error.getMessage()), Toast.LENGTH_SHORT).show());
+            }
+
+            @Override
+            public void onAllCompleted() {
+            }
+        });
+    }
+
     private void setupComposeInput() {
         chatInputBar = findViewById(R.id.chatInputBar);
         if (chatInputBar != null) {
             chatInputBar.setOnSendClickListener(this::performSend);
+            chatInputBar.setOnQuoteDismissListener(() -> { /* quote cleared by user tapping ✕ */ });
             chatInputBar.setOnPanelActionClickListener(actionType -> {
                 if ("image".equals(actionType)) {
                     openImagePicker();
@@ -443,12 +523,11 @@ public class ChatActivity extends AppCompatActivity {
                     openCamera();
                 } else if ("file".equals(actionType)) {
                     openFilePicker();
+                } else if ("video".equals(actionType)) {
+                    openVideoPicker();
                 } else {
                     String actionName;
                     switch (actionType) {
-                        case "video":
-                            actionName = getString(R.string.chat_action_video);
-                            break;
                         case "record":
                             actionName = getString(R.string.chat_action_record);
                             break;
@@ -472,12 +551,40 @@ public class ChatActivity extends AppCompatActivity {
         if (text == null || text.trim().isEmpty()) return;
         String token = PrefUtils.getToken(this);
         if (chatInputBar != null) chatInputBar.setSendEnabled(false);
-        sendCall = repository.sendMessage(token, chatId, chatType, text, new MessageRepository.SendMessageCallback() {
+
+        // Collect quote data from the preview bar
+        com.nago8.chat.old.proto.Msg quoteMsg = chatInputBar != null ? chatInputBar.getPendingQuoteMsg() : null;
+        String quoteId = null;
+        String quoteText = null;
+        if (quoteMsg != null) {
+            quoteId = quoteMsg.quote_msg_id != null && !quoteMsg.quote_msg_id.isEmpty()
+                    ? quoteMsg.quote_msg_id : quoteMsg.msg_id;
+            String senderName = (quoteMsg.sender != null && quoteMsg.sender.name != null && !quoteMsg.sender.name.isEmpty())
+                    ? quoteMsg.sender.name : getString(R.string.chat_msg_default);
+            String msgContent;
+            if (quoteMsg.content != null && quoteMsg.content.text != null && !quoteMsg.content.text.isEmpty()) {
+                msgContent = quoteMsg.content.text;
+            } else if (quoteMsg.content != null && quoteMsg.content.image_url != null && !quoteMsg.content.image_url.isEmpty()) {
+                msgContent = getString(R.string.preview_image);
+            } else if (quoteMsg.content != null && quoteMsg.content.video_url != null && !quoteMsg.content.video_url.isEmpty()) {
+                msgContent = getString(R.string.preview_video);
+            } else if (quoteMsg.content != null && quoteMsg.content.file_name != null && !quoteMsg.content.file_name.isEmpty()) {
+                msgContent = quoteMsg.content.file_name;
+            } else {
+                msgContent = getString(R.string.preview_unknown);
+            }
+            quoteText = senderName + "：" + msgContent;
+        }
+
+        final String finalQuoteId = quoteId;
+        final String finalQuoteText = quoteText;
+        sendCall = repository.sendMessage(token, chatId, chatType, text, finalQuoteId, finalQuoteText, new MessageRepository.SendMessageCallback() {
             @Override
             public void onSuccess(send_message response) {
                 runOnUiThread(() -> {
                     if (chatInputBar != null) {
                         chatInputBar.clearInput();
+                        chatInputBar.clearQuote();
                         chatInputBar.setSendEnabled(true);
                     }
                     // 发送成功后依赖 WS 推送自动插入消息到列表
@@ -693,6 +800,149 @@ public class ChatActivity extends AppCompatActivity {
                 previous.uncaughtException(thread, throwable);
             }
         });
+    }
+
+    private void showMessageDropMenu(View anchorView, Msg msg, MessageGroup group) {
+        if (msg == null) return;
+        // 1. 排除已撤回消息
+        if (msg.msg_delete_time > 0) return;
+
+        // 2. 排除 Tip / 系统提示消息
+        if (msg.content_type == 9 || msg.content_type == 12) return;
+        if (msg.content != null && !android.text.TextUtils.isEmpty(msg.content.tip)
+                && android.text.TextUtils.isEmpty(msg.content.text)
+                && android.text.TextUtils.isEmpty(msg.content.image_url)
+                && android.text.TextUtils.isEmpty(msg.content.video_url)
+                && android.text.TextUtils.isEmpty(msg.content.file_name)) {
+            return;
+        }
+
+        List<String> options = new ArrayList<>();
+        List<Integer> actions = new ArrayList<>();
+
+        // 获取可复制文本
+        final String copyContent = getCopyableContent(msg);
+        if (!copyContent.isEmpty()) {
+            options.add(getString(R.string.menu_copy));
+            actions.add(1);
+        }
+
+        // 回复
+        options.add(getString(R.string.menu_reply));
+        actions.add(2);
+
+        // 撤回 (如果是自己发送的消息，或者具备管理权限)
+        String myUserId = PrefUtils.getUserId(this);
+        boolean isMine = group != null ? group.mine : (msg.sender != null && myUserId.equals(msg.sender.chat_id));
+        boolean isAdminOrOwner = (ownerId != null && ownerId.equals(myUserId)) || adminIds.contains(myUserId);
+
+        if (isMine || isAdminOrOwner) {
+            options.add(getString(R.string.menu_recall));
+            actions.add(3);
+        }
+
+        // 删除
+        options.add(getString(R.string.menu_delete));
+        actions.add(4);
+
+        // 构建对话框标题（发件人 + 消息摘要）
+        String senderName = msg.sender != null && !android.text.TextUtils.isEmpty(msg.sender.name)
+                ? msg.sender.name : getString(R.string.chat_msg_default);
+        String previewText = !copyContent.isEmpty() ? copyContent : getString(R.string.preview_unknown);
+        if (previewText.length() > 20) {
+            previewText = previewText.substring(0, 20) + "…";
+        }
+        String dialogTitle = senderName + ": " + previewText;
+
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setTitle(dialogTitle)
+                .setItems(options.toArray(new String[0]), (dialog, which) -> {
+                    if (which >= 0 && which < actions.size()) {
+                        int action = actions.get(which);
+                        switch (action) {
+                            case 1:
+                                copyToClipboard(copyContent);
+                                break;
+                            case 2:
+                                replyToMessage(msg);
+                                break;
+                            case 3:
+                                recallMsg(msg);
+                                break;
+                            case 4:
+                                deleteMsg(msg);
+                                break;
+                        }
+                    }
+                })
+                .show();
+    }
+
+    private String getCopyableContent(Msg msg) {
+        if (msg == null || msg.content == null) return "";
+        if (!android.text.TextUtils.isEmpty(msg.content.text)) return msg.content.text;
+        if (!android.text.TextUtils.isEmpty(msg.content.file_name)) return msg.content.file_name;
+        if (!android.text.TextUtils.isEmpty(msg.content.image_url)) return msg.content.image_url;
+        if (!android.text.TextUtils.isEmpty(msg.content.video_url)) return msg.content.video_url;
+        return "";
+    }
+
+    private void copyToClipboard(String content) {
+        if (content == null || content.isEmpty()) return;
+        ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        if (cm != null) {
+            cm.setPrimaryClip(ClipData.newPlainText("chat_msg", content));
+            Toast.makeText(this, R.string.toast_copied_to_clipboard, Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void replyToMessage(Msg msg) {
+        if (msg == null || chatInputBar == null) return;
+        chatInputBar.showQuotePreview(msg);
+        if (chatInputBar.getEditText() != null) {
+            chatInputBar.getEditText().requestFocus();
+        }
+    }
+
+    private void recallMsg(Msg msg) {
+        if (msg == null || msg.msg_id == null || msg.msg_id.isEmpty()) return;
+        String token = PrefUtils.getToken(this);
+        repository.recallMessage(token, msg.msg_id, chatId, chatType, new MessageRepository.RecallMessageCallback() {
+            @Override
+            public void onSuccess() {
+                runOnUiThread(() -> {
+                    Toast.makeText(ChatActivity.this, R.string.toast_message_recalled, Toast.LENGTH_SHORT).show();
+                    // Find the message by ID (Wire objects may not implement equals())
+                    int foundIndex = -1;
+                    for (int i = 0; i < allMessages.size(); i++) {
+                        Msg m = allMessages.get(i);
+                        if (m != null && msg.msg_id.equals(m.msg_id)) {
+                            foundIndex = i;
+                            break;
+                        }
+                    }
+                    if (foundIndex >= 0) {
+                        Msg updatedMsg = allMessages.get(foundIndex).newBuilder()
+                                .msg_delete_time(System.currentTimeMillis() / 1000L)
+                                .build();
+                        allMessages.set(foundIndex, updatedMsg);
+                    }
+                    refreshMessages(false);
+                });
+            }
+
+            @Override
+            public void onError(String errorMsg) {
+                runOnUiThread(() -> Toast.makeText(ChatActivity.this, errorMsg != null ? errorMsg : getString(R.string.toast_recall_failed), Toast.LENGTH_SHORT).show());
+            }
+        });
+    }
+
+    private void deleteMsg(Msg msg) {
+        if (msg == null) return;
+        allMessages.remove(msg);
+        refreshMessages(false);
+        Toast.makeText(this, R.string.toast_deleted, Toast.LENGTH_SHORT).show();
     }
 
     @Override

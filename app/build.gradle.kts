@@ -12,7 +12,8 @@ android {
         minSdk = 16
         targetSdk = 34
         versionCode = 1
-        versionName = "1.0.3-snapshot-26w12a"
+        versionName = "1.0.3-snapshot-26w15a"
+        multiDexEnabled = true
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -36,6 +37,7 @@ dependencies {
     implementation(libs.androidsvg)
     implementation(libs.appcompat)
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
+    implementation("androidx.multidex:multidex:2.0.1")
     implementation(libs.constraintlayout)
     implementation(libs.material)
     implementation(libs.wire.runtime)

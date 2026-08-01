@@ -31,7 +31,7 @@
     <string name="chat_empty">No chat history</string>
     <string name="chat_load_failed">Failed to load chat history</string>
     <string name="chat_load_older_failed">Failed to load earlier messages</string>
-    <string name="unknown_user">Unknown user</string>
+    <string name="unknown_user"></string>
     <string name="message_unsupported">[Unsupported message]</string>
     <string name="message_image">Image message\nTap to view</string>
     <string name="message_file">[File] %1$s</string>
@@ -108,6 +108,12 @@
     <string name="group_profile_history_msg">New Members Can View History</string>
     <string name="group_profile_hide_members">Hide Member List</string>
     <string name="group_profile_auto_delete">Auto Delete Messages</string>
+    <string name="group_profile_auto_delete_days_format">%1$d Days</string>
+    <string name="auto_delete_select_title">Set Auto Delete Duration (Days)</string>
+    <string name="auto_delete_custom">Custom Days</string>
+    <string name="auto_delete_custom_hint">Enter number of days</string>
+    <string name="edit_group_name_title">Edit Group Name</string>
+    <string name="edit_group_intro_title">Edit Group Introduction</string>
     <string name="group_profile_deny_upload">Deny Upload to Group Disk</string>
     <string name="group_profile_ban_reason">Ban Reason</string>
     <string name="group_profile_no_ban">None</string>
@@ -134,7 +140,23 @@
     <string name="tab_sticky_format">Pinned (%1$d)</string>
     <string name="tab_sticky_title">Pinned Chats</string>
     <string name="sticky_load_failed">Failed to load pinned chats</string>
-    <string name="settings_ws_log">WebSocket Log</string>
+    <string name="settings_ws_log">WebSocket Logs</string>
+    <string name="settings_avatar_threads_title">Avatar Loading Threads</string>
+    <string name="settings_avatar_threads_format">%1$d Threads</string>
+    <string name="settings_avatar_threads_dialog_title">Set Avatar Loading Threads (Min: 1)</string>
+    <string name="settings_avatar_threads_min_hint">Enter thread count (≥ 1)</string>
+    <string name="mine_my_posts">My Posts</string>
+    <string name="mine_my_collects">My Bookmarks</string>
+    <string name="mine_blocked_users">Blocked Users</string>
+    <string name="blocked_users_title">Blocked Users</string>
+    <string name="blocked_users_empty">No blocked users</string>
+    <string name="unblock_button">Unblock</string>
+    <string name="unblock_success">Unblocked successfully</string>
+    <string name="my_posts_title">My Posts</string>
+    <string name="my_collects_title">My Bookmarks</string>
+    <string name="my_posts_empty">No posts created yet</string>
+    <string name="my_collects_empty">No bookmarked posts yet</string>
+    <string name="network_error">Network error, please try again later</string>
     <string name="ws_log_clear">Clear</string>
     <string name="ws_log_empty">No logs yet</string>
     <string name="image_preview_desc">Image preview</string>
@@ -252,8 +274,9 @@
     <string name="tab_community_sections">Sections</string>
     <string name="tab_community_mine">Mine</string>
     <string name="community_filter_title">Filter Articles</string>
-    <string name="community_filter_recommend">Recommended</string>
+    <string name="community_filter_recommend">Popular</string>
     <string name="community_filter_latest">Latest</string>
+    <string name="community_filter_reverse">Reverse</string>
     <string name="loading">Loading...</string>
     <string name="create_failed_format">Failed to create: %1$s</string>
 
@@ -329,6 +352,8 @@
     <string name="chat_file_sent_format">File (%1$d/%2$d) %3$s sent</string>
     <string name="chat_file_failed_format">File send failed: %1$s</string>
     <string name="chat_action_video">Video</string>
+    <string name="chat_pick_video_title">Select Videos</string>
+    <string name="chat_video_failed_format">Failed to send video: %1$s</string>
     <string name="chat_action_record">Record</string>
     <string name="chat_action_card">Card</string>
     <string name="chat_action_article">Article</string>
@@ -348,4 +373,46 @@
     <string name="time_unit_hours_format">%1$d hour(s)</string>
     <string name="time_unit_minutes_format">%1$d minute(s)</string>
     <string name="time_unit_seconds_format">%1$d second(s)</string>
+    <!-- Context Menu & Actions -->
+    <string name="menu_copy">Copy</string>
+    <string name="menu_reply">Reply</string>
+    <string name="menu_recall">Recall</string>
+    <string name="menu_delete">Delete</string>
+    <string name="toast_copied_to_clipboard">Copied to clipboard</string>
+    <string name="toast_message_recalled">Message recalled</string>
+    <string name="toast_recall_failed">Recall failed</string>
+    <string name="toast_deleted">Deleted</string>
+    <string name="chat_msg_default">Message</string>
+
+    <!-- Community Ba & List Footer -->
+    <string name="community_ba_stats_format">%1$d Members  •  %2$d Posts</string>
+    <string name="load_more_click">Click to load more</string>
+    <string name="loaded_all_sections">All sections loaded</string>
+    <string name="loaded_all_posts">All posts loaded</string>
+
+    <!-- Section Detail UI -->
+    <string name="section_detail_title">Section Details</string>
+    <string name="section_info_detail_title">Section Information</string>
+    <string name="section_members_format">%1$d Members</string>
+    <string name="section_posts_format">%1$d Posts</string>
+    <string name="section_groups_format">%1$d Groups</string>
+    <string name="section_id_format">Section ID: %1$d</string>
+    <string name="section_create_time_label">Created: %1$s</string>
+    <string name="section_followed_label">Follow Status: %1$s</string>
+    <string name="section_followed_yes">Followed</string>
+    <string name="section_followed_no">Not Followed</string>
+    <string name="section_info_load_failed">Failed to load section info</string>
+    <string name="action_follow">+ Follow</string>
+    <string name="action_unfollow">Followed</string>
+    <string name="follow_success">Followed section</string>
+    <string name="unfollow_success">Unfollowed section</string>
+    <string name="follow_failed">Operation failed: %1$s</string>
+    <string name="section_info_title">Section Details</string>
+    <string name="tab_section_details">Details</string>
+    <string name="tab_section_groups">Bound Groups</string>
+    <string name="no_bound_groups">No bound groups</string>
+    <string name="group_members_format">%1$d members</string>
+    <string name="section_creator_title">Creator</string>
+    <string name="section_managers_title">Managers</string>
+    <string name="no_managers">No managers</string>
 </resources>

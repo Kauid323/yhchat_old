@@ -19,6 +19,11 @@ public class CommunityPostModel {
     private boolean isLiked;
     private boolean isCollected;
 
+    private String displayAuthorName;
+    private String likeNumStr;
+    private String commentNumStr;
+    private String collectNumStr;
+
     public static CommunityPostModel fromJson(JSONObject json) {
         if (json == null) return null;
         CommunityPostModel model = new CommunityPostModel();
@@ -42,6 +47,12 @@ public class CommunityPostModel {
         model.commentNum = json.optInt("commentNum", 0);
         model.collectNum = json.optInt("collectNum", 0);
         model.amountNum = json.optDouble("amountNum", 0.0);
+
+        model.displayAuthorName = (model.senderNickname != null && !model.senderNickname.isEmpty())
+                ? model.senderNickname : model.senderId;
+        model.likeNumStr = String.valueOf(model.likeNum);
+        model.commentNumStr = String.valueOf(model.commentNum);
+        model.collectNumStr = String.valueOf(model.collectNum);
 
         Object likedObj = json.opt("isLiked");
         if (likedObj != null) {
@@ -71,4 +82,9 @@ public class CommunityPostModel {
     public double getAmountNum() { return amountNum; }
     public boolean isLiked() { return isLiked; }
     public boolean isCollected() { return isCollected; }
+
+    public String getDisplayAuthorName() { return displayAuthorName != null ? displayAuthorName : ""; }
+    public String getLikeNumStr() { return likeNumStr != null ? likeNumStr : "0"; }
+    public String getCommentNumStr() { return commentNumStr != null ? commentNumStr : "0"; }
+    public String getCollectNumStr() { return collectNumStr != null ? collectNumStr : "0"; }
 }

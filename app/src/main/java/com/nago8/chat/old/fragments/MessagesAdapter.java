@@ -55,8 +55,18 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
         void onAvatarClick(String senderId, int senderChatType);
     }
 
+    public interface OnMessageClickListener {
+        void onMessageClick(View anchorView, Msg msg, MessageGroup group);
+    }
+
+    private OnMessageClickListener messageClickListener;
+
     public void setOnAvatarClickListener(OnAvatarClickListener listener) {
         this.avatarClickListener = listener;
+    }
+
+    public void setOnMessageClickListener(OnMessageClickListener listener) {
+        this.messageClickListener = listener;
     }
 
     public void setData(List<MessageGroup> data) {
@@ -103,7 +113,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         MessageGroup group = groups.get(position);
-        holder.bind(group, avatarClickListener, getMarkwon(holder.itemView.getContext()));
+        holder.bind(group, avatarClickListener, messageClickListener, getMarkwon(holder.itemView.getContext()));
     }
 
     @Override
@@ -137,7 +147,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             tvOwnerTag = itemView.findViewById(R.id.tvOwnerTag);
         }
 
-        void bind(MessageGroup group, OnAvatarClickListener listener, Markwon markwon) {
+        void bind(MessageGroup group, OnAvatarClickListener listener, OnMessageClickListener messageClickListener, Markwon markwon) {
             root.setGravity(group.mine ? Gravity.END : Gravity.START);
             groupContainer.setGravity(group.mine ? Gravity.END : Gravity.START);
             headerRow.setGravity(group.mine ? Gravity.END : Gravity.START);
@@ -146,7 +156,11 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             applyGroupOrder(group.mine);
             applyHeaderOrder(group.mine);
 
-            tvName.setText(TextUtils.isEmpty(group.senderName) ? itemView.getContext().getString(R.string.unknown_user) : group.senderName);
+            String displayName = group.senderName;
+            if (displayName == null || "未知用户".equals(displayName) || "Unknown user".equals(displayName)) {
+                displayName = "";
+            }
+            tvName.setText(displayName);
             tvTime.setText(TimeUtils.formatMessageTime(group.firstSendTime));
             ImageUtils.loadAvatar(itemView.getContext(), group.avatarUrl, ivAvatar);
             tvAdminTag.setVisibility(group.isAdmin ? View.VISIBLE : View.GONE);
@@ -160,7 +174,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
 
             contentColumn.removeAllViews();
             for (int i = 0; i < group.messages.size(); i++) {
-                View bubble = createBubble(group, group.messages.get(i), i, group.messages.size(), markwon);
+                View bubble = createBubble(group, group.messages.get(i), i, group.messages.size(), markwon, messageClickListener);
                 contentColumn.addView(bubble);
             }
         }
@@ -227,14 +241,38 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             view.setLayoutParams(params);
         }
 
-        private View createBubble(MessageGroup group, Msg msg, int index, int count, Markwon markwon) {
+        private View createBubble(MessageGroup group, Msg msg, int index, int count, Markwon markwon, OnMessageClickListener messageClickListener) {
             View rawBubble = createRawBubble(group, msg, index, count, markwon);
-            return applyRecallIfNeeded(group, msg, rawBubble);
+            View bubbleView = applyRecallIfNeeded(group, msg, rawBubble);
+
+            boolean isRecalled = (msg != null && msg.msg_delete_time > 0);
+            boolean isTip = isTipMessage(msg);
+
+            if (!isRecalled && !isTip && messageClickListener != null) {
+                bubbleView.setOnLongClickListener(v -> {
+                    messageClickListener.onMessageClick(v, msg, group);
+                    return true;
+                });
+            }
+            return bubbleView;
+        }
+
+        private boolean isTipMessage(Msg msg) {
+            if (msg == null) return false;
+            if (msg.content_type == 9 || msg.content_type == 12) return true;
+            if (msg.content != null && !TextUtils.isEmpty(msg.content.tip)
+                    && TextUtils.isEmpty(msg.content.text)
+                    && TextUtils.isEmpty(msg.content.image_url)
+                    && TextUtils.isEmpty(msg.content.video_url)
+                    && TextUtils.isEmpty(msg.content.file_name)) {
+                return true;
+            }
+            return false;
         }
 
         private View createRawBubble(MessageGroup group, Msg msg, int index, int count, Markwon markwon) {
             if (msg != null && msg.msg_delete_time <= 0) {
-                if (msg.content != null && msg.content.video_url != null && !msg.content.video_url.isEmpty()) {
+                if (msg.content_type == 10 || (msg.content != null && msg.content.video_url != null && !msg.content.video_url.isEmpty())) {
                     return createVideoBubble(group, msg, index, count);
                 }
                 if (msg.content != null && msg.content.image_url != null && !msg.content.image_url.isEmpty()) {

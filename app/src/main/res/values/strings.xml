@@ -31,7 +31,7 @@
     <string name="chat_empty">暂无聊天记录</string>
     <string name="chat_load_failed">获取聊天记录失败</string>
     <string name="chat_load_older_failed">获取更早消息失败</string>
-    <string name="unknown_user">未知用户</string>
+    <string name="unknown_user"></string>
     <string name="message_unsupported">[不支持的消息]</string>
     <string name="message_image">图片消息\n点击可查看</string>
     <string name="message_file">[文件] %1$s</string>
@@ -108,6 +108,12 @@
     <string name="group_profile_history_msg">新成员可查看历史消息</string>
     <string name="group_profile_hide_members">隐藏群成员列表</string>
     <string name="group_profile_auto_delete">自动删除消息</string>
+    <string name="group_profile_auto_delete_days_format">%1$d 天</string>
+    <string name="auto_delete_select_title">设置自动删除消息天数</string>
+    <string name="auto_delete_custom">自定义天数</string>
+    <string name="auto_delete_custom_hint">请输入天数（天）</string>
+    <string name="edit_group_name_title">修改群聊名称</string>
+    <string name="edit_group_intro_title">修改群聊简介</string>
     <string name="group_profile_deny_upload">禁止成员上传到群盘</string>
     <string name="group_profile_ban_reason">禁言原因</string>
     <string name="group_profile_no_ban">无</string>
@@ -139,6 +145,22 @@
     <string name="tab_sticky_title">置顶会话</string>
     <string name="sticky_load_failed">获取置顶会话失败</string>
     <string name="settings_ws_log">WebSocket 日志</string>
+    <string name="settings_avatar_threads_title">头像加载线程数</string>
+    <string name="settings_avatar_threads_format">%1$d 线程</string>
+    <string name="settings_avatar_threads_dialog_title">设置头像加载线程数（最低为 1 线程）</string>
+    <string name="settings_avatar_threads_min_hint">请输入并发线程数 (≥ 1)</string>
+    <string name="mine_my_posts">我的文章</string>
+    <string name="mine_my_collects">我的收藏</string>
+    <string name="mine_blocked_users">屏蔽用户</string>
+    <string name="blocked_users_title">屏蔽的用户</string>
+    <string name="blocked_users_empty">暂无屏蔽的用户</string>
+    <string name="unblock_button">取消屏蔽</string>
+    <string name="unblock_success">已取消屏蔽</string>
+    <string name="my_posts_title">我的文章</string>
+    <string name="my_collects_title">我的收藏</string>
+    <string name="my_posts_empty">暂无发布的文章</string>
+    <string name="my_collects_empty">暂无收藏的文章</string>
+    <string name="network_error">网络异常，请稍后重试</string>
     <string name="ws_log_clear">清空</string>
     <string name="ws_log_empty">暂无日志</string>
     <string name="image_preview_desc">图片预览</string>
@@ -254,6 +276,7 @@
     <string name="community_filter_title">筛选文章</string>
     <string name="community_filter_recommend">推荐</string>
     <string name="community_filter_latest">最新</string>
+    <string name="community_filter_reverse">倒序</string>
     <string name="loading">正在加载...</string>
     <string name="create_failed_format">创建失败: %1$s</string>
 
@@ -329,6 +352,8 @@
     <string name="chat_file_sent_format">文件 (%1$d/%2$d) %3$s 发送成功</string>
     <string name="chat_file_failed_format">文件发送失败: %1$s</string>
     <string name="chat_action_video">视频</string>
+    <string name="chat_pick_video_title">选择视频</string>
+    <string name="chat_video_failed_format">视频发送失败: %1$s</string>
     <string name="chat_action_record">录制</string>
     <string name="chat_action_card">名片</string>
     <string name="chat_action_article">文章</string>
@@ -348,4 +373,47 @@
     <string name="time_unit_hours_format">%1$d小时</string>
     <string name="time_unit_minutes_format">%1$d分钟</string>
     <string name="time_unit_seconds_format">%1$d秒</string>
+
+    <!-- Context Menu & Actions -->
+    <string name="menu_copy">复制</string>
+    <string name="menu_reply">回复</string>
+    <string name="menu_recall">撤回</string>
+    <string name="menu_delete">删除</string>
+    <string name="toast_copied_to_clipboard">已复制到剪贴板</string>
+    <string name="toast_message_recalled">消息已撤回</string>
+    <string name="toast_recall_failed">撤回失败</string>
+    <string name="toast_deleted">已删除</string>
+    <string name="chat_msg_default">消息</string>
+
+    <!-- Community Ba & List Footer -->
+    <string name="community_ba_stats_format">%1$d 成员  •  %2$d 帖子</string>
+    <string name="load_more_click">点击加载更多</string>
+    <string name="loaded_all_sections">已加载全部板块</string>
+    <string name="loaded_all_posts">已加载全部文章</string>
+
+    <!-- Section Detail UI -->
+    <string name="section_detail_title">板块详情</string>
+    <string name="section_info_detail_title">板块详细信息</string>
+    <string name="section_members_format">%1$d 成员</string>
+    <string name="section_posts_format">%1$d 帖子</string>
+    <string name="section_groups_format">%1$d 群组</string>
+    <string name="section_id_format">板块 ID: %1$d</string>
+    <string name="section_create_time_label">创建时间：%1$s</string>
+    <string name="section_followed_label">关注状态：%1$s</string>
+    <string name="section_followed_yes">已关注</string>
+    <string name="section_followed_no">未关注</string>
+    <string name="section_info_load_failed">获取板块信息失败</string>
+    <string name="action_follow">+ 关注</string>
+    <string name="action_unfollow">已关注</string>
+    <string name="follow_success">已关注此板块</string>
+    <string name="unfollow_success">已取消关注此板块</string>
+    <string name="follow_failed">操作失败：%1$s</string>
+    <string name="section_info_title">板块详情</string>
+    <string name="tab_section_details">详情</string>
+    <string name="tab_section_groups">绑定的群聊</string>
+    <string name="no_bound_groups">暂无绑定的群聊</string>
+    <string name="group_members_format">%1$d 人</string>
+    <string name="section_creator_title">创建者</string>
+    <string name="section_managers_title">管理员</string>
+    <string name="no_managers">暂无管理员</string>
 </resources>

@@ -1,5 +1,6 @@
 package com.nago8.chat.old;
 
+import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
@@ -13,7 +14,6 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.AppCompatImageButton;
@@ -58,20 +58,26 @@ public class GroupProfileActivity extends AppCompatActivity {
     private TextView tvGroupCode;
     private TextView tvMyNickname;
     private TextView tvCommunity;
-    private TextView tvPrivate;
-    private TextView tvDirectJoin;
-    private TextView tvHistoryMsg;
-    private TextView tvHideMembers;
+    private TextView tvBanReason;
     private TextView tvAutoDelete;
-    private TextView tvDenyUpload;
+
+    private View rowName;
+    private View rowIntroduction;
     private View rowCategory;
     private View rowGroupCode;
     private View rowMyNickname;
     private View rowCommunity;
     private View rowBanReason;
-    private TextView tvBanReason;
+    private View rowAutoDelete;
+
     private SwitchCompat swDoNotDisturb;
     private SwitchCompat swTop;
+    private SwitchCompat swPrivate;
+    private SwitchCompat swDirectJoin;
+    private SwitchCompat swHistoryMsg;
+    private SwitchCompat swHideMembers;
+    private SwitchCompat swDenyUpload;
+
     private ProgressBar progressBar;
 
     private Call runningCall;
@@ -121,20 +127,26 @@ public class GroupProfileActivity extends AppCompatActivity {
         tvGroupCode = findViewById(R.id.tvGroupCode);
         tvMyNickname = findViewById(R.id.tvMyNickname);
         tvCommunity = findViewById(R.id.tvCommunity);
-        tvPrivate = findViewById(R.id.tvPrivate);
-        tvDirectJoin = findViewById(R.id.tvDirectJoin);
-        tvHistoryMsg = findViewById(R.id.tvHistoryMsg);
-        tvHideMembers = findViewById(R.id.tvHideMembers);
+        tvBanReason = findViewById(R.id.tvBanReason);
         tvAutoDelete = findViewById(R.id.tvAutoDelete);
-        tvDenyUpload = findViewById(R.id.tvDenyUpload);
+
+        rowName = findViewById(R.id.rowName);
+        rowIntroduction = findViewById(R.id.rowIntroduction);
         rowCategory = findViewById(R.id.rowCategory);
         rowGroupCode = findViewById(R.id.rowGroupCode);
         rowMyNickname = findViewById(R.id.rowMyNickname);
         rowCommunity = findViewById(R.id.rowCommunity);
         rowBanReason = findViewById(R.id.rowBanReason);
-        tvBanReason = findViewById(R.id.tvBanReason);
+        rowAutoDelete = findViewById(R.id.rowAutoDelete);
+
         swDoNotDisturb = findViewById(R.id.swDoNotDisturb);
         swTop = findViewById(R.id.swTop);
+        swPrivate = findViewById(R.id.swPrivate);
+        swDirectJoin = findViewById(R.id.swDirectJoin);
+        swHistoryMsg = findViewById(R.id.swHistoryMsg);
+        swHideMembers = findViewById(R.id.swHideMembers);
+        swDenyUpload = findViewById(R.id.swDenyUpload);
+
         progressBar = findViewById(R.id.progressBar);
 
         btnBack.setOnClickListener(v -> onBackPressed());
@@ -148,10 +160,16 @@ public class GroupProfileActivity extends AppCompatActivity {
             }
         });
 
+        // 字符设置项点击事件 (可编辑字符)
+        rowName.setOnClickListener(v -> showEditGroupNameDialog());
+        rowIntroduction.setOnClickListener(v -> showEditGroupIntroDialog());
         rowGroupCode.setOnClickListener(v -> showEditGroupCodeDialog());
         rowMyNickname.setOnClickListener(v -> showEditMyNicknameDialog());
         rowCategory.setOnClickListener(v -> fetchAndShowCategoryDialog());
+        rowAutoDelete.setOnClickListener(v -> showAutoDeleteDialog());
         rowCommunity.setOnClickListener(v -> Toast.makeText(this, R.string.group_profile_community_readonly, Toast.LENGTH_SHORT).show());
+
+        // 按钮项 / 开关项事件
         setupSwitchListeners();
 
         fetchGroupInfo(groupId);
@@ -239,8 +257,12 @@ public class GroupProfileActivity extends AppCompatActivity {
     }
 
     private void bindGroup(info.Group_data data) {
-        currentGroup = data;
-        tvName.setText(data.name != null && !data.name.isEmpty() ? data.name : getString(R.string.unknown_user));
+        this.currentGroup = data;
+        String gName = data.name;
+        if (gName == null || "未知用户".equals(gName) || "Unknown user".equals(gName)) {
+            gName = "";
+        }
+        tvName.setText(gName);
         tvGroupId.setText(getString(R.string.user_id_format, data.group_id));
         ImageUtils.loadAvatar(this, data.avatar_url, ivAvatar);
 
@@ -251,17 +273,12 @@ public class GroupProfileActivity extends AppCompatActivity {
 
         String category = data.category_name != null && !data.category_name.isEmpty() ? data.category_name : "";
         tvCategory.setText(category);
-        tvPrivate.setText(formatYesNo(data.private_ == 1));
-        tvDirectJoin.setText(formatYesNo(data.direct_join == 1));
-        tvHistoryMsg.setText(formatYesNo(data.history_msg == 1));
-        tvHideMembers.setText(formatYesNo(data.hide_group_members == 1));
-        tvDenyUpload.setText(formatYesNo(data.deny_members_upload_to_group_disk == 1));
+
+        // 自动删除消息 (以天数为单位)
         tvAutoDelete.setText(formatAutoDelete(data.auto_delete_message));
 
-        // 群号码
+        // 群号码与群昵称 (字符设置项)
         tvGroupCode.setText(data.group_code != null ? data.group_code : "");
-
-        // 我的群昵称
         tvMyNickname.setText(data.my_group_nickname != null ? data.my_group_nickname : "");
 
         // 关联分区
@@ -280,10 +297,15 @@ public class GroupProfileActivity extends AppCompatActivity {
             rowBanReason.setVisibility(View.GONE);
         }
 
-        // 开关项
+        // 按钮项 / 开关绑定
         bindingSwitches = true;
         swDoNotDisturb.setChecked(data.do_not_disturb == 1);
         swTop.setChecked(data.top == 1);
+        swPrivate.setChecked(data.private_ == 1);
+        swDirectJoin.setChecked(data.direct_join == 1);
+        swHistoryMsg.setChecked(data.history_msg == 1);
+        swHideMembers.setChecked(data.hide_group_members == 1);
+        swDenyUpload.setChecked(data.deny_members_upload_to_group_disk == 1);
         bindingSwitches = false;
     }
 
@@ -295,6 +317,43 @@ public class GroupProfileActivity extends AppCompatActivity {
         swTop.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (bindingSwitches || currentGroup == null) return;
             updateSticky(isChecked);
+        });
+        swPrivate.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (bindingSwitches || currentGroup == null) return;
+            updateGroupEditProto(currentGroup.name, currentGroup.introduction, currentGroup.direct_join,
+                    currentGroup.history_msg, isChecked ? 1 : 0, currentGroup.hide_group_members,
+                    () -> currentGroup = currentGroup.newBuilder().private_(isChecked ? 1 : 0).build(),
+                    () -> revertSwitch(swPrivate, !isChecked));
+        });
+        swDirectJoin.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (bindingSwitches || currentGroup == null) return;
+            updateGroupEditProto(currentGroup.name, currentGroup.introduction, isChecked ? 1 : 0,
+                    currentGroup.history_msg, currentGroup.private_, currentGroup.hide_group_members,
+                    () -> currentGroup = currentGroup.newBuilder().direct_join(isChecked ? 1 : 0).build(),
+                    () -> revertSwitch(swDirectJoin, !isChecked));
+        });
+        swHistoryMsg.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (bindingSwitches || currentGroup == null) return;
+            updateGroupEditProto(currentGroup.name, currentGroup.introduction, currentGroup.direct_join,
+                    isChecked ? 1 : 0, currentGroup.private_, currentGroup.hide_group_members,
+                    () -> currentGroup = currentGroup.newBuilder().history_msg(isChecked ? 1 : 0).build(),
+                    () -> revertSwitch(swHistoryMsg, !isChecked));
+        });
+        swHideMembers.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (bindingSwitches || currentGroup == null) return;
+            updateGroupEditProto(currentGroup.name, currentGroup.introduction, currentGroup.direct_join,
+                    currentGroup.history_msg, currentGroup.private_, isChecked ? 1L : 0L,
+                    () -> currentGroup = currentGroup.newBuilder().hide_group_members(isChecked ? 1L : 0L).build(),
+                    () -> revertSwitch(swHideMembers, !isChecked));
+        });
+        swDenyUpload.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (bindingSwitches || currentGroup == null) return;
+            JsonObject bodyJson = new JsonObject();
+            bodyJson.addProperty("groupId", groupId);
+            bodyJson.addProperty("denyMembersUploadToGroupDisk", isChecked ? 1 : 0);
+            bodyJson.addProperty("deny_members_upload_to_group_disk", isChecked ? 1 : 0);
+            postSimpleJsonEdit("/v1/group/edit-deny-upload", bodyJson,
+                    () -> currentGroup = currentGroup.newBuilder().deny_members_upload_to_group_disk(isChecked ? 1L : 0L).build());
         });
     }
 
@@ -351,6 +410,39 @@ public class GroupProfileActivity extends AppCompatActivity {
             bindingSwitches = false;
             Toast.makeText(GroupProfileActivity.this, R.string.group_profile_update_failed, Toast.LENGTH_SHORT).show();
         });
+    }
+
+    // 字符设置项 - 修改群名称
+    private void showEditGroupNameDialog() {
+        if (currentGroup == null) return;
+        showSingleInputDialog(
+                getString(R.string.edit_group_name_title),
+                currentGroup.name,
+                newName -> {
+                    if (newName == null || newName.isEmpty()) return;
+                    updateGroupEditProto(newName, currentGroup.introduction, currentGroup.direct_join,
+                            currentGroup.history_msg, currentGroup.private_, currentGroup.hide_group_members,
+                            () -> {
+                                currentGroup = currentGroup.newBuilder().name(newName).build();
+                                tvName.setText(newName);
+                            }, null);
+                }
+        );
+    }
+
+    // 字符设置项 - 修改群简介
+    private void showEditGroupIntroDialog() {
+        if (currentGroup == null) return;
+        showSingleInputDialog(
+                getString(R.string.edit_group_intro_title),
+                currentGroup.introduction,
+                newIntro -> updateGroupEditProto(currentGroup.name, newIntro, currentGroup.direct_join,
+                        currentGroup.history_msg, currentGroup.private_, currentGroup.hide_group_members,
+                        () -> {
+                            currentGroup = currentGroup.newBuilder().introduction(newIntro).build();
+                            tvIntroduction.setText(newIntro != null && !newIntro.isEmpty() ? newIntro : getString(R.string.group_profile_no_ban));
+                        }, null)
+        );
     }
 
     private void showEditGroupCodeDialog() {
@@ -419,6 +511,98 @@ public class GroupProfileActivity extends AppCompatActivity {
                     }
                 }
         );
+    }
+
+    // 自动删除消息 (以天数为单位)
+    private String formatAutoDelete(long seconds) {
+        if (seconds <= 0) return getString(R.string.group_profile_off);
+        long days = seconds / 86400;
+        if (days <= 0) days = 1;
+        return getString(R.string.group_profile_auto_delete_days_format, days);
+    }
+
+    private void showAutoDeleteDialog() {
+        if (currentGroup == null) return;
+        final String[] options = new String[]{
+                getString(R.string.group_profile_off) + " (0 天)",
+                "1 天",
+                "3 天",
+                "7 天",
+                "30 天",
+                "90 天",
+                getString(R.string.auto_delete_custom)
+        };
+        final long[] secondsMap = new long[]{
+                0L,
+                86400L,
+                259200L,
+                604800L,
+                2592000L,
+                7776000L,
+                -1L
+        };
+
+        long currentSecs = currentGroup.auto_delete_message;
+        int checked = 0;
+        for (int i = 0; i < secondsMap.length - 1; i++) {
+            if (currentSecs == secondsMap[i]) {
+                checked = i;
+                break;
+            }
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.auto_delete_select_title)
+                .setSingleChoiceItems(options, checked, (dialog, which) -> {
+                    dialog.dismiss();
+                    if (which == options.length - 1) {
+                        showCustomAutoDeleteDaysDialog();
+                    } else {
+                        updateAutoDeleteMessage(secondsMap[which]);
+                    }
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void showCustomAutoDeleteDaysDialog() {
+        final EditText editText = new EditText(this);
+        editText.setInputType(InputType.TYPE_CLASS_NUMBER);
+        editText.setHint(R.string.auto_delete_custom_hint);
+
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.auto_delete_custom)
+                .setView(editText)
+                .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                    String input = editText.getText() != null ? editText.getText().toString().trim() : "";
+                    if (!input.isEmpty()) {
+                        try {
+                            long days = Long.parseLong(input);
+                            if (days < 0) days = 0;
+                            updateAutoDeleteMessage(days * 86400L);
+                        } catch (NumberFormatException ignored) {
+                        }
+                    }
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void updateAutoDeleteMessage(long seconds) {
+        long days = seconds / 86400;
+        JsonObject bodyJson = new JsonObject();
+        bodyJson.addProperty("groupId", groupId);
+        bodyJson.addProperty("autoDeleteMessage", seconds);
+        bodyJson.addProperty("time", seconds);
+        bodyJson.addProperty("day", days);
+        bodyJson.addProperty("auto_delete_message", seconds);
+
+        postSimpleJsonEdit("/v1/group/edit-auto-delete-message", bodyJson, () -> {
+            if (currentGroup != null) {
+                currentGroup = currentGroup.newBuilder().auto_delete_message(seconds).build();
+                tvAutoDelete.setText(formatAutoDelete(seconds));
+            }
+        });
     }
 
     private void fetchAndShowCategoryDialog() {
@@ -513,20 +697,29 @@ public class GroupProfileActivity extends AppCompatActivity {
 
     private void updateCategory(CategoryItem item) {
         if (currentGroup == null || item == null) return;
+        updateGroupEditProto(currentGroup.name, currentGroup.introduction, currentGroup.direct_join,
+                currentGroup.history_msg, currentGroup.private_, currentGroup.hide_group_members,
+                () -> {
+                    currentGroup = currentGroup.newBuilder().category_id(item.id).category_name(item.name).build();
+                    tvCategory.setText(item.name);
+                }, null);
+    }
+
+    private void updateGroupEditProto(String name, String intro, int directJoin, int historyMsg, int privateVal, long hideMembers, Runnable onSuccess, Runnable onFailure) {
         String token = PrefUtils.getToken(this);
-        if (token == null) return;
+        if (token == null || currentGroup == null) return;
 
         edit_group_send requestProto = new edit_group_send.Builder()
                 .group_id(groupId)
-                .name(currentGroup.name)
-                .introduction(currentGroup.introduction)
+                .name(name != null ? name : currentGroup.name)
+                .introduction(intro != null ? intro : currentGroup.introduction)
                 .avatar_url(currentGroup.avatar_url)
-                .direct_join(currentGroup.direct_join)
-                .history_msg(currentGroup.history_msg)
-                .category_name(item.name)
-                .category_id(item.id)
-                .private_(currentGroup.private_)
-                .hide_group_members(currentGroup.hide_group_members)
+                .direct_join(directJoin)
+                .history_msg(historyMsg)
+                .category_name(currentGroup.category_name)
+                .category_id(currentGroup.category_id)
+                .private_(privateVal)
+                .hide_group_members(hideMembers)
                 .build();
 
         Request request = new Request.Builder()
@@ -540,31 +733,39 @@ public class GroupProfileActivity extends AppCompatActivity {
         editCall.enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                runOnUiThread(() -> Toast.makeText(GroupProfileActivity.this, R.string.group_profile_update_failed, Toast.LENGTH_SHORT).show());
+                runOnUiThread(() -> {
+                    if (onFailure != null) onFailure.run();
+                    Toast.makeText(GroupProfileActivity.this, R.string.group_profile_update_failed, Toast.LENGTH_SHORT).show();
+                });
             }
 
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) {
-                if (!response.isSuccessful() || response.body() == null) {
-                    runOnUiThread(() -> Toast.makeText(GroupProfileActivity.this, R.string.group_profile_update_failed, Toast.LENGTH_SHORT).show());
-                    return;
-                }
-                try {
-                    final edit_group result = edit_group.ADAPTER.decode(response.body().source());
-                    boolean success = result != null && result.status != null && result.status.code == 1;
-                    runOnUiThread(() -> {
-                        if (!success) {
+                if (response.isSuccessful() && response.body() != null) {
+                    try {
+                        final edit_group result = edit_group.ADAPTER.decode(response.body().source());
+                        boolean success = result != null && result.status != null && result.status.code == 1;
+                        runOnUiThread(() -> {
+                            if (success) {
+                                if (onSuccess != null) onSuccess.run();
+                            } else {
+                                if (onFailure != null) onFailure.run();
+                                Toast.makeText(GroupProfileActivity.this, R.string.group_profile_update_failed, Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    } catch (Exception e) {
+                        runOnUiThread(() -> {
+                            if (onFailure != null) onFailure.run();
                             Toast.makeText(GroupProfileActivity.this, R.string.group_profile_update_failed, Toast.LENGTH_SHORT).show();
-                            return;
-                        }
-                        currentGroup = currentGroup.newBuilder().category_id(item.id).category_name(item.name).build();
-                        tvCategory.setText(item.name);
+                        });
+                    } finally {
+                        response.body().close();
+                    }
+                } else {
+                    runOnUiThread(() -> {
+                        if (onFailure != null) onFailure.run();
+                        Toast.makeText(GroupProfileActivity.this, R.string.group_profile_update_failed, Toast.LENGTH_SHORT).show();
                     });
-                } catch (Exception e) {
-                    Log.e(TAG, "edit group parse error", e);
-                    runOnUiThread(() -> Toast.makeText(GroupProfileActivity.this, R.string.group_profile_update_failed, Toast.LENGTH_SHORT).show());
-                } finally {
-                    response.body().close();
                 }
             }
         });
@@ -594,21 +795,6 @@ public class GroupProfileActivity extends AppCompatActivity {
     private long getJsonLong(JsonObject obj, String key) {
         if (obj.has(key) && !obj.get(key).isJsonNull()) return obj.get(key).getAsLong();
         return 0L;
-    }
-
-    private String formatYesNo(boolean enabled) {
-        return getString(enabled ? R.string.group_profile_private_yes : R.string.group_profile_private_no);
-    }
-
-    private String formatAutoDelete(long seconds) {
-        if (seconds <= 0) return getString(R.string.group_profile_off);
-        long days = seconds / 86400;
-        if (days > 0 && seconds % 86400 == 0) return getString(R.string.time_unit_days_format, days);
-        long hours = seconds / 3600;
-        if (hours > 0 && seconds % 3600 == 0) return getString(R.string.time_unit_hours_format, hours);
-        long minutes = seconds / 60;
-        if (minutes > 0 && seconds % 60 == 0) return getString(R.string.time_unit_minutes_format, minutes);
-        return getString(R.string.time_unit_seconds_format, seconds);
     }
 
     private interface OnTextSubmitListener {

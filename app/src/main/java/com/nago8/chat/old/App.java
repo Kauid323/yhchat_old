@@ -49,6 +49,7 @@ public class App extends Application {
     protected void attachBaseContext(Context base) {
         // 用 LocaleHelper.wrap 包裹 base，确保 attachBaseContext 阶段就应用正确 locale
         super.attachBaseContext(com.nago8.chat.old.utils.LocaleHelper.wrap(base));
+        androidx.multidex.MultiDex.install(this);
         applyLanguage(this);
     }
 

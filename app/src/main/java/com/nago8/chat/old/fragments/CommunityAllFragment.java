@@ -32,6 +32,7 @@ public class CommunityAllFragment extends Fragment {
 
     public static final int FILTER_RECOMMEND = 0;
     public static final int FILTER_LATEST = 1;
+    public static final int FILTER_REVERSE = 2;
 
     private SwipeRefreshLayout swipeRefreshAll;
     private RecyclerView rvCommunityAll;
@@ -64,6 +65,7 @@ public class CommunityAllFragment extends Fragment {
         postsAdapter = new CommunityPostsAdapter(requireContext());
 
         LinearLayoutManager layoutManager = new LinearLayoutManager(getContext());
+        layoutManager.setInitialPrefetchItemCount(6);
         rvCommunityAll.setLayoutManager(layoutManager);
         rvCommunityAll.setHasFixedSize(false);
         rvCommunityAll.setItemViewCacheSize(15);
@@ -106,7 +108,8 @@ public class CommunityAllFragment extends Fragment {
         if (getContext() == null) return;
         String[] options = new String[]{
                 getString(R.string.community_filter_recommend),
-                getString(R.string.community_filter_latest)
+                getString(R.string.community_filter_latest),
+                getString(R.string.community_filter_reverse)
         };
 
         new MaterialAlertDialogBuilder(requireContext())
@@ -189,6 +192,8 @@ public class CommunityAllFragment extends Fragment {
 
         if (currentFilter == FILTER_RECOMMEND) {
             communityRepository.getRecommendPostList(token, currentPage, pageSize, callback);
+        } else if (currentFilter == FILTER_REVERSE) {
+            communityRepository.getPostList(token, 3, 0, currentPage, pageSize, callback);
         } else {
             communityRepository.getPostList(token, 4, 0, currentPage, pageSize, callback);
         }

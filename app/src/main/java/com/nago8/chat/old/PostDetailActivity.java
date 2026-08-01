@@ -827,6 +827,7 @@ public class PostDetailActivity extends AppCompatActivity {
         commentCard.addView(tvReplyBtn);
 
         // Replies (nested)
+        // Replies (nested)
         if (replies.size() > 0) {
             LinearLayout repliesContainer = new LinearLayout(this);
             repliesContainer.setOrientation(LinearLayout.VERTICAL);
@@ -834,6 +835,7 @@ public class PostDetailActivity extends AppCompatActivity {
             LinearLayout.LayoutParams repliesParams = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             repliesParams.leftMargin = dp(44);
+            repliesParams.rightMargin = dp(12);
             repliesParams.topMargin = dp(6);
             repliesContainer.setLayoutParams(repliesParams);
             repliesContainer.setPadding(dp(8), dp(6), dp(8), dp(6));
@@ -843,37 +845,16 @@ public class PostDetailActivity extends AppCompatActivity {
             addReplyView(repliesContainer, firstReply, commentId);
 
             // "展开剩余 N 条" button
-            int remainingReplies = repliesNum - 1; // -1 because we show first
-            if (remainingReplies > 0 && replies.size() < repliesNum) {
+            int extraCount = replies.size() - 1;
+            if (extraCount > 0) {
                 TextView tvExpandReplies = new TextView(this);
-                tvExpandReplies.setText("展开剩余 " + remainingReplies + " 条回复 ▼");
+                tvExpandReplies.setText("展开剩余 " + extraCount + " 条回复 ▼");
                 tvExpandReplies.setTextSize(12f);
                 tvExpandReplies.setTextColor(getResources().getColor(R.color.app_primary));
-                tvExpandReplies.setPadding(0, dp(4), 0, dp(4));
+                tvExpandReplies.setPadding(0, dp(6), 0, dp(4));
                 tvExpandReplies.setClickable(true);
                 tvExpandReplies.setFocusable(true);
 
-                // Add remaining replies that came in the response
-                final boolean[] expanded = {false};
-                tvExpandReplies.setOnClickListener(v -> {
-                    if (!expanded[0]) {
-                        expanded[0] = true;
-                        tvExpandReplies.setVisibility(View.GONE);
-                        for (int i = 1; i < replies.size(); i++) {
-                            addReplyView(repliesContainer, replies.get(i).getAsJsonObject(), commentId);
-                        }
-                    }
-                });
-                repliesContainer.addView(tvExpandReplies);
-            } else if (replies.size() > 1) {
-                // All replies came in response, show expand for the rest already present
-                TextView tvExpandReplies = new TextView(this);
-                tvExpandReplies.setText("展开剩余 " + (replies.size() - 1) + " 条回复 ▼");
-                tvExpandReplies.setTextSize(12f);
-                tvExpandReplies.setTextColor(getResources().getColor(R.color.app_primary));
-                tvExpandReplies.setPadding(0, dp(4), 0, dp(4));
-                tvExpandReplies.setClickable(true);
-                tvExpandReplies.setFocusable(true);
                 final boolean[] expanded = {false};
                 tvExpandReplies.setOnClickListener(v -> {
                     if (!expanded[0]) {
@@ -905,40 +886,82 @@ public class PostDetailActivity extends AppCompatActivity {
 
     @SuppressWarnings("deprecation")
     private void addReplyView(LinearLayout container, com.google.gson.JsonObject reply, long parentCommentId) {
-        String nick = reply.has("senderNickname") ? reply.get("senderNickname").getAsString() : "";
-        String cnt = reply.has("content") ? reply.get("content").getAsString() : "";
-        String time = reply.has("createTimeText") ? reply.get("createTimeText").getAsString() : "";
+        if (container == null || reply == null) return;
+
+        String senderId = "";
+        if (reply.has("senderId") && !reply.get("senderId").isJsonNull()) {
+            senderId = reply.get("senderId").getAsString();
+        } else if (reply.has("sender_id") && !reply.get("sender_id").isJsonNull()) {
+            senderId = reply.get("sender_id").getAsString();
+        } else if (reply.has("user_id") && !reply.get("user_id").isJsonNull()) {
+            senderId = reply.get("user_id").getAsString();
+        }
+
+        String nick = (reply.has("senderNickname") && !reply.get("senderNickname").isJsonNull())
+                ? reply.get("senderNickname").getAsString() : "";
+        if ("未知用户".equals(nick) || "Unknown user".equals(nick)) {
+            nick = "";
+        }
+        String cnt = (reply.has("content") && !reply.get("content").isJsonNull())
+                ? reply.get("content").getAsString() : "";
+        String time = (reply.has("createTimeText") && !reply.get("createTimeText").isJsonNull())
+                ? reply.get("createTimeText").getAsString() : "";
 
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(android.view.Gravity.TOP);
         row.setPadding(0, dp(4), 0, dp(4));
 
-        TextView tv = new TextView(this);
-        tv.setText(android.text.Html.fromHtml("<b>" + nick + "</b>: " + cnt));
-        tv.setTextSize(13f);
-        tv.setTextColor(getResources().getColor(R.color.text_primary));
-        tv.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        TextView tvNick = new TextView(this);
+        tvNick.setText(nick.isEmpty() ? "" : nick);
+        tvNick.setTextSize(13f);
+        tvNick.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvNick.setTextColor(getResources().getColor(R.color.app_primary));
+        tvNick.setPadding(0, 0, dp(4), 0);
+
+        if (!android.text.TextUtils.isEmpty(senderId)) {
+            final String targetUserId = senderId;
+            tvNick.setOnClickListener(v -> {
+                Intent intent = new Intent(PostDetailActivity.this, UserProfileActivity.class);
+                intent.putExtra(UserProfileActivity.EXTRA_USER_ID, targetUserId);
+                startActivity(intent);
+            });
+            tvNick.setClickable(true);
+            tvNick.setFocusable(true);
+        }
+
+        TextView tvContent = new TextView(this);
+        tvContent.setText(": " + cnt);
+        tvContent.setTextSize(13f);
+        tvContent.setTextColor(getResources().getColor(R.color.text_primary));
+        LinearLayout.LayoutParams contentParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        tvContent.setLayoutParams(contentParams);
 
         TextView tvT = new TextView(this);
         tvT.setText(time.length() > 10 ? time.substring(5, 10) : time);
         tvT.setTextSize(11f);
         tvT.setTextColor(getResources().getColor(R.color.text_secondary));
         LinearLayout.LayoutParams tvTParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        tvTParams.leftMargin = dp(4);
+        tvTParams.leftMargin = dp(6);
         tvT.setLayoutParams(tvTParams);
 
-        row.addView(tv);
-        row.addView(tvT);
-        row.setClickable(true);
-        row.setFocusable(true);
-        row.setOnClickListener(v -> {
+        final String finalNick = nick;
+        View.OnClickListener replyClickListener = v -> {
             replyTargetCommentId = parentCommentId;
-            replyHint = "回复 @" + nick + "...";
+            replyHint = "回复 @" + (finalNick.isEmpty() ? "" : finalNick) + "...";
             etComment.setHint(replyHint);
             etComment.requestFocus();
             InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
             if (imm != null) imm.showSoftInput(etComment, InputMethodManager.SHOW_IMPLICIT);
-        });
+        };
+
+        tvContent.setOnClickListener(replyClickListener);
+        tvT.setOnClickListener(replyClickListener);
+
+        row.addView(tvNick);
+        row.addView(tvContent);
+        row.addView(tvT);
+
         container.addView(row);
     }
 

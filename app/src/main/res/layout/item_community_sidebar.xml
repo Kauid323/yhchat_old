@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/layoutSidebarRoot"
+    android:layout_width="88dp"
+    android:layout_height="52dp"
+    android:clickable="true"
+    android:focusable="true">
+
+    <View
+        android:id="@+id/indicatorSidebar"
+        android:layout_width="4dp"
+        android:layout_height="24dp"
+        android:layout_gravity="center_vertical|start"
+        android:background="?attr/colorPrimary"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/tvSidebarTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:textColor="?android:attr/textColorSecondary"
+        android:textSize="14sp" />
+
+</FrameLayout>

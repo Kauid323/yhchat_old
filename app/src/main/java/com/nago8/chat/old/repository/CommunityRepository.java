@@ -193,4 +193,132 @@ public class CommunityRepository {
             return null;
         }
     }
+
+    // ==================== 分区/板块 API ====================
+
+    /** 获取分区列表（POST /v1/community/ba/following-ba-list） typ: 1-关注, 2-热门, 3-我的, 4-全部 */
+    @SuppressWarnings("UnusedReturnValue")
+    public Call getBaList(String token, int typ, int page, int size, StringCallback cb) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("typ", typ);
+            json.put("page", page);
+            json.put("size", size);
+            return post("/v1/community/ba/following-ba-list", token, json.toString(), cb);
+        } catch (Exception e) {
+            cb.onError(e.getMessage());
+            return null;
+        }
+    }
+
+    /** 获取分区信息（POST /v1/community/ba/info） */
+    @SuppressWarnings("UnusedReturnValue")
+    public Call getBaInfo(String token, int baId, StringCallback cb) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("id", baId);
+            return post("/v1/community/ba/info", token, json.toString(), cb);
+        } catch (Exception e) {
+            cb.onError(e.getMessage());
+            return null;
+        }
+    }
+
+    /** 关注分区 (POST /v1/community/ba/user-follow-ba) */
+    @SuppressWarnings("UnusedReturnValue")
+    public Call followBa(String token, int baId, SimpleCallback cb) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("baId", baId);
+            json.put("followSource", 2);
+            simplePost("/v1/community/ba/user-follow-ba", token, json.toString(), cb);
+        } catch (Exception e) {
+            cb.onError(e.getMessage());
+        }
+        return null;
+    }
+
+    /** 取关分区 (POST /v1/community/ba/user-unfollow-ba) */
+    @SuppressWarnings("UnusedReturnValue")
+    public Call unfollowBa(String token, int baId, SimpleCallback cb) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("baId", baId);
+            simplePost("/v1/community/ba/user-unfollow-ba", token, json.toString(), cb);
+        } catch (Exception e) {
+            cb.onError(e.getMessage());
+        }
+        return null;
+    }
+
+    /** 获取分区下绑定的群聊列表（POST /v1/community/ba/group-list） */
+    @SuppressWarnings("UnusedReturnValue")
+    public Call getBaGroupList(String token, int baId, int page, int size, StringCallback cb) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("baId", baId);
+            json.put("page", page);
+            json.put("size", size);
+            return post("/v1/community/ba/group-list", token, json.toString(), cb);
+        } catch (Exception e) {
+            cb.onError(e.getMessage());
+            return null;
+        }
+    }
+
+    /** 获取我的文章列表（POST /v1/community/posts/my-post-list） */
+    @SuppressWarnings("UnusedReturnValue")
+    public Call getMyPostList(String token, int page, int size, StringCallback cb) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("page", page);
+            json.put("size", size);
+            return post("/v1/community/posts/my-post-list", token, json.toString(), cb);
+        } catch (Exception e) {
+            cb.onError(e.getMessage());
+            return null;
+        }
+    }
+
+    /** 获取我的收藏文章列表（POST /v1/community/posts/post-collect-list） */
+    @SuppressWarnings("UnusedReturnValue")
+    public Call getMyCollectList(String token, int page, int size, StringCallback cb) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("page", page);
+            json.put("size", size);
+            return post("/v1/community/posts/post-collect-list", token, json.toString(), cb);
+        } catch (Exception e) {
+            cb.onError(e.getMessage());
+            return null;
+        }
+    }
+
+    /** 获取屏蔽用户列表（POST /v1/community/black-list） */
+    @SuppressWarnings("UnusedReturnValue")
+    public Call getBlackList(String token, int page, int size, StringCallback cb) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("page", page);
+            json.put("size", size);
+            return post("/v1/community/black-list", token, json.toString(), cb);
+        } catch (Exception e) {
+            cb.onError(e.getMessage());
+            return null;
+        }
+    }
+
+    /** 屏蔽/取消屏蔽用户（POST /v1/community/set-black-list） isAdd: 1-屏蔽, 0-取消屏蔽 */
+    @SuppressWarnings("UnusedReturnValue")
+    public Call setBlackList(String token, String authorId, int isAdd, SimpleCallback cb) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("authorId", authorId);
+            json.put("isAdd", isAdd);
+            simplePost("/v1/community/set-black-list", token, json.toString(), cb);
+        } catch (Exception e) {
+            cb.onError(e.getMessage());
+        }
+        return null;
+    }
 }

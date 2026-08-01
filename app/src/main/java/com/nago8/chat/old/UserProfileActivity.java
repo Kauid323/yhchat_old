@@ -214,7 +214,7 @@ public class UserProfileActivity extends AppCompatActivity {
 
     private void bindUser(get_user.Data data) {
         if (data == null) return;
-        currentUserName = data.name != null && data.name.length() > 0 ? data.name : getString(R.string.unknown_user);
+        currentUserName = (data.name != null && !"未知用户".equals(data.name) && !"Unknown user".equals(data.name)) ? data.name : "";
         currentUserAvatar = data.avatar_url != null ? data.avatar_url : "";
 
         tvName.setText(currentUserName);

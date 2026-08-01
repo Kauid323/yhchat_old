@@ -39,6 +39,9 @@
         <activity android:name=".SettingsActivity" />
         <activity android:name=".WsLogActivity" />
         <activity android:name=".CreateChatActivity" />
+        <activity android:name=".MyPostsActivity" />
+        <activity android:name=".MyCollectsActivity" />
+        <activity android:name=".BlockedUsersActivity" />
         <activity android:name=".ImagePreviewActivity"
             android:theme="@style/Theme.云湖Old.Fullscreen" />
         <activity
@@ -65,6 +68,8 @@
             </intent-filter>
         </activity>
         <activity android:name=".GroupMembersActivity" />
+        <activity android:name=".SectionDetailActivity" />
+        <activity android:name=".SectionInfoActivity" />
         <activity android:name=".VideoPlayerActivity"
             android:configChanges="orientation|screenSize"
             android:theme="@style/Theme.云湖Old.Fullscreen" />

@@ -157,7 +157,11 @@ public class BotProfileActivity extends AppCompatActivity {
     }
 
     private void bindBot(bot_info.Bot_data data) {
-        tvName.setText(data.name != null && !data.name.isEmpty() ? data.name : getString(R.string.unknown_user));
+        String name = data.name;
+        if (name == null || "未知用户".equals(name) || "Unknown user".equals(name)) {
+            name = "";
+        }
+        tvName.setText(name);
         tvBotId.setText(getString(R.string.user_id_format, data.bot_id));
         ImageUtils.loadAvatar(this, data.avatar_url, ivAvatar);
 
