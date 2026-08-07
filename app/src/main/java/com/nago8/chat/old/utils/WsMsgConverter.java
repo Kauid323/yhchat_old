@@ -41,6 +41,10 @@ public class WsMsgConverter {
             contentBuilder.audio_time(wsMsg.content.audio_time);
             contentBuilder.width(wsMsg.content.width);
             contentBuilder.height(wsMsg.content.height);
+            if (wsMsg.content.post_id != null) contentBuilder.post_id(wsMsg.content.post_id);
+            if (wsMsg.content.post_title != null) contentBuilder.post_title(wsMsg.content.post_title);
+            if (wsMsg.content.post_content != null) contentBuilder.post_content(wsMsg.content.post_content);
+            if (wsMsg.content.post_content_type != null) contentBuilder.post_content_type(wsMsg.content.post_content_type);
         }
 
         // 构建 Cmd
@@ -50,6 +54,12 @@ public class WsMsgConverter {
                     .name(wsMsg.cmd.name != null ? wsMsg.cmd.name : "")
                     .type(0)
                     .build();
+        }
+
+        long editTime = wsMsg.edit_time;
+        if (editTime <= 0 && wsMsg.cmd != null && wsMsg.cmd.name != null &&
+                ("edit_message".equalsIgnoreCase(wsMsg.cmd.name) || "edit".equalsIgnoreCase(wsMsg.cmd.name))) {
+            editTime = wsMsg.timestamp > 0 ? wsMsg.timestamp : System.currentTimeMillis();
         }
 
         return new Msg.Builder()
@@ -63,7 +73,7 @@ public class WsMsgConverter {
                 .msg_delete_time(wsMsg.delete_time)
                 .quote_msg_id(wsMsg.quote_msg_id != null ? wsMsg.quote_msg_id : "")
                 .msg_seq(wsMsg.msg_seq)
-                .edit_time(wsMsg.edit_time)
+                .edit_time(editTime)
                 .build();
     }
 

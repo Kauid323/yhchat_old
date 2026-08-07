@@ -15,6 +15,8 @@
     <string name="menu_logout">Logout</string>
     <string name="logout_success">Logged out successfully</string>
     <string name="logout_failed">Logout failed</string>
+    <string name="logout_confirm_title">Confirm Logout</string>
+    <string name="logout_confirm_message">Are you sure you want to log out?</string>
     <string name="menu_conversations">Conversations</string>
     <string name="menu_address_book">Address Book</string>
     <string name="menu_community">Community</string>

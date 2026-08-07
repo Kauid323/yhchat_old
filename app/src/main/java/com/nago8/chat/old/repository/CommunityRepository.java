@@ -194,6 +194,28 @@ public class CommunityRepository {
         }
     }
 
+    /** 转发文章到会话 (POST /v1/community/posts/post-forward) */
+    @SuppressWarnings("UnusedReturnValue")
+    public Call forwardPost(String token, long postId, String chatId, int chatType, StringCallback cb) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("postId", postId);
+
+            org.json.JSONArray receiveArr = new org.json.JSONArray();
+            JSONObject receiveObj = new JSONObject();
+            receiveObj.put("chatId", chatId != null ? chatId : "");
+            receiveObj.put("chatType", chatType);
+            receiveArr.put(receiveObj);
+
+            json.put("receive", receiveArr);
+
+            return post("/v1/community/posts/post-forward", token, json.toString(), cb);
+        } catch (Exception e) {
+            cb.onError(e.getMessage());
+            return null;
+        }
+    }
+
     // ==================== 分区/板块 API ====================
 
     /** 获取分区列表（POST /v1/community/ba/following-ba-list） typ: 1-关注, 2-热门, 3-我的, 4-全部 */

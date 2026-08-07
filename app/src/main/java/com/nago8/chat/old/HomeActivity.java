@@ -216,7 +216,17 @@ public class HomeActivity extends AppCompatActivity {
             startActivity(new Intent(this, SettingsActivity.class));
         });
         findViewById(R.id.menu_language).setOnClickListener(v -> showLanguageDialog());
-        findViewById(R.id.menu_logout).setOnClickListener(v -> performLogout());
+        findViewById(R.id.menu_logout).setOnClickListener(v -> showLogoutConfirmDialog());
+    }
+
+    private void showLogoutConfirmDialog() {
+        if (drawerLayout != null) drawerLayout.closeDrawer(GravityCompat.START);
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.logout_confirm_title)
+                .setMessage(R.string.logout_confirm_message)
+                .setPositiveButton(R.string.dialog_confirm, (dialog, which) -> performLogout())
+                .setNegativeButton(R.string.dialog_cancel, null)
+                .show();
     }
 
     private void switchFragment(Fragment fragment, int titleRes) {

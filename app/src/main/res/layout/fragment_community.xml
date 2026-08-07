@@ -1,25 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical">
+    android:layout_height="match_parent">
 
-    <!-- MD2 Community TabLayout -->
-    <com.google.android.material.tabs.TabLayout
-        android:id="@+id/tabLayoutCommunity"
+    <!-- Normal Tabs View -->
+    <LinearLayout
+        android:id="@+id/layoutTabsContainer"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        app:tabIndicatorColor="?attr/colorPrimary"
-        app:tabIndicatorHeight="3dp"
-        app:tabSelectedTextColor="?attr/colorPrimary"
-        app:tabTextColor="?android:attr/textColorSecondary" />
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
-    <!-- ViewPager2 for Community Tabs -->
-    <androidx.viewpager2.widget.ViewPager2
-        android:id="@+id/viewPagerCommunity"
+        <!-- MD2 Community TabLayout -->
+        <com.google.android.material.tabs.TabLayout
+            android:id="@+id/tabLayoutCommunity"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:tabIndicatorColor="?attr/colorPrimary"
+            app:tabIndicatorHeight="3dp"
+            app:tabSelectedTextColor="?attr/colorPrimary"
+            app:tabTextColor="?android:attr/textColorSecondary" />
+
+        <!-- ViewPager2 for Community Tabs -->
+        <androidx.viewpager2.widget.ViewPager2
+            android:id="@+id/viewPagerCommunity"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+    </LinearLayout>
+
+    <!-- Overlay Container for in-place Section Detail -->
+    <FrameLayout
+        android:id="@+id/containerSectionDetail"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1" />
+        android:layout_height="match_parent"
+        android:visibility="gone" />
 
-</LinearLayout>
+</FrameLayout>

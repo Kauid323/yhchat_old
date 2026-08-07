@@ -5,41 +5,71 @@
     android:layout_height="match_parent"
     android:background="#FF000000">
 
-    <com.ortiz.touchview.TouchImageView
-        android:id="@+id/zoomableImage"
+    <!-- 多图滑动 ViewPager2 -->
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/viewPager"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:contentDescription="@string/image_preview_desc" />
+        android:layout_height="match_parent" />
 
-    <androidx.appcompat.widget.AppCompatImageButton
-        android:id="@+id/btnBack"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:layout_gravity="top|start"
-        android:layout_margin="8dp"
-        android:background="@android:color/transparent"
-        android:contentDescription="@string/action_back"
-        android:padding="12dp"
-        app:srcCompat="@drawable/ic_back"
-        app:tint="@color/text_white" />
+    <!-- 顶部工具栏 -->
+    <LinearLayout
+        android:id="@+id/topBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp">
 
-    <androidx.appcompat.widget.AppCompatImageButton
-        android:id="@+id/btnSave"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:layout_gravity="top|end"
-        android:layout_margin="8dp"
-        android:background="@android:color/transparent"
-        android:contentDescription="@string/image_preview_save"
-        android:padding="12dp"
-        app:srcCompat="@drawable/ic_more"
-        app:tint="@color/text_white" />
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/btnBack"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="@string/action_back"
+            android:padding="12dp"
+            app:srcCompat="@drawable/ic_back"
+            app:tint="@color/text_white" />
 
+        <!-- 图片计数器：如 "2 / 8" -->
+        <TextView
+            android:id="@+id/tvPageCount"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:textColor="#FFFFFFFF"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/btnSave"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="@string/image_preview_save"
+            android:padding="12dp"
+            app:srcCompat="@drawable/ic_more"
+            app:tint="@color/text_white" />
+    </LinearLayout>
+
+    <!-- 中央加载进度 -->
     <ProgressBar
         android:id="@+id/progressBar"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
+        android:visibility="gone" />
+
+    <!-- 底部加载更多进度 -->
+    <ProgressBar
+        android:id="@+id/progressLoadMore"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="24dp"
         android:visibility="gone" />
 
 </FrameLayout>

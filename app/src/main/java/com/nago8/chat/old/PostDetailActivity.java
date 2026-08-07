@@ -663,10 +663,17 @@ public class PostDetailActivity extends AppCompatActivity {
     }
 
     private void removeCommentViews() {
-        // Keep: commentProgressBar(idx 0), tvNoComment(idx 1), tvLoadMoreComments(idx 2)
-        int keepCount = 3;
-        while (commentListContainer.getChildCount() > keepCount) {
-            commentListContainer.removeViewAt(keepCount);
+        if (commentListContainer == null) return;
+        for (int i = commentListContainer.getChildCount() - 1; i >= 0; i--) {
+            View child = commentListContainer.getChildAt(i);
+            int id = child.getId();
+            if (id != R.id.commentProgressBar && id != R.id.tvNoComment && id != R.id.tvLoadMoreComments) {
+                commentListContainer.removeViewAt(i);
+            }
+        }
+        if (tvLoadMoreComments != null && commentListContainer.indexOfChild(tvLoadMoreComments) != -1) {
+            commentListContainer.removeView(tvLoadMoreComments);
+            commentListContainer.addView(tvLoadMoreComments);
         }
     }
 
@@ -879,9 +886,13 @@ public class PostDetailActivity extends AppCompatActivity {
         divider.setLayoutParams(divParams);
         commentCard.addView(divider);
 
-        // Insert before tvLoadMoreComments (last child of commentListContainer)
-        int insertIdx = commentListContainer.getChildCount() - 1;
-        commentListContainer.addView(commentCard, insertIdx);
+        // Insert before tvLoadMoreComments
+        int insertIdx = commentListContainer.indexOfChild(tvLoadMoreComments);
+        if (insertIdx >= 0) {
+            commentListContainer.addView(commentCard, insertIdx);
+        } else {
+            commentListContainer.addView(commentCard);
+        }
     }
 
     @SuppressWarnings("deprecation")

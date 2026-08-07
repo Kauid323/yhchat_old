@@ -2,6 +2,7 @@ package com.nago8.chat.old.cache;
 
 import android.content.Context;
 
+import com.nago8.chat.old.proto.Msg;
 import com.nago8.chat.old.proto.chat_ws_go.WsMsg;
 import com.nago8.chat.old.proto.conversation.ConversationList;
 import com.nago8.chat.old.utils.PrefUtils;
@@ -10,9 +11,11 @@ import com.nago8.chat.old.ws.WsClient;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -45,10 +48,69 @@ public class ConversationCache {
     private final Set<String> stickySet = new HashSet<>();
     private final Set<String> dndSet = new HashSet<>();
 
+    // 消息列表增量缓存：按 chatId 映射 List<Msg>
+    private final Map<String, List<Msg>> messageCacheMap = new HashMap<>();
+
     private OnUnreadCountChangeListener unreadChangeListener;
 
     private int totalUnreadCount = 0;
     private int stickyUnreadCount = 0;
+
+    /**
+     * 获取特定会话已缓存的消息列表（副本）
+     */
+    public synchronized List<Msg> getCachedMessages(String chatId) {
+        if (chatId == null || chatId.isEmpty()) return new ArrayList<>();
+        List<Msg> cached = messageCacheMap.get(chatId);
+        return cached != null ? new ArrayList<>(cached) : new ArrayList<>();
+    }
+
+    /**
+     * 更新特定会话的消息缓存列表
+     */
+    public synchronized void updateCachedMessages(String chatId, List<Msg> messages) {
+        if (chatId == null || chatId.isEmpty()) return;
+        if (messages == null) {
+            messageCacheMap.remove(chatId);
+        } else {
+            messageCacheMap.put(chatId, new ArrayList<>(messages));
+        }
+    }
+
+    /**
+     * 当在任意界面接收到 WS 消息时，增量提前保存到该会话的消息缓存中
+     */
+    public synchronized void saveSinglePushMessage(WsMsg wsMsg, String myUserId) {
+        if (wsMsg == null) return;
+        String chatId = WsClient.getTargetChatId(wsMsg, myUserId);
+        if (chatId == null || chatId.isEmpty()) return;
+
+        Msg msg = WsMsgConverter.convert(wsMsg, myUserId);
+        if (msg == null) return;
+
+        List<Msg> list = messageCacheMap.get(chatId);
+        if (list == null) {
+            list = new ArrayList<>();
+            messageCacheMap.put(chatId, list);
+        }
+
+        // 如果找到已有对应的消息id，直接覆盖原内容；否则增量追加
+        if (msg.msg_id != null && !msg.msg_id.isEmpty()) {
+            int foundIndex = -1;
+            for (int i = 0; i < list.size(); i++) {
+                Msg existing = list.get(i);
+                if (existing != null && msg.msg_id.equals(existing.msg_id)) {
+                    foundIndex = i;
+                    break;
+                }
+            }
+            if (foundIndex != -1) {
+                list.set(foundIndex, msg);
+                return;
+            }
+        }
+        list.add(msg);
+    }
 
     private ConversationCache() {}
 
@@ -189,6 +251,9 @@ public class ConversationCache {
         String myUserId = PrefUtils.getUserId(ctx);
         String chatId = WsClient.getTargetChatId(wsMsg, myUserId);
         if (chatId == null || chatId.isEmpty()) return;
+
+        // 在其他界面时收到 WS 消息，提前增量添加到全局消息缓存中
+        saveSinglePushMessage(wsMsg, myUserId);
 
         boolean isFromMe = (wsMsg.sender != null && wsMsg.sender.chat_id != null && wsMsg.sender.chat_id.equals(myUserId));
         String activeChatId = WsClient.getInstance().getActiveChatId();

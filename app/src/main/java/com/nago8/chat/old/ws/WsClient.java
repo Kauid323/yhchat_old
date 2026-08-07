@@ -498,6 +498,17 @@ public class WsClient {
                 String cmd = m.info != null && m.info.cmd != null ? m.info.cmd : "";
                 String seq = m.info != null && m.info.seq != null ? m.info.seq : "";
                 if (cmd.length() == 0) return null;
+                // 将编辑消息推送给所有监听器，让 ChatActivity 能覆盖原消息
+                if (m.data != null && m.data.msg != null) {
+                    WsMsg wm = m.data.msg;
+                    // 确保 cmd 字段标记为 edit_message，以便 WsMsgConverter 识别编辑标志
+                    if (wm.cmd == null || wm.cmd.name == null || wm.cmd.name.isEmpty()) {
+                        wm = wm.newBuilder()
+                                .cmd(new WsMsg.WsCmd.Builder().name("edit_message").build())
+                                .build();
+                    }
+                    notifyListeners(wm);
+                }
                 return "[cmd=" + cmd + " seq=" + seq + "] edit_message";
             } else if (msg instanceof draft_input) {
                 draft_input m = (draft_input) msg;

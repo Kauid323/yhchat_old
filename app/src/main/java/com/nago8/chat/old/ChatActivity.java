@@ -157,6 +157,7 @@ public class ChatActivity extends AppCompatActivity {
         recyclerView.setItemAnimator(null);
         recyclerView.addOnScrollListener(new TopLoadScrollListener());
         adapter = new MessagesAdapter();
+        adapter.setChatContext(chatId, chatType, PrefUtils.getToken(this));
         recyclerView.setAdapter(adapter);
 
         adapter.setOnAvatarClickListener((senderId, senderChatType) -> {
@@ -173,8 +174,15 @@ public class ChatActivity extends AppCompatActivity {
         });
 
         adapter.setOnMessageClickListener((anchorView, msg, group) -> showMessageDropMenu(anchorView, msg, group));
+        adapter.setOnEditHistoryClickListener(msg -> showEditHistory(msg));
 
         setupComposeInput();
+        // 优先读取在其他界面提前增量保存的消息缓存
+        List<Msg> cached = com.nago8.chat.old.cache.ConversationCache.getInstance().getCachedMessages(chatId);
+        if (cached != null && !cached.isEmpty()) {
+            mergeMessages(cached);
+            refreshMessages(true);
+        }
         fetchMessages();
     }
 
@@ -196,6 +204,15 @@ public class ChatActivity extends AppCompatActivity {
         com.nago8.chat.old.utils.NotificationHelper.cancelNotification(this, chatId);
         wsListener = wsMsg -> runOnUiThread(() -> handlePushMessage(wsMsg));
         WsClient.getInstance().addMessageListener(wsListener);
+
+        // 从全局缓存增量同步在其他界面或后台期间接收到的 WS 消息
+        List<Msg> cached = com.nago8.chat.old.cache.ConversationCache.getInstance().getCachedMessages(chatId);
+        if (cached != null && !cached.isEmpty()) {
+            int added = mergeMessages(cached);
+            if (added > 0) {
+                refreshMessages(isAtBottom());
+            }
+        }
     }
 
     @Override
@@ -218,14 +235,26 @@ public class ChatActivity extends AppCompatActivity {
         Msg msg = WsMsgConverter.convert(wsMsg, myUserId);
         if (msg == null) return;
 
-        // 去重
+        // 如果找到已有对应的消息id，直接覆盖原内容
         if (msg.msg_id != null && !msg.msg_id.isEmpty()) {
-            for (Msg existing : allMessages) {
-                if (existing != null && msg.msg_id.equals(existing.msg_id)) return;
+            int foundIndex = -1;
+            for (int i = 0; i < allMessages.size(); i++) {
+                Msg existing = allMessages.get(i);
+                if (existing != null && msg.msg_id.equals(existing.msg_id)) {
+                    foundIndex = i;
+                    break;
+                }
+            }
+            if (foundIndex != -1) {
+                allMessages.set(foundIndex, msg);
+                com.nago8.chat.old.cache.ConversationCache.getInstance().updateCachedMessages(chatId, allMessages);
+                refreshMessages(false);
+                return;
             }
         }
 
         allMessages.add(msg);
+        com.nago8.chat.old.cache.ConversationCache.getInstance().updateCachedMessages(chatId, allMessages);
         // 只有用户当前在底部附近时才滚动到最新消息，否则保持当前位置
         refreshMessages(isAtBottom());
     }
@@ -511,6 +540,12 @@ public class ChatActivity extends AppCompatActivity {
         });
     }
 
+    private void openArticlePicker() {
+        com.nago8.chat.old.fragments.ArticlePickerBottomSheetDialogFragment dialog =
+                com.nago8.chat.old.fragments.ArticlePickerBottomSheetDialogFragment.newInstance(chatId, chatType);
+        dialog.show(getSupportFragmentManager(), "article_picker");
+    }
+
     private void setupComposeInput() {
         chatInputBar = findViewById(R.id.chatInputBar);
         if (chatInputBar != null) {
@@ -525,6 +560,8 @@ public class ChatActivity extends AppCompatActivity {
                     openFilePicker();
                 } else if ("video".equals(actionType)) {
                     openVideoPicker();
+                } else if ("article".equals(actionType)) {
+                    openArticlePicker();
                 } else {
                     String actionName;
                     switch (actionType) {
@@ -533,9 +570,6 @@ public class ChatActivity extends AppCompatActivity {
                             break;
                         case "card":
                             actionName = getString(R.string.chat_action_card);
-                            break;
-                        case "article":
-                            actionName = getString(R.string.chat_action_article);
                             break;
                         default:
                             actionName = actionType;
@@ -603,7 +637,7 @@ public class ChatActivity extends AppCompatActivity {
         });
     }
 
-    private void fetchLatestMessage() {
+    public void fetchLatestMessage() {
         // 增量拉取最新消息（用最大 msg_seq + 1 作为起点）
         long maxSeq = 0;
         for (Msg msg : allMessages) {
@@ -675,7 +709,6 @@ public class ChatActivity extends AppCompatActivity {
             public void onSuccess(list_message_by_seq response) {
                 runOnUiThread(() -> {
                     progressBar.setVisibility(View.GONE);
-                    allMessages.clear();
                     mergeMessages(response == null ? null : response.msg);
                     refreshMessages(true);
                 });
@@ -685,7 +718,7 @@ public class ChatActivity extends AppCompatActivity {
             public void onError(Exception error) {
                 runOnUiThread(() -> {
                     progressBar.setVisibility(View.GONE);
-                    tvEmpty.setVisibility(View.VISIBLE);
+                    tvEmpty.setVisibility(View.GONE);
                     Toast.makeText(ChatActivity.this, R.string.chat_load_failed, Toast.LENGTH_SHORT).show();
                 });
             }
@@ -734,20 +767,28 @@ public class ChatActivity extends AppCompatActivity {
     private int mergeMessages(List<Msg> messages) {
         if (messages == null || messages.isEmpty()) return 0;
 
-        Set<String> existed = new HashSet<>();
-        for (Msg msg : allMessages) {
-            if (msg != null && msg.msg_id != null) existed.add(msg.msg_id);
-        }
-
-        int added = 0;
+        int addedOrUpdated = 0;
         for (Msg msg : messages) {
-            if (msg == null || msg.msg_id == null || existed.contains(msg.msg_id)) continue;
-            allMessages.add(msg);
-            existed.add(msg.msg_id);
-            added++;
+            if (msg == null || msg.msg_id == null || msg.msg_id.isEmpty()) continue;
+            int foundIndex = -1;
+            for (int i = 0; i < allMessages.size(); i++) {
+                Msg existing = allMessages.get(i);
+                if (existing != null && msg.msg_id.equals(existing.msg_id)) {
+                    foundIndex = i;
+                    break;
+                }
+            }
+            if (foundIndex != -1) {
+                allMessages.set(foundIndex, msg);
+                addedOrUpdated++;
+            } else {
+                allMessages.add(msg);
+                addedOrUpdated++;
+            }
         }
         sortMessagesOldToNew();
-        return added;
+        com.nago8.chat.old.cache.ConversationCache.getInstance().updateCachedMessages(chatId, allMessages);
+        return addedOrUpdated;
     }
 
     private void sortMessagesOldToNew() {
@@ -943,6 +984,103 @@ public class ChatActivity extends AppCompatActivity {
         allMessages.remove(msg);
         refreshMessages(false);
         Toast.makeText(this, R.string.toast_deleted, Toast.LENGTH_SHORT).show();
+    }
+
+    private void showEditHistory(Msg msg) {
+        if (msg == null || msg.msg_id == null || msg.msg_id.isEmpty()) return;
+        String token = PrefUtils.getToken(this);
+
+        // 展示加载中状态
+        android.app.ProgressDialog progress = new android.app.ProgressDialog(this);
+        progress.setMessage("正在加载编辑历史…");
+        progress.setCancelable(false);
+        progress.show();
+
+        repository.listMessageEditRecord(token, msg.msg_id, new MessageRepository.EditRecordCallback() {
+            @Override
+            public void onSuccess(java.util.List<MessageRepository.EditRecord> records) {
+                runOnUiThread(() -> {
+                    progress.dismiss();
+                    if (records == null || records.isEmpty()) {
+                        Toast.makeText(ChatActivity.this, "暂无编辑历史", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    // 构建列表展示
+                    android.widget.ScrollView scrollView = new android.widget.ScrollView(ChatActivity.this);
+                    android.widget.LinearLayout listLayout = new android.widget.LinearLayout(ChatActivity.this);
+                    listLayout.setOrientation(android.widget.LinearLayout.VERTICAL);
+                    listLayout.setPadding(dp(16), dp(8), dp(16), dp(8));
+
+                    java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault());
+
+                    for (int i = 0; i < records.size(); i++) {
+                        MessageRepository.EditRecord rec = records.get(i);
+
+                        // 时间标头
+                        android.widget.TextView tvTime = new android.widget.TextView(ChatActivity.this);
+                        String timeStr = sdf.format(new java.util.Date(rec.msgTime > 0 ? rec.msgTime : rec.createTime));
+                        tvTime.setText("第 " + (i + 1) + " 次编辑·" + timeStr);
+                        tvTime.setTextSize(12);
+                        tvTime.setTextColor(0xFF9E9E9E);
+                        android.widget.LinearLayout.LayoutParams timeParams = new android.widget.LinearLayout.LayoutParams(
+                                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+                        timeParams.topMargin = i == 0 ? 0 : dp(12);
+                        tvTime.setLayoutParams(timeParams);
+                        listLayout.addView(tvTime);
+
+                        // 旧内容文本
+                        String oldText = "";
+                        try {
+                            org.json.JSONObject contentJson = new org.json.JSONObject(rec.contentOld);
+                            oldText = contentJson.optString("text", rec.contentOld);
+                        } catch (Exception e) {
+                            oldText = rec.contentOld;
+                        }
+
+                        android.widget.TextView tvContent = new android.widget.TextView(ChatActivity.this);
+                        tvContent.setText(oldText);
+                        tvContent.setTextSize(14);
+                        tvContent.setTextColor(0xFF212121);
+                        android.widget.LinearLayout.LayoutParams contentParams = new android.widget.LinearLayout.LayoutParams(
+                                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+                        contentParams.topMargin = dp(2);
+                        tvContent.setLayoutParams(contentParams);
+
+                        // 内容卡片背景
+                        android.graphics.drawable.GradientDrawable cardBg = new android.graphics.drawable.GradientDrawable();
+                        cardBg.setCornerRadius(dp(8));
+                        cardBg.setColor(0xFFF5F5F5);
+                        tvContent.setBackground(cardBg);
+                        tvContent.setPadding(dp(10), dp(8), dp(10), dp(8));
+                        listLayout.addView(tvContent);
+                    }
+
+                    scrollView.addView(listLayout);
+
+                    new com.google.android.material.dialog.MaterialAlertDialogBuilder(ChatActivity.this)
+                            .setTitle("编辑历史")
+                            .setView(scrollView)
+                            .setPositiveButton("关闭", null)
+                            .show();
+                });
+            }
+
+            @Override
+            public void onError(String error) {
+                runOnUiThread(() -> {
+                    progress.dismiss();
+                    Toast.makeText(ChatActivity.this, "加载失败: " + error, Toast.LENGTH_SHORT).show();
+                });
+            }
+        });
+    }
+
+    private int dp(int dp) {
+        float density = getResources().getDisplayMetrics().density;
+        return Math.round(dp * density);
     }
 
     @Override

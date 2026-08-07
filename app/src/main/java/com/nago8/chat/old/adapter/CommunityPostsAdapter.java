@@ -36,9 +36,14 @@ public class CommunityPostsAdapter extends RecyclerView.Adapter<RecyclerView.Vie
     private View headerView;
     private int footerState = STATE_LOADING;
     private OnLoadMoreClickListener onLoadMoreClickListener;
+    private OnPostClickListener onPostClickListener;
 
     public interface OnLoadMoreClickListener {
         void onLoadMoreClick();
+    }
+
+    public interface OnPostClickListener {
+        void onPostClick(CommunityPostModel post);
     }
 
     public CommunityPostsAdapter(Context context) {
@@ -55,20 +60,15 @@ public class CommunityPostsAdapter extends RecyclerView.Adapter<RecyclerView.Vie
         this.onLoadMoreClickListener = listener;
     }
 
+    public void setOnPostClickListener(OnPostClickListener listener) {
+        this.onPostClickListener = listener;
+    }
+
     public void setPosts(List<CommunityPostModel> newPosts) {
         if (newPosts == null) newPosts = new ArrayList<>();
-
-        if (headerView != null) {
-            this.postList.clear();
-            this.postList.addAll(newPosts);
-            notifyDataSetChanged();
-            return;
-        }
-
-        DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new PostDiffCallback(this.postList, newPosts));
         this.postList.clear();
         this.postList.addAll(newPosts);
-        diffResult.dispatchUpdatesTo(this);
+        notifyDataSetChanged();
     }
 
     public void addPosts(List<CommunityPostModel> newPosts) {
@@ -171,8 +171,8 @@ public class CommunityPostsAdapter extends RecyclerView.Adapter<RecyclerView.Vie
                     && oldItem.getCollectNum() == newItem.getCollectNum()
                     && oldItem.isLiked() == newItem.isLiked()
                     && oldItem.isCollected() == newItem.isCollected()
-                    && Objects.equals(oldItem.getTitle(), newItem.getTitle())
-                    && Objects.equals(oldItem.getContent(), newItem.getContent());
+                    && android.text.TextUtils.equals(oldItem.getTitle(), newItem.getTitle())
+                    && android.text.TextUtils.equals(oldItem.getContent(), newItem.getContent());
         }
     }
 
@@ -243,10 +243,14 @@ public class CommunityPostsAdapter extends RecyclerView.Adapter<RecyclerView.Vie
                 int realPos = pos - (headerView != null ? 1 : 0);
                 if (pos != RecyclerView.NO_POSITION && realPos >= 0 && realPos < postList.size()) {
                     CommunityPostModel item = postList.get(realPos);
-                    Intent intent = new Intent(context, PostDetailActivity.class);
-                    intent.putExtra(PostDetailActivity.EXTRA_POST_ID, String.valueOf(item.getId()));
-                    intent.putExtra(PostDetailActivity.EXTRA_POST_TITLE, item.getTitle());
-                    context.startActivity(intent);
+                    if (onPostClickListener != null) {
+                        onPostClickListener.onPostClick(item);
+                    } else {
+                        Intent intent = new Intent(context, PostDetailActivity.class);
+                        intent.putExtra(PostDetailActivity.EXTRA_POST_ID, String.valueOf(item.getId()));
+                        intent.putExtra(PostDetailActivity.EXTRA_POST_TITLE, item.getTitle());
+                        context.startActivity(intent);
+                    }
                 }
             });
         }
@@ -268,7 +272,7 @@ public class CommunityPostsAdapter extends RecyclerView.Adapter<RecyclerView.Vie
 
             String avatarUrl = item.getSenderAvatar();
             Object currentTag = ivPostAuthorAvatar.getTag(R.id.ivPostAuthorAvatar);
-            if (!Objects.equals(currentTag, avatarUrl)) {
+            if (!android.text.TextUtils.equals(currentTag != null ? currentTag.toString() : null, avatarUrl)) {
                 ivPostAuthorAvatar.setTag(R.id.ivPostAuthorAvatar, avatarUrl);
                 ImageUtils.loadAvatar(context, avatarUrl, ivPostAuthorAvatar);
             }

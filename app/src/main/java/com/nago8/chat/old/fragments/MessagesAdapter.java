@@ -48,6 +48,17 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
     private OnAvatarClickListener avatarClickListener;
     private Markwon markwon;
 
+    // 聊天上下文，供图片预览多图模式使用
+    private String chatId;
+    private int chatType;
+    private String token;
+
+    public void setChatContext(String chatId, int chatType, String token) {
+        this.chatId = chatId;
+        this.chatType = chatType;
+        this.token = token;
+    }
+
     private static final int HEADER_ORDER_LEFT = 1;
     private static final int HEADER_ORDER_RIGHT = 2;
 
@@ -59,7 +70,12 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
         void onMessageClick(View anchorView, Msg msg, MessageGroup group);
     }
 
+    public interface OnEditHistoryClickListener {
+        void onEditHistoryClick(Msg msg);
+    }
+
     private OnMessageClickListener messageClickListener;
+    private OnEditHistoryClickListener editHistoryClickListener;
 
     public void setOnAvatarClickListener(OnAvatarClickListener listener) {
         this.avatarClickListener = listener;
@@ -67,6 +83,10 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
 
     public void setOnMessageClickListener(OnMessageClickListener listener) {
         this.messageClickListener = listener;
+    }
+
+    public void setOnEditHistoryClickListener(OnEditHistoryClickListener listener) {
+        this.editHistoryClickListener = listener;
     }
 
     public void setData(List<MessageGroup> data) {
@@ -113,7 +133,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         MessageGroup group = groups.get(position);
-        holder.bind(group, avatarClickListener, messageClickListener, getMarkwon(holder.itemView.getContext()));
+        holder.bind(this, group, avatarClickListener, messageClickListener, editHistoryClickListener, getMarkwon(holder.itemView.getContext()));
     }
 
     @Override
@@ -147,7 +167,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             tvOwnerTag = itemView.findViewById(R.id.tvOwnerTag);
         }
 
-        void bind(MessageGroup group, OnAvatarClickListener listener, OnMessageClickListener messageClickListener, Markwon markwon) {
+        void bind(MessagesAdapter adapter, MessageGroup group, OnAvatarClickListener listener, OnMessageClickListener messageClickListener, OnEditHistoryClickListener editHistoryClickListener, Markwon markwon) {
             root.setGravity(group.mine ? Gravity.END : Gravity.START);
             groupContainer.setGravity(group.mine ? Gravity.END : Gravity.START);
             headerRow.setGravity(group.mine ? Gravity.END : Gravity.START);
@@ -174,7 +194,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
 
             contentColumn.removeAllViews();
             for (int i = 0; i < group.messages.size(); i++) {
-                View bubble = createBubble(group, group.messages.get(i), i, group.messages.size(), markwon, messageClickListener);
+                View bubble = createBubble(adapter, group, group.messages.get(i), i, group.messages.size(), markwon, messageClickListener, editHistoryClickListener);
                 contentColumn.addView(bubble);
             }
         }
@@ -241,18 +261,23 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             view.setLayoutParams(params);
         }
 
-        private View createBubble(MessageGroup group, Msg msg, int index, int count, Markwon markwon, OnMessageClickListener messageClickListener) {
-            View rawBubble = createRawBubble(group, msg, index, count, markwon);
+        private View createBubble(MessagesAdapter adapter, MessageGroup group, Msg msg, int index, int count, Markwon markwon, OnMessageClickListener messageClickListener, OnEditHistoryClickListener editHistoryClickListener) {
+            View rawBubble = createRawBubble(adapter, group, msg, index, count, markwon);
             View bubbleView = applyRecallIfNeeded(group, msg, rawBubble);
 
             boolean isRecalled = (msg != null && msg.msg_delete_time > 0);
             boolean isTip = isTipMessage(msg);
+            boolean isEdited = (msg != null && msg.edit_time > 0);
 
             if (!isRecalled && !isTip && messageClickListener != null) {
                 bubbleView.setOnLongClickListener(v -> {
                     messageClickListener.onMessageClick(v, msg, group);
                     return true;
                 });
+            }
+            // 点击已编辑消息气泡 -> 弹出编辑历史
+            if (isEdited && !isRecalled && editHistoryClickListener != null) {
+                bubbleView.setOnClickListener(v -> editHistoryClickListener.onEditHistoryClick(msg));
             }
             return bubbleView;
         }
@@ -270,26 +295,33 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             return false;
         }
 
-        private View createRawBubble(MessageGroup group, Msg msg, int index, int count, Markwon markwon) {
+        private View createRawBubble(MessagesAdapter adapter, MessageGroup group, Msg msg, int index, int count, Markwon markwon) {
             if (msg != null && msg.msg_delete_time <= 0) {
                 if (msg.content_type == 10 || (msg.content != null && msg.content.video_url != null && !msg.content.video_url.isEmpty())) {
                     return createVideoBubble(group, msg, index, count);
                 }
                 if (msg.content != null && msg.content.image_url != null && !msg.content.image_url.isEmpty()) {
-                    return createImageBubble(group, msg, index, count);
+                    return createImageBubble(adapter, group, msg, index, count);
                 }
                 if (msg.content != null && msg.content.file_name != null && !msg.content.file_name.isEmpty() && msg.content.file_url != null && !msg.content.file_url.isEmpty()) {
                     return createFileBubble(group, msg, index, count);
                 }
-                if (msg.content_type == 6 && msg.content != null && msg.content.post_id != null && !msg.content.post_id.isEmpty()) {
+                if (msg.content_type == 6 || (msg.content != null && msg.content.post_id != null && !msg.content.post_id.isEmpty())) {
                     return createPostBubble(group, msg, index, count);
                 }
             }
+            boolean isEdited = msg != null && msg.edit_time > 0;
             TextView textView = new TextView(itemView.getContext());
             int emojiSize = dp(22);
             CharSequence displayText = FengEmojiRenderer.apply(itemView.getContext(), getMessageText(msg), emojiSize);
-            int linkColor = group.mine ? 0xFFE0F2FE : 0xFF1A73E8;
-            textView.setLinkTextColor(linkColor);
+            if (isEdited) {
+                textView.setTextColor(0xFFFFFFFF);
+                textView.setLinkTextColor(0xFFFFECB3);
+            } else {
+                int linkColor = group.mine ? 0xFFE0F2FE : 0xFF1A73E8;
+                textView.setLinkTextColor(linkColor);
+                textView.setTextColor(ContextCompat.getColor(itemView.getContext(), group.mine ? android.R.color.white : R.color.bubble_text_left));
+            }
 
             boolean isMarkdown = msg != null && msg.content_type == 3 && msg.msg_delete_time <= 0;
             if (isMarkdown && markwon != null) {
@@ -299,7 +331,6 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                 InternalLinkUtils.processTextViewLinks(textView, group.mine);
             }
             textView.setTextSize(15);
-            textView.setTextColor(ContextCompat.getColor(itemView.getContext(), group.mine ? android.R.color.white : R.color.bubble_text_left));
             textView.setGravity(Gravity.START);
 
             int maxBubbleWidth = getMaxBubbleWidth(itemView.getContext());
@@ -312,7 +343,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                 Context ctx = itemView.getContext();
                 LinearLayout container = new LinearLayout(ctx);
                 container.setOrientation(LinearLayout.VERTICAL);
-                container.setBackgroundResource(getBubbleBackground(group.mine, index, count));
+                applyBubbleStyle(container, group.mine, isEdited, index, count);
                 container.setPadding(dp(12), dp(8), dp(12), dp(8));
 
                 View quoteView = createQuoteView(ctx, quoteTextStr);
@@ -333,7 +364,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                 container.setLayoutParams(params);
                 return container;
             } else {
-                textView.setBackgroundResource(getBubbleBackground(group.mine, index, count));
+                applyBubbleStyle(textView, group.mine, isEdited, index, count);
                 textView.setPadding(dp(12), dp(8), dp(12), dp(8));
 
                 LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -378,11 +409,12 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             final String videoUrl = msg.content.video_url;
             final String videoTitle = !TextUtils.isEmpty(msg.content.file_name) ? msg.content.file_name : ctx.getString(R.string.preview_video);
 
-            int textColor = ContextCompat.getColor(ctx, group.mine ? android.R.color.white : R.color.bubble_text_left);
+            boolean isEdited = msg != null && msg.edit_time > 0;
+            int textColor = isEdited ? 0xFFFFFFFF : ContextCompat.getColor(ctx, group.mine ? android.R.color.white : R.color.bubble_text_left);
 
             LinearLayout container = new LinearLayout(ctx);
             container.setOrientation(LinearLayout.VERTICAL);
-            container.setBackgroundResource(getBubbleBackground(group.mine, index, count));
+            applyBubbleStyle(container, group.mine, isEdited, index, count);
             container.setPadding(dp(12), dp(10), dp(12), dp(10));
             container.setClickable(true);
             container.setFocusable(true);
@@ -446,12 +478,13 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             final String postId = msg.content.post_id;
             final String postTitle = msg.content.post_title != null ? msg.content.post_title : "";
 
-            int textColor = ContextCompat.getColor(ctx, group.mine ? android.R.color.white : R.color.bubble_text_left);
+            boolean isEdited = msg != null && msg.edit_time > 0;
+            int textColor = isEdited ? 0xFFFFFFFF : ContextCompat.getColor(ctx, group.mine ? android.R.color.white : R.color.bubble_text_left);
 
             LinearLayout container = new LinearLayout(ctx);
             container.setOrientation(LinearLayout.HORIZONTAL);
             container.setGravity(Gravity.CENTER_VERTICAL);
-            container.setBackgroundResource(getBubbleBackground(group.mine, index, count));
+            applyBubbleStyle(container, group.mine, isEdited, index, count);
             container.setPadding(dp(12), dp(10), dp(12), dp(10));
             container.setClickable(true);
             container.setFocusable(true);
@@ -497,12 +530,13 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             final String fileName = msg.content.file_name;
             final long fileSize = msg.content.file_size;
 
+            boolean isEdited = msg != null && msg.edit_time > 0;
             final LinearLayout container = new LinearLayout(ctx);
             container.setOrientation(LinearLayout.VERTICAL);
-            container.setBackgroundResource(getBubbleBackground(group.mine, index, count));
+            applyBubbleStyle(container, group.mine, isEdited, index, count);
             container.setPadding(dp(12), dp(8), dp(12), dp(8));
 
-            int textColor = ContextCompat.getColor(ctx, group.mine ? android.R.color.white : R.color.bubble_text_left);
+            int textColor = isEdited ? 0xFFFFFFFF : ContextCompat.getColor(ctx, group.mine ? android.R.color.white : R.color.bubble_text_left);
 
             LinearLayout infoRow = new LinearLayout(ctx);
             infoRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -713,13 +747,16 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             return quoteBlock;
         }
 
-        private View createImageBubble(MessageGroup group, Msg msg, int index, int count) {
+        private View createImageBubble(MessagesAdapter adapter, MessageGroup group, Msg msg, int index, int count) {
             Context ctx = itemView.getContext();
             String url = msg != null && msg.content != null ? msg.content.image_url : null;
 
+            boolean isEdited = msg != null && msg.edit_time > 0;
+            int textColor = isEdited ? 0xFFFFFFFF : ContextCompat.getColor(ctx, group.mine ? android.R.color.white : R.color.bubble_text_left);
+
             LinearLayout container = new LinearLayout(ctx);
             container.setOrientation(LinearLayout.VERTICAL);
-            container.setBackgroundResource(getBubbleBackground(group.mine, index, count));
+            applyBubbleStyle(container, group.mine, isEdited, index, count);
             container.setPadding(dp(12), dp(8), dp(12), dp(8));
             container.setClickable(true);
 
@@ -739,13 +776,13 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             iconParams.rightMargin = dp(6);
             icon.setLayoutParams(iconParams);
             icon.setImageResource(R.drawable.ic_image);
-            icon.setColorFilter(ContextCompat.getColor(ctx, group.mine ? android.R.color.white : R.color.bubble_text_left));
+            icon.setColorFilter(textColor);
             imageRow.addView(icon);
 
             TextView text = new TextView(ctx);
             text.setText(R.string.message_image);
             text.setTextSize(15);
-            text.setTextColor(ContextCompat.getColor(ctx, group.mine ? android.R.color.white : R.color.bubble_text_left));
+            text.setTextColor(textColor);
             imageRow.addView(text);
 
             container.addView(imageRow);
@@ -759,13 +796,59 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
 
             container.setOnClickListener(v -> {
                 if (!TextUtils.isEmpty(url)) {
+                    // 收集所有已加载的图片/表情消息（去重，保留 msg_seq）
+                    ArrayList<String> allUrls = new ArrayList<>();
+                    ArrayList<Long> allSeqs = new ArrayList<>();
+                    int startIdx = 0;
+                    if (adapter != null && adapter.groups != null) {
+                        for (MessageGroup g : adapter.groups) {
+                            if (g.messages == null) continue;
+                            for (Msg m : g.messages) {
+                                if (m == null || m.content == null) continue;
+                                String imgUrl = null;
+                                if (!TextUtils.isEmpty(m.content.image_url)) {
+                                    imgUrl = m.content.image_url;
+                                } else if (!TextUtils.isEmpty(m.content.sticker_url)) {
+                                    imgUrl = m.content.sticker_url;
+                                }
+                                if (imgUrl != null && !allUrls.contains(imgUrl)) {
+                                    if (imgUrl.equals(url)) startIdx = allUrls.size();
+                                    allUrls.add(imgUrl);
+                                    allSeqs.add(m.msg_seq);
+                                }
+                            }
+                        }
+                    }
+                    if (allUrls.isEmpty()) {
+                        allUrls.add(url);
+                        allSeqs.add(msg != null ? msg.msg_seq : 0L);
+                    }
+
                     Intent intent = new Intent(ctx, ImagePreviewActivity.class);
-                    intent.putExtra(ImagePreviewActivity.EXTRA_IMAGE_URL, url);
+                    intent.putStringArrayListExtra(ImagePreviewActivity.EXTRA_IMAGE_URLS, allUrls);
+                    intent.putExtra(ImagePreviewActivity.EXTRA_MSG_SEQS, allSeqs);
+                    intent.putExtra(ImagePreviewActivity.EXTRA_START_INDEX, startIdx);
+                    if (adapter != null) {
+                        intent.putExtra(ImagePreviewActivity.EXTRA_CHAT_ID, adapter.chatId);
+                        intent.putExtra(ImagePreviewActivity.EXTRA_CHAT_TYPE, adapter.chatType);
+                        intent.putExtra(ImagePreviewActivity.EXTRA_TOKEN, adapter.token);
+                    }
                     ctx.startActivity(intent);
                 }
             });
 
             return container;
+        }
+
+        private void applyBubbleStyle(View bubbleView, boolean mine, boolean isEdited, int index, int count) {
+            if (isEdited) {
+                android.graphics.drawable.GradientDrawable redBg = new android.graphics.drawable.GradientDrawable();
+                redBg.setCornerRadius(dp(16));
+                redBg.setColor(0xFFD32F2F);
+                bubbleView.setBackground(redBg);
+            } else {
+                bubbleView.setBackgroundResource(getBubbleBackground(mine, index, count));
+            }
         }
 
         private int getBubbleBackground(boolean mine, int index, int count) {

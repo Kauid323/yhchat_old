@@ -109,7 +109,7 @@ public class ImageUtils {
         String trimmedUrl = url.trim();
         Object currentTag = imageView.getTag(R.id.ivAvatar);
         // 如果此 ImageView 已渲染当前 URL 的头像且已有图片 Drawable，避免重复加载引起界面闪烁
-        if (Objects.equals(currentTag, trimmedUrl) && imageView.getDrawable() != null) {
+        if ((currentTag == trimmedUrl || (currentTag != null && currentTag.equals(trimmedUrl))) && imageView.getDrawable() != null) {
             return;
         }
 

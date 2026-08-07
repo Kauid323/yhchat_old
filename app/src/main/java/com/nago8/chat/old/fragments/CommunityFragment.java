@@ -17,6 +17,8 @@ import com.nago8.chat.old.R;
 
 public class CommunityFragment extends Fragment {
 
+    private View layoutTabsContainer;
+    private View containerSectionDetail;
     private TabLayout tabLayoutCommunity;
     private ViewPager2 viewPagerCommunity;
 
@@ -29,6 +31,8 @@ public class CommunityFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
+        layoutTabsContainer = view.findViewById(R.id.layoutTabsContainer);
+        containerSectionDetail = view.findViewById(R.id.containerSectionDetail);
         tabLayoutCommunity = view.findViewById(R.id.tabLayoutCommunity);
         viewPagerCommunity = view.findViewById(R.id.viewPagerCommunity);
 
@@ -37,12 +41,11 @@ public class CommunityFragment extends Fragment {
             @Override
             public Fragment createFragment(int position) {
                 switch (position) {
-                    case 0:
-                        return new CommunityAllFragment();
                     case 1:
                         return new CommunitySectionsFragment();
                     case 2:
                         return new CommunityMineFragment();
+                    case 0:
                     default:
                         return new CommunityAllFragment();
                 }
@@ -67,5 +70,27 @@ public class CommunityFragment extends Fragment {
                     break;
             }
         }).attach();
+    }
+
+    public void openSectionDetail(int baId, String baName) {
+        if (containerSectionDetail == null || layoutTabsContainer == null) return;
+        containerSectionDetail.setVisibility(View.VISIBLE);
+        layoutTabsContainer.setVisibility(View.GONE);
+
+        SectionDetailFragment fragment = SectionDetailFragment.newInstance(baId, baName);
+        getChildFragmentManager().beginTransaction()
+                .replace(R.id.containerSectionDetail, fragment)
+                .commit();
+    }
+
+    public void closeSectionDetail() {
+        if (containerSectionDetail == null || layoutTabsContainer == null) return;
+        containerSectionDetail.setVisibility(View.GONE);
+        layoutTabsContainer.setVisibility(View.VISIBLE);
+
+        Fragment fragment = getChildFragmentManager().findFragmentById(R.id.containerSectionDetail);
+        if (fragment != null) {
+            getChildFragmentManager().beginTransaction().remove(fragment).commit();
+        }
     }
 }

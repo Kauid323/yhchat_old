@@ -8,6 +8,11 @@ import java.util.Locale;
 public class TimeUtils {
 
     public static String formatChatTime(long timestampMs) {
+        if (timestampMs <= 0) return "";
+        if (timestampMs < 100000000000L) {
+            timestampMs *= 1000L;
+        }
+
         long now = System.currentTimeMillis();
         long diff = now - timestampMs;
 
@@ -40,7 +45,11 @@ public class TimeUtils {
     }
 
     public static String formatMessageTime(long timestampMs) {
-        // 今天的消息显示"时:分"，其他日期显示"月日 时:分"
+        if (timestampMs <= 0) return "";
+        if (timestampMs < 100000000000L) {
+            timestampMs *= 1000L;
+        }
+
         Calendar calendar = Calendar.getInstance();
         calendar.setTimeInMillis(timestampMs);
         int year = calendar.get(Calendar.YEAR);
@@ -52,7 +61,10 @@ public class TimeUtils {
 
         if (nowYear == year && nowDayOfYear == dayOfYear) {
             return new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(timestampMs));
+        } else if (nowYear == year) {
+            return new SimpleDateFormat("MM月dd日 HH:mm", Locale.getDefault()).format(new Date(timestampMs));
+        } else {
+            return new SimpleDateFormat("yyyy年MM月dd日 HH:mm", Locale.getDefault()).format(new Date(timestampMs));
         }
-        return new SimpleDateFormat("MM月dd日 HH:mm", Locale.getDefault()).format(new Date(timestampMs));
     }
 }

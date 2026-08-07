@@ -715,4 +715,91 @@ public class MessageRepository {
         });
         return call;
     }
+
+    /** 消息编辑历史记录 */
+    public static class EditRecord {
+        public long id;
+        public String msgId;
+        public int contentType;
+        public String contentOld; // JSON 字符串，e.g. {"text":"..."}
+        public long createTime;
+        public long msgTime;
+    }
+
+    public interface EditRecordCallback {
+        void onSuccess(java.util.List<EditRecord> records);
+        void onError(String error);
+    }
+
+    /** 获取消息编辑历史 (POST /v1/msg/list-message-edit-record) */
+    public Call listMessageEditRecord(String token, String msgId, EditRecordCallback callback) {
+        if (token == null || token.isEmpty()) {
+            if (callback != null) callback.onError("token is empty");
+            return null;
+        }
+        if (msgId == null || msgId.isEmpty()) {
+            if (callback != null) callback.onError("msgId is empty");
+            return null;
+        }
+
+        String json = "{\"msgId\":\"" + msgId + "\",\"size\":50,\"page\":1}";
+        RequestBody body = RequestBody.create(
+                MediaType.parse("application/json"),
+                json
+        );
+
+        Request request = new Request.Builder()
+                .url(ApiClient.BASE_URL + "/v1/msg/list-message-edit-record")
+                .header("token", token)
+                .post(body)
+                .build();
+
+        Call call = ApiClient.getClient().newCall(request);
+        call.enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                if (callback != null) callback.onError(e.getMessage());
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
+                if (!response.isSuccessful() || response.body() == null) {
+                    if (callback != null) callback.onError("HTTP " + response.code());
+                    return;
+                }
+                try {
+                    String respStr = response.body().string();
+                    java.util.List<EditRecord> records = new java.util.ArrayList<>();
+                    org.json.JSONObject root = new org.json.JSONObject(respStr);
+                    if (root.optInt("code", 0) != 1) {
+                        if (callback != null) callback.onError(root.optString("msg", "failed"));
+                        return;
+                    }
+                    org.json.JSONObject data = root.optJSONObject("data");
+                    if (data != null) {
+                        org.json.JSONArray list = data.optJSONArray("list");
+                        if (list != null) {
+                            for (int i = 0; i < list.length(); i++) {
+                                org.json.JSONObject item = list.getJSONObject(i);
+                                EditRecord rec = new EditRecord();
+                                rec.id = item.optLong("id");
+                                rec.msgId = item.optString("msgId");
+                                rec.contentType = item.optInt("contentType");
+                                rec.contentOld = item.optString("contentOld");
+                                rec.createTime = item.optLong("createTime");
+                                rec.msgTime = item.optLong("msgTime");
+                                records.add(rec);
+                            }
+                        }
+                    }
+                    if (callback != null) callback.onSuccess(records);
+                } catch (Exception e) {
+                    if (callback != null) callback.onError(e.getMessage());
+                } finally {
+                    response.body().close();
+                }
+            }
+        });
+        return call;
+    }
 }

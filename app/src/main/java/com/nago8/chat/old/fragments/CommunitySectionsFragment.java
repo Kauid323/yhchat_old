@@ -101,6 +101,18 @@ public class CommunitySectionsFragment extends Fragment {
 
         sectionsAdapter.setOnLoadMoreClickListener(this::loadMore);
 
+        sectionsAdapter.setOnSectionClickListener(item -> {
+            if (item == null) return;
+            if (getParentFragment() instanceof CommunityFragment) {
+                ((CommunityFragment) getParentFragment()).openSectionDetail(item.getId(), item.getName());
+            } else {
+                android.content.Intent intent = new android.content.Intent(requireContext(), com.nago8.chat.old.SectionDetailActivity.class);
+                intent.putExtra(com.nago8.chat.old.SectionDetailActivity.EXTRA_BA_ID, item.getId());
+                intent.putExtra(com.nago8.chat.old.SectionDetailActivity.EXTRA_BA_NAME, item.getName());
+                startActivity(intent);
+            }
+        });
+
         rvSectionsList.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
             public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {

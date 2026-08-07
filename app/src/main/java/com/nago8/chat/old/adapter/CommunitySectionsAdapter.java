@@ -33,9 +33,14 @@ public class CommunitySectionsAdapter extends RecyclerView.Adapter<RecyclerView.
     private final List<CommunityBaModel> sectionList = new ArrayList<>();
     private int footerState = STATE_LOADING;
     private OnLoadMoreClickListener onLoadMoreClickListener;
+    private OnSectionClickListener onSectionClickListener;
 
     public interface OnLoadMoreClickListener {
         void onLoadMoreClick();
+    }
+
+    public interface OnSectionClickListener {
+        void onSectionClick(CommunityBaModel item);
     }
 
     public CommunitySectionsAdapter(Context context) {
@@ -46,13 +51,15 @@ public class CommunitySectionsAdapter extends RecyclerView.Adapter<RecyclerView.
         this.onLoadMoreClickListener = listener;
     }
 
+    public void setOnSectionClickListener(OnSectionClickListener listener) {
+        this.onSectionClickListener = listener;
+    }
+
     public void setSections(List<CommunityBaModel> newSections) {
         if (newSections == null) newSections = new ArrayList<>();
-
-        DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new BaDiffCallback(this.sectionList, newSections));
         this.sectionList.clear();
         this.sectionList.addAll(newSections);
-        diffResult.dispatchUpdatesTo(this);
+        notifyDataSetChanged();
     }
 
     public void addSections(List<CommunityBaModel> newSections) {
@@ -135,8 +142,8 @@ public class CommunitySectionsAdapter extends RecyclerView.Adapter<RecyclerView.
                     && oldItem.getMemberNum() == newItem.getMemberNum()
                     && oldItem.getPostNum() == newItem.getPostNum()
                     && oldItem.getGroupNum() == newItem.getGroupNum()
-                    && Objects.equals(oldItem.getName(), newItem.getName())
-                    && Objects.equals(oldItem.getAvatar(), newItem.getAvatar());
+                    && android.text.TextUtils.equals(oldItem.getName(), newItem.getName())
+                    && android.text.TextUtils.equals(oldItem.getAvatar(), newItem.getAvatar());
         }
     }
 
@@ -192,10 +199,14 @@ public class CommunitySectionsAdapter extends RecyclerView.Adapter<RecyclerView.
                 if (pos != RecyclerView.NO_POSITION && pos < sectionList.size()) {
                     CommunityBaModel item = sectionList.get(pos);
                     if (item != null) {
-                        android.content.Intent intent = new android.content.Intent(context, com.nago8.chat.old.SectionDetailActivity.class);
-                        intent.putExtra(com.nago8.chat.old.SectionDetailActivity.EXTRA_BA_ID, item.getId());
-                        intent.putExtra(com.nago8.chat.old.SectionDetailActivity.EXTRA_BA_NAME, item.getName());
-                        context.startActivity(intent);
+                        if (onSectionClickListener != null) {
+                            onSectionClickListener.onSectionClick(item);
+                        } else {
+                            android.content.Intent intent = new android.content.Intent(context, com.nago8.chat.old.SectionDetailActivity.class);
+                            intent.putExtra(com.nago8.chat.old.SectionDetailActivity.EXTRA_BA_ID, item.getId());
+                            intent.putExtra(com.nago8.chat.old.SectionDetailActivity.EXTRA_BA_NAME, item.getName());
+                            context.startActivity(intent);
+                        }
                     }
                 }
             });
@@ -208,7 +219,7 @@ public class CommunitySectionsAdapter extends RecyclerView.Adapter<RecyclerView.
 
             String avatarUrl = item.getAvatar();
             Object currentTag = ivBaAvatar.getTag(R.id.ivBaAvatar);
-            if (!Objects.equals(currentTag, avatarUrl)) {
+            if (!android.text.TextUtils.equals(currentTag != null ? currentTag.toString() : null, avatarUrl)) {
                 ivBaAvatar.setTag(R.id.ivBaAvatar, avatarUrl);
                 ImageUtils.loadAvatar(context, avatarUrl, ivBaAvatar);
             }

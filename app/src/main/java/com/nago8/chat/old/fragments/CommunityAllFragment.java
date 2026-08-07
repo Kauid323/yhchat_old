@@ -31,7 +31,6 @@ import java.util.List;
 public class CommunityAllFragment extends Fragment {
 
     public static final int FILTER_RECOMMEND = 0;
-    public static final int FILTER_LATEST = 1;
     public static final int FILTER_REVERSE = 2;
 
     private SwipeRefreshLayout swipeRefreshAll;
@@ -79,6 +78,20 @@ public class CommunityAllFragment extends Fragment {
         });
 
         postsAdapter.setOnLoadMoreClickListener(this::loadMore);
+
+        com.nago8.chat.old.listeners.OnArticleSelectListener selectListener = null;
+        if (getParentFragment() instanceof com.nago8.chat.old.listeners.OnArticleSelectListener) {
+            selectListener = (com.nago8.chat.old.listeners.OnArticleSelectListener) getParentFragment();
+        } else if (getParentFragment() != null && getParentFragment().getParentFragment() instanceof com.nago8.chat.old.listeners.OnArticleSelectListener) {
+            selectListener = (com.nago8.chat.old.listeners.OnArticleSelectListener) getParentFragment().getParentFragment();
+        } else if (getActivity() instanceof com.nago8.chat.old.listeners.OnArticleSelectListener) {
+            selectListener = (com.nago8.chat.old.listeners.OnArticleSelectListener) getActivity();
+        }
+
+        if (selectListener != null) {
+            final com.nago8.chat.old.listeners.OnArticleSelectListener listener = selectListener;
+            postsAdapter.setOnPostClickListener(listener::onArticleSelected);
+        }
 
         rvCommunityAll.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
