@@ -474,7 +474,7 @@ public class WsClient {
                     WsMsg wm = m.data.msg;
                     String senderName = wm.sender != null && wm.sender.name != null ? wm.sender.name : "";
                     String text = wm.content != null && wm.content.text != null ? wm.content.text : "";
-                    detail = "from=" + senderName + " chat_id=" + wm.chat_id + " type=" + wm.content_type + " text=" + text;
+                    detail = "msg_id=" + wm.msg_id + " chat_id=" + wm.chat_id + " type=" + wm.content_type + " editTime=" + wm.edit_time + " delTime=" + wm.delete_time + " from=" + senderName + " text=" + text;
                 }
                 // 通知所有监听器
                 if (m.data != null && m.data.msg != null) {
@@ -497,7 +497,13 @@ public class WsClient {
                 edit_message m = (edit_message) msg;
                 String cmd = m.info != null && m.info.cmd != null ? m.info.cmd : "";
                 String seq = m.info != null && m.info.seq != null ? m.info.seq : "";
-                if (cmd.length() == 0) return null;
+                String editDetail = "";
+                if (m.data != null && m.data.msg != null) {
+                    WsMsg wm = m.data.msg;
+                    String text = wm.content != null && wm.content.text != null ? wm.content.text : "";
+                    editDetail = "msg_id=" + wm.msg_id + " chat_id=" + wm.chat_id + " type=" + wm.content_type + " text=" + text;
+                }
+                if (cmd.length() == 0) cmd = "edit_message";
                 // 将编辑消息推送给所有监听器，让 ChatActivity 能覆盖原消息
                 if (m.data != null && m.data.msg != null) {
                     WsMsg wm = m.data.msg;
@@ -509,7 +515,7 @@ public class WsClient {
                     }
                     notifyListeners(wm);
                 }
-                return "[cmd=" + cmd + " seq=" + seq + "] edit_message";
+                return "[cmd=" + cmd + " seq=" + seq + "] edit_message " + editDetail;
             } else if (msg instanceof draft_input) {
                 draft_input m = (draft_input) msg;
                 String cmd = m.info != null && m.info.cmd != null ? m.info.cmd : "";

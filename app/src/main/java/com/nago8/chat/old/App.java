@@ -15,6 +15,7 @@ public class App extends Application {
     @Override
     public void onCreate() {
         super.onCreate();
+        com.nago8.chat.old.utils.PrefUtils.applyDarkMode(this);
         androidx.appcompat.app.AppCompatDelegate.setCompatVectorFromResourcesEnabled(true);
         registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks() {
             @Override

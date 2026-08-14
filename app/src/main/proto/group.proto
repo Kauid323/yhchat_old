@@ -202,3 +202,22 @@ message create_group {
     Status status = 1;
     string group_id = 2;  // 创建的群组ID
 }
+
+// 获取群口令关联群聊
+message info_add_friend_send {
+    string keyword = 2; // 欲要搜索的群口令或群ID
+}
+
+message info_add_friend {
+    Status status = 1;
+    info.Group_data data = 2;
+}
+
+// 解散群聊
+message dismiss_group_send {
+    string group_id = 2;
+}
+
+message dismiss_group {
+    Status status = 1;
+}

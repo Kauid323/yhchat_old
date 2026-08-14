@@ -94,6 +94,67 @@ public class ImageUtils {
         }
     }
 
+    /**
+     * 为七牛云图片 URL 动态拼接 imageView2 采样/缩放/压缩参数
+     * 例如: imageView2/2/w/200/h/200/q/75
+     */
+    public static String appendQiniuParam(String url, int width, int height) {
+        if (url == null || url.trim().isEmpty()) return "";
+        String trimmed = url.trim();
+        if (width <= 0 && height <= 0) return trimmed;
+
+        // 如果已经包含 imageView2 参数，不再重复拼接
+        if (trimmed.contains("imageView2/")) return trimmed;
+
+        // 避开默认头像路径
+        if (trimmed.contains("/default-avatars/") || trimmed.contains("/defalut-avatars/")) {
+            return trimmed;
+        }
+
+        StringBuilder param = new StringBuilder("imageView2/2");
+        if (width > 0) param.append("/w/").append(width);
+        if (height > 0) param.append("/h/").append(height);
+        param.append("/q/75");
+
+        if (trimmed.contains("?")) {
+            return trimmed + "&" + param.toString();
+        } else {
+            return trimmed + "?" + param.toString();
+        }
+    }
+
+    public static void loadImage(Context context, String url, ImageView imageView, int reqWidth, int reqHeight) {
+        if (context == null || imageView == null) return;
+        if (url == null || url.trim().isEmpty()) {
+            imageView.setImageDrawable(null);
+            return;
+        }
+
+        String finalUrl = appendQiniuParam(url.trim(), reqWidth, reqHeight);
+        if (Build.VERSION.SDK_INT < 21 || finalUrl.contains(".jwznb.com")) {
+            if (finalUrl.startsWith("https://")) {
+                finalUrl = "http://" + finalUrl.substring(8);
+            }
+        }
+
+        try {
+            GlideUrl glideUrl;
+            if (finalUrl.contains(".jwznb.com")) {
+                glideUrl = new GlideUrl(finalUrl, new LazyHeaders.Builder()
+                        .addHeader("Referer", "http://myapp.jwznb.com")
+                        .build());
+            } else {
+                glideUrl = new GlideUrl(finalUrl);
+            }
+
+            Glide.with(context)
+                    .load(glideUrl)
+                    .override(reqWidth > 0 ? reqWidth : Target.SIZE_ORIGINAL, reqHeight > 0 ? reqHeight : Target.SIZE_ORIGINAL)
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                    .into(imageView);
+        } catch (Exception ignored) {}
+    }
+
     public static void loadAvatar(Context context, String url, ImageView imageView) {
         if (context == null || imageView == null) return;
 
@@ -115,21 +176,12 @@ public class ImageUtils {
 
         imageView.setTag(R.id.ivAvatar, trimmedUrl);
 
-        String finalUrl = trimmedUrl;
+        String finalUrl = appendQiniuParam(trimmedUrl, 120, 120);
 
         // 兼容 Android 4.x (SDK < 21) 系统 SSL/TLS 协议低版本导致的 HTTPS 握手失败
         if (Build.VERSION.SDK_INT < 21 || finalUrl.contains(".jwznb.com")) {
             if (finalUrl.startsWith("https://")) {
                 finalUrl = "http://" + finalUrl.substring(8);
-            }
-        }
-
-        // 避免给默认头像添加 resize 参数 (兼容 default-avatars 和 defalut-avatars 拼写)
-        if (!finalUrl.contains("/default-avatars/") && !finalUrl.contains("/defalut-avatars/")) {
-            if (finalUrl.contains("?")) {
-                finalUrl = finalUrl + "&" + AVATAR_RESIZE_PARAM;
-            } else {
-                finalUrl = finalUrl + "?" + AVATAR_RESIZE_PARAM;
             }
         }
 
@@ -143,6 +195,7 @@ public class ImageUtils {
             Glide.with(context)
                     .asBitmap()
                     .load(cachedFile)
+                    .override(120, 120)
                     .placeholder(existingDrawable != null ? existingDrawable : context.getResources().getDrawable(android.R.drawable.ic_menu_gallery))
                     .error(android.R.drawable.ic_menu_report_image)
                     .circleCrop()
@@ -167,6 +220,7 @@ public class ImageUtils {
                     Glide.with(context)
                             .asBitmap()
                             .load(glideUrl)
+                            .override(120, 120)
                             .placeholder(currentDrawable != null ? currentDrawable : context.getResources().getDrawable(android.R.drawable.ic_menu_gallery))
                             .error(android.R.drawable.ic_menu_report_image)
                             .diskCacheStrategy(DiskCacheStrategy.ALL)

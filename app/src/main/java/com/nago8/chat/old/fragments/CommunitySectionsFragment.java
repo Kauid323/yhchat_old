@@ -103,7 +103,11 @@ public class CommunitySectionsFragment extends Fragment {
 
         sectionsAdapter.setOnSectionClickListener(item -> {
             if (item == null) return;
+            boolean isPicker = false;
             if (getParentFragment() instanceof CommunityFragment) {
+                isPicker = ((CommunityFragment) getParentFragment()).isPickerMode();
+            }
+            if (isPicker) {
                 ((CommunityFragment) getParentFragment()).openSectionDetail(item.getId(), item.getName());
             } else {
                 android.content.Intent intent = new android.content.Intent(requireContext(), com.nago8.chat.old.SectionDetailActivity.class);

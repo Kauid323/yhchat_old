@@ -39,6 +39,7 @@
         <activity android:name=".SettingsActivity" />
         <activity android:name=".WsLogActivity" />
         <activity android:name=".CreateChatActivity" />
+        <activity android:name=".AddContactActivity" />
         <activity android:name=".MyPostsActivity" />
         <activity android:name=".MyCollectsActivity" />
         <activity android:name=".BlockedUsersActivity" />

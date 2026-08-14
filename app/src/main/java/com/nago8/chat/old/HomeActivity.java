@@ -37,11 +37,14 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.android.material.tabs.TabLayout;
+import com.google.android.material.tabs.TabLayoutMediator;
 import com.nago8.chat.old.cache.ConversationCache;
 import com.nago8.chat.old.fragments.AddressBookFragment;
 import com.nago8.chat.old.fragments.CommunityFragment;
 import com.nago8.chat.old.fragments.ConversationsFragment;
 import com.nago8.chat.old.fragments.DiscoveryFragment;
+import com.nago8.chat.old.fragments.HomeConversationsFragment;
 import com.nago8.chat.old.fragments.StickyConversationsFragment;
 import com.nago8.chat.old.listener.SearchHost;
 import com.nago8.chat.old.model.UserModels;
@@ -83,14 +86,12 @@ public class HomeActivity extends AppCompatActivity {
     private TextView tvUserId;
     private Fragment currentFragment;
 
-    private View tabContainer;
+    private TabLayout tabLayoutHome;
+    private TabLayoutMediator tabLayoutMediator;
     private View searchContainer;
-    private TextView tabConversations;
-    private TextView tabSticky;
     private EditText etSearch;
 
     private boolean searchMode = false;
-    private boolean showingSticky = false;
     private int conversationCount = 0;
     private int stickyCount = 0;
 
@@ -168,8 +169,7 @@ public class HomeActivity extends AppCompatActivity {
         fetchStickyCount();
 
         if (savedInstanceState == null) {
-            switchFragment(new ConversationsFragment(), R.string.menu_conversations);
-            updateTabSelection();
+            switchFragment(new HomeConversationsFragment(), R.string.menu_conversations);
         }
     }
 
@@ -202,13 +202,9 @@ public class HomeActivity extends AppCompatActivity {
     }
 
     private void setupMenuClickListeners() {
-        findViewById(R.id.menu_conversations).setOnClickListener(v -> {
-            showingSticky = false;
-            switchFragment(new ConversationsFragment(), R.string.menu_conversations);
-            updateTabSelection();
-        });
+        findViewById(R.id.menu_conversations).setOnClickListener(v -> switchFragment(new HomeConversationsFragment(), R.string.menu_conversations));
         findViewById(R.id.menu_address_book).setOnClickListener(v -> switchFragment(new AddressBookFragment(), R.string.menu_address_book));
-        findViewById(R.id.menu_community).setOnClickListener(v -> switchFragment(new CommunityFragment(), R.string.menu_community));
+        findViewById(R.id.menu_community).setOnClickListener(v -> switchFragment(CommunityFragment.newInstance(false), R.string.menu_community));
         findViewById(R.id.menu_discovery).setOnClickListener(v -> switchFragment(new DiscoveryFragment(), R.string.menu_discovery));
 
         findViewById(R.id.menu_settings).setOnClickListener(v -> {
@@ -230,6 +226,11 @@ public class HomeActivity extends AppCompatActivity {
     }
 
     private void switchFragment(Fragment fragment, int titleRes) {
+        if (tabLayoutMediator != null) {
+            tabLayoutMediator.detach();
+            tabLayoutMediator = null;
+        }
+
         FragmentManager fragmentManager = getSupportFragmentManager();
         fragmentManager.beginTransaction().replace(R.id.content_frame, fragment).commit();
         currentFragment = fragment;
@@ -238,10 +239,28 @@ public class HomeActivity extends AppCompatActivity {
 
         invalidateOptionsMenu();
 
-        boolean isConversationTab = fragment instanceof ConversationsFragment
-                || fragment instanceof StickyConversationsFragment;
-        if (tabContainer != null && !searchMode) {
-            tabContainer.setVisibility(isConversationTab ? View.VISIBLE : View.GONE);
+        boolean isConversationTab = (fragment instanceof HomeConversationsFragment);
+        if (tabLayoutHome != null && !searchMode) {
+            tabLayoutHome.setVisibility(isConversationTab ? View.VISIBLE : View.GONE);
+        }
+
+        if (fragment instanceof HomeConversationsFragment) {
+            HomeConversationsFragment hcf = (HomeConversationsFragment) fragment;
+            hcf.setOnViewPagerReadyListener(vp -> {
+                if (tabLayoutHome != null) {
+                    if (tabLayoutMediator != null) {
+                        tabLayoutMediator.detach();
+                    }
+                    tabLayoutMediator = new TabLayoutMediator(tabLayoutHome, vp, (tab, position) -> {
+                        if (position == 0) {
+                            tab.setText(getString(R.string.tab_conversations_format, conversationCount));
+                        } else {
+                            tab.setText(getString(R.string.tab_sticky_format, stickyCount));
+                        }
+                    });
+                    tabLayoutMediator.attach();
+                }
+            });
         }
 
         collapseFabMenu();
@@ -251,16 +270,12 @@ public class HomeActivity extends AppCompatActivity {
     }
 
     private void initConversationTabs() {
-        tabContainer = findViewById(R.id.tabContainer);
+        tabLayoutHome = findViewById(R.id.tabLayoutHome);
         searchContainer = findViewById(R.id.searchContainer);
-        tabConversations = findViewById(R.id.tabConversations);
-        tabSticky = findViewById(R.id.tabSticky);
         etSearch = findViewById(R.id.etSearch);
         AppCompatImageView btnSearch = findViewById(R.id.btnSearch);
         AppCompatImageView btnSearchBack = findViewById(R.id.btnSearchBack);
 
-        if (tabConversations != null) tabConversations.setOnClickListener(v -> switchConversationTab(false));
-        if (tabSticky != null) tabSticky.setOnClickListener(v -> switchConversationTab(true));
         if (btnSearch != null) btnSearch.setOnClickListener(v -> doSearch());
         if (btnSearchBack != null) btnSearchBack.setOnClickListener(v -> hideSearch());
         if (etSearch != null) {
@@ -276,43 +291,21 @@ public class HomeActivity extends AppCompatActivity {
         updateTabTexts();
     }
 
-    private void switchConversationTab(boolean toSticky) {
-        if (showingSticky == toSticky) return;
-        showingSticky = toSticky;
-
-        if (toSticky) {
-            switchFragment(new StickyConversationsFragment(), R.string.tab_sticky_title);
-        } else {
-            switchFragment(new ConversationsFragment(), R.string.menu_conversations);
-        }
-        updateTabSelection();
-    }
-
-    private void updateTabSelection() {
-        if (tabConversations == null || tabSticky == null) return;
-        int whiteColor = ContextCompat.getColor(this, android.R.color.white);
-        if (showingSticky) {
-            tabConversations.setTextColor(0xCCFFFFFF);
-            tabConversations.setTypeface(null, Typeface.NORMAL);
-            tabSticky.setTextColor(whiteColor);
-            tabSticky.setTypeface(null, Typeface.BOLD);
-        } else {
-            tabConversations.setTextColor(whiteColor);
-            tabConversations.setTypeface(null, Typeface.BOLD);
-            tabSticky.setTextColor(0xCCFFFFFF);
-            tabSticky.setTypeface(null, Typeface.NORMAL);
-        }
-    }
-
     private void updateTabTexts() {
-        if (tabConversations == null || tabSticky == null) return;
-        tabConversations.setText(getString(R.string.tab_conversations_format, conversationCount));
-        tabSticky.setText(getString(R.string.tab_sticky_format, stickyCount));
+        if (tabLayoutHome != null) {
+            TabLayout.Tab tab0 = tabLayoutHome.getTabAt(0);
+            if (tab0 != null) {
+                tab0.setText(getString(R.string.tab_conversations_format, conversationCount));
+            }
+            TabLayout.Tab tab1 = tabLayoutHome.getTabAt(1);
+            if (tab1 != null) {
+                tab1.setText(getString(R.string.tab_sticky_format, stickyCount));
+            }
 
-        boolean isConversationTab = currentFragment instanceof ConversationsFragment
-                || currentFragment instanceof StickyConversationsFragment;
-        if (tabContainer != null && !searchMode) {
-            tabContainer.setVisibility(isConversationTab ? View.VISIBLE : View.GONE);
+            boolean isConversationTab = (currentFragment instanceof HomeConversationsFragment);
+            if (!searchMode) {
+                tabLayoutHome.setVisibility(isConversationTab ? View.VISIBLE : View.GONE);
+            }
         }
     }
 
@@ -326,18 +319,14 @@ public class HomeActivity extends AppCompatActivity {
 
     public void showSearch() {
         if (searchMode) return;
-        if (showingSticky) {
-            showingSticky = false;
-            switchFragment(new ConversationsFragment(), R.string.menu_conversations);
-            updateTabSelection();
+        if (currentFragment instanceof HomeConversationsFragment) {
+            HomeConversationsFragment hcf = (HomeConversationsFragment) currentFragment;
+            if (hcf.getViewPager() != null) {
+                hcf.getViewPager().setCurrentItem(0, true);
+            }
         }
         searchMode = true;
-        if (tabContainer != null) tabContainer.setVisibility(View.GONE);
-        if (searchContainer != null) searchContainer.setVisibility(View.VISIBLE);
-        if (etSearch != null) {
-            etSearch.setText("");
-            etSearch.requestFocus();
-        }
+        if (tabLayoutHome != null) tabLayoutHome.setVisibility(View.GONE);
         InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
         if (imm != null && etSearch != null) imm.showSoftInput(etSearch, InputMethodManager.SHOW_IMPLICIT);
     }
@@ -350,13 +339,17 @@ public class HomeActivity extends AppCompatActivity {
         InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
         if (imm != null && etSearch != null) imm.hideSoftInputFromWindow(etSearch.getWindowToken(), 0);
 
-        boolean isConversationTab = currentFragment instanceof ConversationsFragment
-                || currentFragment instanceof StickyConversationsFragment;
-        if (tabContainer != null) {
-            tabContainer.setVisibility(isConversationTab ? View.VISIBLE : View.GONE);
+        boolean isConversationTab = (currentFragment instanceof HomeConversationsFragment);
+        if (tabLayoutHome != null) {
+            tabLayoutHome.setVisibility(isConversationTab ? View.VISIBLE : View.GONE);
         }
         if (currentFragment instanceof SearchHost) {
             ((SearchHost) currentFragment).onSearchClosed();
+        } else if (currentFragment instanceof HomeConversationsFragment) {
+            HomeConversationsFragment hcf = (HomeConversationsFragment) currentFragment;
+            if (hcf.getConversationsFragment() instanceof SearchHost) {
+                ((SearchHost) hcf.getConversationsFragment()).onSearchClosed();
+            }
         }
     }
 
@@ -370,6 +363,11 @@ public class HomeActivity extends AppCompatActivity {
 
         if (currentFragment instanceof SearchHost) {
             ((SearchHost) currentFragment).onSearch(word);
+        } else if (currentFragment instanceof HomeConversationsFragment) {
+            HomeConversationsFragment hcf = (HomeConversationsFragment) currentFragment;
+            if (hcf.getConversationsFragment() instanceof SearchHost) {
+                ((SearchHost) hcf.getConversationsFragment()).onSearch(word);
+            }
         }
     }
 
@@ -554,11 +552,8 @@ public class HomeActivity extends AppCompatActivity {
 
         Runnable openAddAction = () -> {
             collapseFabMenu();
-            if (etSearch != null) {
-                etSearch.requestFocus();
-                android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-                if (imm != null) imm.showSoftInput(etSearch, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
-            }
+            Intent intent = new Intent(HomeActivity.this, AddContactActivity.class);
+            startActivity(intent);
         };
         if (fabSubNewGroup != null) {
             fabSubNewGroup.setOnClickListener(v -> openAddAction.run());

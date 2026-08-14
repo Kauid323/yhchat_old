@@ -48,6 +48,7 @@ public class WsLogManager {
         while (logs.size() > MAX_LOGS) {
             logs.remove(0);
         }
+        android.util.Log.d("WsClient", "[" + direction + "] " + message);
     }
 
     public void logSend(String message) {

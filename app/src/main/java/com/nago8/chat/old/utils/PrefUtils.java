@@ -65,4 +65,21 @@ public class PrefUtils {
     public static boolean isVip(Context context) {
         return getPrefs(context).getBoolean(KEY_IS_VIP, false);
     }
+
+    private static final String KEY_DARK_MODE_ENABLED = "dark_mode_enabled";
+
+    public static boolean isDarkModeEnabled(Context context) {
+        return getPrefs(context).getBoolean(KEY_DARK_MODE_ENABLED, false);
+    }
+
+    public static void setDarkModeEnabled(Context context, boolean enabled) {
+        getPrefs(context).edit().putBoolean(KEY_DARK_MODE_ENABLED, enabled).apply();
+    }
+
+    public static void applyDarkMode(Context context) {
+        boolean enabled = isDarkModeEnabled(context);
+        int mode = enabled ? androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
+                : androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM;
+        androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(mode);
+    }
 }

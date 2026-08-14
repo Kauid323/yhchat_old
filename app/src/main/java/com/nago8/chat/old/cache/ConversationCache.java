@@ -88,8 +88,11 @@ public class ConversationCache {
         Msg msg = WsMsgConverter.convert(wsMsg, myUserId);
         if (msg == null) return;
 
+        boolean isRecallMsg = (msg.msg_delete_time > 0);
+
         List<Msg> list = messageCacheMap.get(chatId);
         if (list == null) {
+            if (isRecallMsg) return;
             list = new ArrayList<>();
             messageCacheMap.put(chatId, list);
         }
@@ -105,10 +108,17 @@ public class ConversationCache {
                 }
             }
             if (foundIndex != -1) {
-                list.set(foundIndex, msg);
+                Msg merged = com.nago8.chat.old.utils.WsMsgConverter.mergeMsg(list.get(foundIndex), msg);
+                list.set(foundIndex, merged);
                 return;
             }
         }
+
+        // 如果未找到对应 msg_id 且是撤回消息，则不存入缓存
+        if (isRecallMsg) {
+            return;
+        }
+
         list.add(msg);
     }
 

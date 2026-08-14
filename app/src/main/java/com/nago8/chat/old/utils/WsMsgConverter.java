@@ -78,6 +78,79 @@ public class WsMsgConverter {
     }
 
     /**
+     * 智能融合已有消息 existing 与推送新消息 newMsg。
+     * 当收到编辑消息推送时，如果推送缺失 sender、direction、content_type 等，自动安全继承旧消息元数据。
+     */
+    public static Msg mergeMsg(Msg existing, Msg newMsg) {
+        if (existing == null) return newMsg;
+        if (newMsg == null) return existing;
+
+        Msg.Builder builder = newMsg.newBuilder();
+
+        // 1. 严格继承原始发送时间与序列号（消息编辑绝不能改变其历史时间线与排序位置）
+        if (existing.send_time > 0) {
+            builder.send_time(existing.send_time);
+        }
+        if (existing.msg_seq > 0) {
+            builder.msg_seq(existing.msg_seq);
+        }
+
+        // 2. 如果新消息没有 sender 或 sender 字段不完整，保留原有 sender
+        if (newMsg.sender == null || android.text.TextUtils.isEmpty(newMsg.sender.chat_id)) {
+            if (existing.sender != null) {
+                builder.sender(existing.sender);
+            }
+        }
+
+        // 3. 继承 direction（方向不变）
+        if (existing.direction != null && !existing.direction.isEmpty()) {
+            builder.direction(existing.direction);
+        }
+
+        // 4. 继承 content_type
+        if (newMsg.content_type <= 0 && existing.content_type > 0) {
+            builder.content_type(existing.content_type);
+        }
+
+        // 5. 继承引用消息 ID
+        if (android.text.TextUtils.isEmpty(newMsg.quote_msg_id) && !android.text.TextUtils.isEmpty(existing.quote_msg_id)) {
+            builder.quote_msg_id(existing.quote_msg_id);
+        }
+
+        // 6. 合并 content 内容（更新新文本，保留原有其他字段）
+        if (newMsg.content == null) {
+            builder.content(existing.content);
+        } else if (existing.content != null) {
+            Msg.Content.Builder contentBuilder = newMsg.content.newBuilder();
+            if (android.text.TextUtils.isEmpty(newMsg.content.text) && !android.text.TextUtils.isEmpty(existing.content.text)) {
+                contentBuilder.text(existing.content.text);
+            }
+            if (android.text.TextUtils.isEmpty(newMsg.content.image_url) && !android.text.TextUtils.isEmpty(existing.content.image_url)) {
+                contentBuilder.image_url(existing.content.image_url);
+            }
+            if (android.text.TextUtils.isEmpty(newMsg.content.file_name) && !android.text.TextUtils.isEmpty(existing.content.file_name)) {
+                contentBuilder.file_name(existing.content.file_name);
+            }
+            if (android.text.TextUtils.isEmpty(newMsg.content.file_url) && !android.text.TextUtils.isEmpty(existing.content.file_url)) {
+                contentBuilder.file_url(existing.content.file_url);
+            }
+            if (android.text.TextUtils.isEmpty(newMsg.content.quote_msg_text) && !android.text.TextUtils.isEmpty(existing.content.quote_msg_text)) {
+                contentBuilder.quote_msg_text(existing.content.quote_msg_text);
+            }
+            builder.content(contentBuilder.build());
+        }
+
+        // 7. 设值 edit_time
+        long editTime = newMsg.edit_time;
+        if (editTime <= 0) {
+            editTime = existing.edit_time > 0 ? existing.edit_time : System.currentTimeMillis();
+        }
+        builder.edit_time(editTime);
+
+        return builder.build();
+    }
+
+    /**
      * 将 WsMsg 转为会话列表预览文本（不含发送者名）。
      * 按 content_type 区分消息类型，便于一眼看出是什么类型的消息。
      *

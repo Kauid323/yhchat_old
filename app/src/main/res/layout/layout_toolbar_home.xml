@@ -5,35 +5,20 @@
     android:layout_height="wrap_content"
     android:orientation="vertical">
 
-    <!-- Tab 容器：默认显示，搜索时隐藏 -->
-    <LinearLayout
-        android:id="@+id/tabContainer"
+    <!-- MD2 会话 TabLayout 栏：带有平滑切换动画与白色下划线指示器 -->
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/tabLayoutHome"
         android:layout_width="match_parent"
         android:layout_height="44dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
         android:background="?attr/colorPrimary"
-        android:visibility="gone">
-
-        <TextView
-            android:id="@+id/tabConversations"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:textColor="@color/text_white"
-            android:textSize="15sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/tabSticky"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:textColor="@color/text_white_secondary"
-            android:textSize="15sp" />
-    </LinearLayout>
+        app:tabIndicatorColor="@android:color/white"
+        app:tabIndicatorHeight="3dp"
+        app:tabIndicatorFullWidth="false"
+        app:tabMode="fixed"
+        app:tabGravity="fill"
+        app:tabTextColor="#CCFFFFFF"
+        app:tabSelectedTextColor="@android:color/white"
+        android:visibility="gone" />
 
     <!-- 搜索容器：默认隐藏，搜索时显示 -->
     <LinearLayout

@@ -84,7 +84,7 @@ public class ArticlePickerBottomSheetDialogFragment extends BottomSheetDialogFra
 
         if (savedInstanceState == null) {
             getChildFragmentManager().beginTransaction()
-                    .replace(R.id.articlePickerContainer, new CommunityFragment())
+                    .replace(R.id.articlePickerContainer, CommunityFragment.newInstance(true))
                     .commit();
         }
     }

@@ -229,11 +229,19 @@ public class ChatActivity extends AppCompatActivity {
         if (wsMsg == null) return;
         String myUserId = PrefUtils.getUserId(this);
         String targetChatId = WsClient.getTargetChatId(wsMsg, myUserId);
-        // 只处理当前聊天界面的消息
-        if (!chatId.equals(targetChatId)) return;
+        android.util.Log.d("ChatActivity_WS", "handlePushMessage: targetChatId=" + targetChatId + ", currentChatId=" + chatId + ", wsMsg.msg_id=" + wsMsg.msg_id + ", cmd=" + (wsMsg.cmd != null ? wsMsg.cmd.name : "null"));
+
+        // 只处理当前聊天界面的消息 (兼容 targetChatId 或 msg.chat_id 匹配)
+        boolean isMatch = chatId.equals(targetChatId) || (wsMsg.chat_id != null && chatId.equals(wsMsg.chat_id));
+        if (!isMatch) {
+            android.util.Log.d("ChatActivity_WS", "handlePushMessage: ChatId mismatch, ignore");
+            return;
+        }
 
         Msg msg = WsMsgConverter.convert(wsMsg, myUserId);
         if (msg == null) return;
+
+        boolean isRecallMsg = (msg.msg_delete_time > 0);
 
         // 如果找到已有对应的消息id，直接覆盖原内容
         if (msg.msg_id != null && !msg.msg_id.isEmpty()) {
@@ -245,12 +253,22 @@ public class ChatActivity extends AppCompatActivity {
                     break;
                 }
             }
+            android.util.Log.d("ChatActivity_WS", "handlePushMessage: search msg_id=" + msg.msg_id + ", foundIndex=" + foundIndex + ", allMessages.size=" + allMessages.size());
             if (foundIndex != -1) {
-                allMessages.set(foundIndex, msg);
+                Msg existingMsg = allMessages.get(foundIndex);
+                Msg merged = WsMsgConverter.mergeMsg(existingMsg, msg);
+                allMessages.set(foundIndex, merged);
                 com.nago8.chat.old.cache.ConversationCache.getInstance().updateCachedMessages(chatId, allMessages);
+                android.util.Log.d("ChatActivity_WS", "handlePushMessage: successfully merged and replaced message at index " + foundIndex + ", newText=" + (merged.content != null ? merged.content.text : "null") + ", editTime=" + merged.edit_time);
                 refreshMessages(false);
                 return;
             }
+        }
+
+        // 如果是撤回消息，且聊天界面中未找到对应 msg_id，则不显示/添加此撤回提示
+        if (isRecallMsg) {
+            android.util.Log.d("ChatActivity_WS", "handlePushMessage: recall message not found in list, ignore");
+            return;
         }
 
         allMessages.add(msg);

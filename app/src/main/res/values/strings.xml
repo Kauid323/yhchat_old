@@ -11,6 +11,8 @@
     <string name="btn_login">登录</string>
     <string name="btn_get_code">获取验证码</string>
     <string name="menu_settings">设置</string>
+    <string name="settings_dark_mode">深色模式</string>
+    <string name="settings_dark_mode_desc">开启深色模式，关闭时跟随系统深色设置</string>
     <string name="menu_language">语言</string>
     <string name="menu_logout">登出</string>
     <string name="logout_success">登出成功</string>
@@ -418,4 +420,20 @@
     <string name="section_creator_title">创建者</string>
     <string name="section_managers_title">管理员</string>
     <string name="no_managers">暂无管理员</string>
+    <string name="action_add">添加</string>
+    <string name="tab_add_user">找用户</string>
+    <string name="tab_add_group">找群聊</string>
+    <string name="tab_add_bot">找机器人</string>
+    <string name="add_search_user_hint">请输入要添加的用户 ID</string>
+    <string name="add_search_group_hint">请输入要加入的群聊 ID 或群口令</string>
+    <string name="add_search_bot_hint">请输入要添加的机器人 ID</string>
+    <string name="add_search_empty_hint">请输入 ID 或关键词进行搜索</string>
+    <string name="add_search_not_found">未找到相关结果</string>
+    <string name="action_view_detail">查看详情</string>
+    <string name="action_view_profile">查看资料并添加</string>
+    <string name="user_no_signature">暂无个性签名</string>
+    <string name="group_no_intro">暂无群聊介绍</string>
+    <string name="bot_no_intro">暂无机器人介绍</string>
+    <string name="group_category_format">分类: %1$s</string>
+    <string name="group_members_count_format">成员数: %1$d 人</string>
 </resources>

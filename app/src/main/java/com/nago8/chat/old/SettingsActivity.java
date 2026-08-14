@@ -42,6 +42,22 @@ public class SettingsActivity extends AppCompatActivity {
         AppCompatImageButton btnBack = findViewById(R.id.btnBack);
         btnBack.setOnClickListener(v -> onBackPressed());
 
+        androidx.appcompat.widget.SwitchCompat switchDarkMode = findViewById(R.id.switchDarkMode);
+        boolean darkModeEnabled = com.nago8.chat.old.utils.PrefUtils.isDarkModeEnabled(this);
+        if (switchDarkMode != null) {
+            switchDarkMode.setChecked(darkModeEnabled);
+        }
+
+        findViewById(R.id.menuDarkMode).setOnClickListener(v -> {
+            boolean current = com.nago8.chat.old.utils.PrefUtils.isDarkModeEnabled(this);
+            boolean next = !current;
+            if (switchDarkMode != null) {
+                switchDarkMode.setChecked(next);
+            }
+            com.nago8.chat.old.utils.PrefUtils.setDarkModeEnabled(this, next);
+            com.nago8.chat.old.utils.PrefUtils.applyDarkMode(this);
+        });
+
         findViewById(R.id.menuWsLog).setOnClickListener(v -> {
             Intent intent = new Intent(this, WsLogActivity.class);
             startActivity(intent);

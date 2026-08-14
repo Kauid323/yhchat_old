@@ -90,7 +90,7 @@
                     android:background="@drawable/bg_fab_label"
                     android:paddingHorizontal="10dp"
                     android:paddingVertical="4dp"
-                    android:text="@string/fab_add_item"
+                    android:text="@string/action_add"
                     android:textColor="@android:color/white"
                     android:textSize="13sp" />
 
@@ -102,7 +102,7 @@
                     app:srcCompat="@drawable/ic_add"
                     app:tint="@android:color/white"
                     app:backgroundTint="@color/app_primary"
-                    android:contentDescription="@string/fab_add_item" />
+                    android:contentDescription="@string/action_add" />
             </LinearLayout>
 
             <!-- Sub Item 1: New Chat -->

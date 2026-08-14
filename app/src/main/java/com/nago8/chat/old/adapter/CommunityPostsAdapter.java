@@ -9,6 +9,7 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -66,9 +67,47 @@ public class CommunityPostsAdapter extends RecyclerView.Adapter<RecyclerView.Vie
 
     public void setPosts(List<CommunityPostModel> newPosts) {
         if (newPosts == null) newPosts = new ArrayList<>();
+
+        final List<CommunityPostModel> oldList = new ArrayList<>(this.postList);
+        final List<CommunityPostModel> newList = new ArrayList<>(newPosts);
+
+        boolean oldEmpty = oldList.isEmpty();
+        boolean newEmpty = newList.isEmpty();
+
         this.postList.clear();
-        this.postList.addAll(newPosts);
-        notifyDataSetChanged();
+        this.postList.addAll(newList);
+
+        if (oldEmpty || newEmpty) {
+            notifyDataSetChanged();
+        } else {
+            DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new PostDiffCallback(oldList, newList));
+            final int headerOffset = (headerView != null ? 1 : 0);
+            if (headerOffset == 0) {
+                diffResult.dispatchUpdatesTo(this);
+            } else {
+                diffResult.dispatchUpdatesTo(new androidx.recyclerview.widget.ListUpdateCallback() {
+                    @Override
+                    public void onInserted(int position, int count) {
+                        notifyItemRangeInserted(position + headerOffset, count);
+                    }
+
+                    @Override
+                    public void onRemoved(int position, int count) {
+                        notifyItemRangeRemoved(position + headerOffset, count);
+                    }
+
+                    @Override
+                    public void onMoved(int fromPosition, int toPosition) {
+                        notifyItemMoved(fromPosition + headerOffset, toPosition + headerOffset);
+                    }
+
+                    @Override
+                    public void onChanged(int position, int count, @Nullable Object payload) {
+                        notifyItemRangeChanged(position + headerOffset, count, payload);
+                    }
+                });
+            }
+        }
     }
 
     public void addPosts(List<CommunityPostModel> newPosts) {

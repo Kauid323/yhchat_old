@@ -57,9 +57,22 @@ public class CommunitySectionsAdapter extends RecyclerView.Adapter<RecyclerView.
 
     public void setSections(List<CommunityBaModel> newSections) {
         if (newSections == null) newSections = new ArrayList<>();
+
+        final List<CommunityBaModel> oldList = new ArrayList<>(this.sectionList);
+        final List<CommunityBaModel> newList = new ArrayList<>(newSections);
+
+        boolean oldEmpty = oldList.isEmpty();
+        boolean newEmpty = newList.isEmpty();
+
         this.sectionList.clear();
-        this.sectionList.addAll(newSections);
-        notifyDataSetChanged();
+        this.sectionList.addAll(newList);
+
+        if (oldEmpty || newEmpty) {
+            notifyDataSetChanged();
+        } else {
+            DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new BaDiffCallback(oldList, newList));
+            diffResult.dispatchUpdatesTo(this);
+        }
     }
 
     public void addSections(List<CommunityBaModel> newSections) {

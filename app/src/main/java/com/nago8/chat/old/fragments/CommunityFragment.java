@@ -17,10 +17,27 @@ import com.nago8.chat.old.R;
 
 public class CommunityFragment extends Fragment {
 
+    public static final String ARG_IS_PICKER_MODE = "is_picker_mode";
+
     private View layoutTabsContainer;
     private View containerSectionDetail;
     private TabLayout tabLayoutCommunity;
     private ViewPager2 viewPagerCommunity;
+
+    public static CommunityFragment newInstance(boolean isPickerMode) {
+        CommunityFragment fragment = new CommunityFragment();
+        Bundle args = new Bundle();
+        args.putBoolean(ARG_IS_PICKER_MODE, isPickerMode);
+        fragment.setArguments(args);
+        return fragment;
+    }
+
+    public boolean isPickerMode() {
+        if (getArguments() != null) {
+            return getArguments().getBoolean(ARG_IS_PICKER_MODE, false);
+        }
+        return false;
+    }
 
     @Nullable
     @Override

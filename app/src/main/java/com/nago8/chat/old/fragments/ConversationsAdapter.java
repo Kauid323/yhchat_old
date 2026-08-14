@@ -10,6 +10,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.nago8.chat.old.R;
@@ -69,10 +70,58 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
         void onConversationClick(ConversationList.ConversationData data, int position);
     }
 
-    @android.annotation.SuppressLint("NotifyDataSetChanged")
     public void setData(List<ConversationList.ConversationData> data) {
-        this.dataList = new ArrayList<>(data);
-        notifyDataSetChanged();
+        if (data == null) data = new ArrayList<>();
+        final List<ConversationList.ConversationData> oldList = new ArrayList<>(this.dataList);
+        final List<ConversationList.ConversationData> newList = new ArrayList<>(data);
+
+        boolean oldEmpty = oldList.isEmpty();
+        boolean newEmpty = newList.isEmpty();
+
+        this.dataList = newList;
+
+        if (oldEmpty || newEmpty) {
+            notifyDataSetChanged();
+        } else {
+            DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new ConversationDiffCallback(oldList, newList));
+            diffResult.dispatchUpdatesTo(this);
+        }
+    }
+
+    private static class ConversationDiffCallback extends DiffUtil.Callback {
+        private final List<ConversationList.ConversationData> oldList;
+        private final List<ConversationList.ConversationData> newList;
+
+        public ConversationDiffCallback(List<ConversationList.ConversationData> oldList, List<ConversationList.ConversationData> newList) {
+            this.oldList = oldList;
+            this.newList = newList;
+        }
+
+        @Override
+        public int getOldListSize() { return oldList.size(); }
+
+        @Override
+        public int getNewListSize() { return newList.size(); }
+
+        @Override
+        public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
+            ConversationList.ConversationData oldItem = oldList.get(oldItemPosition);
+            ConversationList.ConversationData newItem = newList.get(newItemPosition);
+            if (oldItem == null || newItem == null || oldItem.chat_id == null || newItem.chat_id == null) return false;
+            return oldItem.chat_id.equals(newItem.chat_id);
+        }
+
+        @Override
+        public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
+            ConversationList.ConversationData oldItem = oldList.get(oldItemPosition);
+            ConversationList.ConversationData newItem = newList.get(newItemPosition);
+            return oldItem.unread_message == newItem.unread_message
+                    && oldItem.timestamp_ms == newItem.timestamp_ms
+                    && oldItem.do_not_disturb == newItem.do_not_disturb
+                    && android.text.TextUtils.equals(oldItem.chat_content, newItem.chat_content)
+                    && android.text.TextUtils.equals(oldItem.name, newItem.name)
+                    && android.text.TextUtils.equals(oldItem.avatar_url, newItem.avatar_url);
+        }
     }
 
     public void markAsRead(int position) {
