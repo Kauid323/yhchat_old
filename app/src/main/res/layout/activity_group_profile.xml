@@ -34,6 +34,17 @@
             android:textColor="@color/text_white"
             android:textSize="18sp"
             android:textStyle="bold" />
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/btnAddGroup"
+            android:layout_width="48dp"
+            android:layout_height="match_parent"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/add_group_btn_title"
+            android:padding="12dp"
+            android:visibility="gone"
+            app:srcCompat="@drawable/ic_add"
+            app:tint="@color/text_white" />
     </LinearLayout>
 
     <ScrollView

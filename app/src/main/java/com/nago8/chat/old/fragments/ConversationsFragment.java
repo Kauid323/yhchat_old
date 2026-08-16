@@ -67,7 +67,10 @@ public class ConversationsFragment extends Fragment implements SearchHost {
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         recyclerView.setHasFixedSize(true);
         recyclerView.setItemViewCacheSize(20);
-        recyclerView.setItemAnimator(null);
+        androidx.recyclerview.widget.DefaultItemAnimator animator = new androidx.recyclerview.widget.DefaultItemAnimator();
+        animator.setSupportsChangeAnimations(false);
+        animator.setMoveDuration(250);
+        recyclerView.setItemAnimator(animator);
         adapter = new ConversationsAdapter();
         recyclerView.setAdapter(adapter);
 
@@ -88,6 +91,19 @@ public class ConversationsFragment extends Fragment implements SearchHost {
                 if (data == null || data.chat_id == null || data.chat_id.isEmpty()) return;
                 int chatType = data.chat_type != 0 ? data.chat_type : 1;
                 toggleStickyConversation(data.chat_id, chatType, isSticky);
+            }
+
+            @Override
+            public void onArchiveConversation(ConversationList.ConversationData data, int position) {
+                if (data == null || data.chat_id == null || data.chat_id.isEmpty() || getContext() == null) return;
+                com.nago8.chat.old.cache.ArchiveManager.getInstance().archiveConversation(getContext(), data);
+                Toast.makeText(getContext(), R.string.conversation_archived_toast, Toast.LENGTH_SHORT).show();
+                if (getActivity() instanceof HomeActivity) {
+                    HomeActivity home = (HomeActivity) getActivity();
+                    if (adapter != null) {
+                        adapter.setData(home.getCachedConversationList());
+                    }
+                }
             }
 
             @Override
@@ -211,7 +227,6 @@ public class ConversationsFragment extends Fragment implements SearchHost {
                         if (getActivity() != null) {
                             getActivity().runOnUiThread(() -> {
                                 if (conversationList.data != null) {
-                                    adapter.setData(conversationList.data);
                                     if (getActivity() instanceof HomeActivity) {
                                         HomeActivity home = (HomeActivity) getActivity();
                                         home.updateConversationDataList(conversationList.data);
@@ -223,6 +238,9 @@ public class ConversationsFragment extends Fragment implements SearchHost {
                                         }
                                         home.updateDoNotDisturbSet(dndIds);
                                         home.updateConvInfoCache(conversationList.data);
+                                        adapter.setData(home.getCachedConversationList());
+                                    } else {
+                                        adapter.setData(conversationList.data);
                                     }
                                 }
                                 if (isManualRefresh) {

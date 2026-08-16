@@ -60,20 +60,16 @@ public class PostDetailActivity extends AppCompatActivity {
     private TextView tvTitle;
     private TextView tvToolbarTitle;
     private TextView tvAuthor;
-    private View authorBlock;
     private TextView tvTime;
     private TextView tvContent;
     private Markwon markwon;
 
     // Interaction tab views
     private LinearLayout interactionLayout;
-    private LinearLayout btnLike;
     private AppCompatImageView ivLike;
     private TextView tvLikeNum;
-    private LinearLayout btnCollect;
     private AppCompatImageView ivCollect;
     private TextView tvCollectNum;
-    private LinearLayout btnReward;
     private AppCompatImageView ivReward;
     private TextView tvRewardNum;
     private TextView tvCommentTitle;
@@ -118,9 +114,15 @@ public class PostDetailActivity extends AppCompatActivity {
 
         communityRepo = new CommunityRepository();
 
+        int primaryColor = com.nago8.chat.old.utils.ThemeUtils.getThemeColor(this);
         markwon = Markwon.builder(this)
                 .usePlugin(StrikethroughPlugin.create())
                 .usePlugin(new io.noties.markwon.AbstractMarkwonPlugin() {
+                    @Override
+                    public void configureTheme(@NonNull io.noties.markwon.core.MarkwonTheme.Builder builder) {
+                        builder.linkColor(primaryColor);
+                    }
+
                     @Override
                     public void configureConfiguration(@NonNull io.noties.markwon.MarkwonConfiguration.Builder builder) {
                         builder.linkResolver((view, link) -> {
@@ -144,19 +146,19 @@ public class PostDetailActivity extends AppCompatActivity {
         tvTitle = findViewById(R.id.tvPostTitle);
         tvToolbarTitle = findViewById(R.id.tvToolbarTitle);
         tvAuthor = findViewById(R.id.tvPostAuthor);
-        authorBlock = findViewById(R.id.authorBlock);
+        View authorBlock = findViewById(R.id.authorBlock);
         tvTime = findViewById(R.id.tvPostTime);
         tvContent = findViewById(R.id.tvPostContent);
 
         // Interaction tab views
         interactionLayout = findViewById(R.id.interactionLayout);
-        btnLike = findViewById(R.id.btnLike);
+        LinearLayout btnLike = findViewById(R.id.btnLike);
         ivLike = findViewById(R.id.ivLike);
         tvLikeNum = findViewById(R.id.tvLikeNum);
-        btnCollect = findViewById(R.id.btnCollect);
+        LinearLayout btnCollect = findViewById(R.id.btnCollect);
         ivCollect = findViewById(R.id.ivCollect);
         tvCollectNum = findViewById(R.id.tvCollectNum);
-        btnReward = findViewById(R.id.btnReward);
+        LinearLayout btnReward = findViewById(R.id.btnReward);
         ivReward = findViewById(R.id.ivReward);
         tvRewardNum = findViewById(R.id.tvRewardNum);
         tvCommentTitle = findViewById(R.id.tvCommentTitle);
@@ -286,7 +288,7 @@ public class PostDetailActivity extends AppCompatActivity {
 
         ApiClient.getClient().newCall(request).enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 runOnUiThread(() -> {
                     progressBar.setVisibility(View.GONE);
                     Toast.makeText(PostDetailActivity.this, R.string.post_load_failed, Toast.LENGTH_SHORT).show();
@@ -294,7 +296,7 @@ public class PostDetailActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 if (response.isSuccessful() && response.body() != null) {
                     try {
                         String respStr = response.body().string();
@@ -354,7 +356,7 @@ public class PostDetailActivity extends AppCompatActivity {
         isRewarded = getJsonIntOrString(post, "isReward") == 1;
         likeNum = getJsonLong(post, "likeNum", 0);
         collectNum = getJsonLong(post, "collectNum", 0);
-        rewardNum = getJsonDouble(post, "amountNum", 0);
+        rewardNum = getJsonDouble(post, "amountNum");
         long commentNum = getJsonLong(post, "commentNum", 0);
 
         if (title.length() > 0) {
@@ -1045,11 +1047,11 @@ public class PostDetailActivity extends AppCompatActivity {
         return def;
     }
 
-    private double getJsonDouble(JsonObject obj, String key, double def) {
+    private double getJsonDouble(JsonObject obj, String key) {
         if (obj.has(key) && !obj.get(key).isJsonNull()) {
-            try { return obj.get(key).getAsDouble(); } catch (Exception e) { return def; }
+            try { return obj.get(key).getAsDouble(); } catch (Exception e) { return 0; }
         }
-        return def;
+        return 0;
     }
 
     /**

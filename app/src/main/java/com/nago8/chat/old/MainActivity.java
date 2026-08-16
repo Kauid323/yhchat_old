@@ -61,6 +61,9 @@ public class MainActivity extends AppCompatActivity {
         String token = PrefUtils.getToken(this);
         if (token != null && !token.isEmpty()) {
             goToHome();
+            if (getIntent() != null && getIntent().getData() != null) {
+                com.nago8.chat.old.utils.InternalLinkUtils.handleUrl(this, getIntent().getData().toString());
+            }
             return;
         }
 

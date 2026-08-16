@@ -4,7 +4,6 @@ import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
@@ -39,13 +38,12 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.tabs.TabLayoutMediator;
+import com.nago8.chat.old.cache.ArchiveManager;
 import com.nago8.chat.old.cache.ConversationCache;
 import com.nago8.chat.old.fragments.AddressBookFragment;
 import com.nago8.chat.old.fragments.CommunityFragment;
-import com.nago8.chat.old.fragments.ConversationsFragment;
 import com.nago8.chat.old.fragments.DiscoveryFragment;
 import com.nago8.chat.old.fragments.HomeConversationsFragment;
-import com.nago8.chat.old.fragments.StickyConversationsFragment;
 import com.nago8.chat.old.listener.SearchHost;
 import com.nago8.chat.old.model.UserModels;
 import com.nago8.chat.old.net.ApiClient;
@@ -146,6 +144,7 @@ public class HomeActivity extends AppCompatActivity {
             });
         }
 
+        ArchiveManager.getInstance().ensureLoaded(this);
         setupSpeedDialFab();
 
         ConversationCache.getInstance().setOnUnreadCountChangeListener((totalUnread, stickyUnread) -> runOnUiThread(() -> {
@@ -259,6 +258,7 @@ public class HomeActivity extends AppCompatActivity {
                         }
                     });
                     tabLayoutMediator.attach();
+                    com.nago8.chat.old.utils.ThemeUtils.applyThemeToViewTree(tabLayoutHome, com.nago8.chat.old.utils.ThemeUtils.getThemeColor(HomeActivity.this));
                 }
             });
         }
@@ -327,6 +327,8 @@ public class HomeActivity extends AppCompatActivity {
         }
         searchMode = true;
         if (tabLayoutHome != null) tabLayoutHome.setVisibility(View.GONE);
+        if (searchContainer != null) searchContainer.setVisibility(View.VISIBLE);
+        if (etSearch != null) etSearch.requestFocus();
         InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
         if (imm != null && etSearch != null) imm.showSoftInput(etSearch, InputMethodManager.SHOW_IMPLICIT);
     }
@@ -347,8 +349,8 @@ public class HomeActivity extends AppCompatActivity {
             ((SearchHost) currentFragment).onSearchClosed();
         } else if (currentFragment instanceof HomeConversationsFragment) {
             HomeConversationsFragment hcf = (HomeConversationsFragment) currentFragment;
-            if (hcf.getConversationsFragment() instanceof SearchHost) {
-                ((SearchHost) hcf.getConversationsFragment()).onSearchClosed();
+            if (hcf.getConversationsFragment() != null) {
+                hcf.getConversationsFragment().onSearchClosed();
             }
         }
     }
@@ -365,8 +367,8 @@ public class HomeActivity extends AppCompatActivity {
             ((SearchHost) currentFragment).onSearch(word);
         } else if (currentFragment instanceof HomeConversationsFragment) {
             HomeConversationsFragment hcf = (HomeConversationsFragment) currentFragment;
-            if (hcf.getConversationsFragment() instanceof SearchHost) {
-                ((SearchHost) hcf.getConversationsFragment()).onSearch(word);
+            if (hcf.getConversationsFragment() != null) {
+                hcf.getConversationsFragment().onSearch(word);
             }
         }
     }
@@ -461,24 +463,25 @@ public class HomeActivity extends AppCompatActivity {
             }
         }
 
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.menu_language)
-                .setSingleChoiceItems(names, checked, (dialog, which) -> {
-                    String selected = codes[which];
-                    if (!selected.equals(current)) {
-                        PrefUtils.setLanguage(this, selected);
-                        dialog.dismiss();
-                        LocaleHelper.applyToApplication(getApplicationContext());
-                        Intent intent = new Intent(this, HomeActivity.class);
-                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                        finish();
-                        startActivity(intent);
-                    } else {
-                        dialog.dismiss();
-                    }
-                })
-                .setNegativeButton(android.R.string.cancel, null)
-                .show();
+        com.nago8.chat.old.utils.ThemeUtils.showThemedDialog(
+                new AlertDialog.Builder(this)
+                        .setTitle(R.string.menu_language)
+                        .setSingleChoiceItems(names, checked, (dialog, which) -> {
+                            String selected = codes[which];
+                            if (!selected.equals(current)) {
+                                PrefUtils.setLanguage(this, selected);
+                                dialog.dismiss();
+                                LocaleHelper.applyToApplication(getApplicationContext());
+                                Intent intent = new Intent(this, HomeActivity.class);
+                                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                                finish();
+                                startActivity(intent);
+                            } else {
+                                dialog.dismiss();
+                            }
+                        })
+                        .setNegativeButton(android.R.string.cancel, null)
+        );
     }
 
     @Override

@@ -410,6 +410,9 @@ public class WsClient {
         // 免打扰会话不通知
         if (dndChecker != null && dndChecker.isDoNotDisturb(targetChatId)) return;
 
+        // 归档会话彻底不通知
+        if (com.nago8.chat.old.cache.ArchiveManager.getInstance().isArchived(appContext, targetChatId)) return;
+
         // 构建通知内容
         String preview = WsMsgConverter.toPreviewText(msg, appContext);
         // 如果预览内容为空（例如空指令、空草稿、系统回执），绝对不发空通知

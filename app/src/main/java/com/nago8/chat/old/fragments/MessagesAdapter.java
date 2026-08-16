@@ -103,31 +103,34 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
     }
 
     private Markwon getMarkwon(Context context) {
-        if (markwon == null) {
-            markwon = Markwon.builder(context)
-                    .usePlugin(StrikethroughPlugin.create())
-                    .usePlugin(new AbstractMarkwonPlugin() {
-                        @Override
-                        public void configureConfiguration(@NonNull MarkwonConfiguration.Builder builder) {
-                            builder.linkResolver((view, link) -> {
-                                if (!InternalLinkUtils.handleUrl(view.getContext(), link)) {
-                                    try {
-                                        String openUrl = link;
-                                        if (!openUrl.startsWith("http://") && !openUrl.startsWith("https://") && !openUrl.startsWith("yunhu://")) {
-                                            openUrl = "http://" + openUrl;
-                                        }
-                                        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(openUrl));
-                                        view.getContext().startActivity(intent);
-                                    } catch (Exception e) {
-                                        Log.e("MessagesAdapter", "Failed to resolve link: " + link, e);
+        int primaryColor = com.nago8.chat.old.utils.ThemeUtils.getThemeColor(context);
+        return Markwon.builder(context)
+                .usePlugin(StrikethroughPlugin.create())
+                .usePlugin(new AbstractMarkwonPlugin() {
+                    @Override
+                    public void configureTheme(@NonNull io.noties.markwon.core.MarkwonTheme.Builder builder) {
+                        builder.linkColor(primaryColor);
+                    }
+
+                    @Override
+                    public void configureConfiguration(@NonNull MarkwonConfiguration.Builder builder) {
+                        builder.linkResolver((view, link) -> {
+                            if (!InternalLinkUtils.handleUrl(view.getContext(), link)) {
+                                try {
+                                    String openUrl = link;
+                                    if (!openUrl.startsWith("http://") && !openUrl.startsWith("https://") && !openUrl.startsWith("yunhu://")) {
+                                        openUrl = "http://" + openUrl;
                                     }
+                                    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(openUrl));
+                                    view.getContext().startActivity(intent);
+                                } catch (Exception e) {
+                                    Log.e("MessagesAdapter", "Failed to resolve link: " + link, e);
                                 }
-                            });
-                        }
-                    })
-                    .build();
-        }
-        return markwon;
+                            }
+                        });
+                    }
+                })
+                .build();
     }
 
     @Override
@@ -319,8 +322,9 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                 textView.setLinkTextColor(0xFFFFECB3);
             } else {
                 int linkColor = group.mine ? 0xFFE0F2FE : 0xFF1A73E8;
-                textView.setLinkTextColor(linkColor);
-                textView.setTextColor(ContextCompat.getColor(itemView.getContext(), group.mine ? android.R.color.white : R.color.bubble_text_left));
+                int primaryColor = com.nago8.chat.old.utils.ThemeUtils.getThemeColor(itemView.getContext());
+                int fgColor = com.nago8.chat.old.utils.ThemeUtils.getContrastingForegroundColor(primaryColor);
+                textView.setTextColor(group.mine ? fgColor : ContextCompat.getColor(itemView.getContext(), R.color.bubble_text_left));
             }
 
             boolean isMarkdown = msg != null && msg.content_type == 3 && msg.msg_delete_time <= 0;
@@ -848,6 +852,10 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                 bubbleView.setBackground(redBg);
             } else {
                 bubbleView.setBackgroundResource(getBubbleBackground(mine, index, count));
+                if (mine && bubbleView.getBackground() != null) {
+                    int primaryColor = com.nago8.chat.old.utils.ThemeUtils.getThemeColor(bubbleView.getContext());
+                    bubbleView.getBackground().mutate().setColorFilter(primaryColor, android.graphics.PorterDuff.Mode.SRC_IN);
+                }
             }
         }
 

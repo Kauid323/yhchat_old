@@ -19,11 +19,22 @@ public class App extends Application {
         androidx.appcompat.app.AppCompatDelegate.setCompatVectorFromResourcesEnabled(true);
         registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks() {
             @Override
+            public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
+                com.nago8.chat.old.utils.ThemeUtils.registerActivity(activity);
+            }
+
+            @Override
             public void onActivityStarted(Activity activity) {
                 if (++startedActivityCount == 1 && !changingConfigurations) {
                     appInForeground = true;
                 }
                 changingConfigurations = false;
+                com.nago8.chat.old.utils.ThemeUtils.applyThemeToActivity(activity);
+            }
+
+            @Override
+            public void onActivityResumed(Activity activity) {
+                com.nago8.chat.old.utils.ThemeUtils.applyThemeToActivity(activity);
             }
 
             @Override
@@ -34,11 +45,11 @@ public class App extends Application {
                 }
             }
 
-            @Override public void onActivityCreated(Activity activity, Bundle savedInstanceState) { }
-            @Override public void onActivityResumed(Activity activity) { }
             @Override public void onActivityPaused(Activity activity) { }
             @Override public void onActivitySaveInstanceState(Activity activity, Bundle outState) { }
-            @Override public void onActivityDestroyed(Activity activity) { }
+            @Override public void onActivityDestroyed(Activity activity) {
+                com.nago8.chat.old.utils.ThemeUtils.unregisterActivity(activity);
+            }
         });
     }
 

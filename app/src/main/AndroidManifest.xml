@@ -28,6 +28,25 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- 1. 支持外部分享链接 (http/https://yhfx.jwznb.com/share?...) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:host="yhfx.jwznb.com" />
+                <data android:pathPrefix="/share" />
+            </intent-filter>
+
+            <!-- 2. 支持自定义 Scheme (yunhu://share, yunhu://add-chat 等) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="yunhu" />
+            </intent-filter>
         </activity>
         <activity android:name=".HomeActivity" />
         <activity
@@ -71,6 +90,7 @@
         <activity android:name=".GroupMembersActivity" />
         <activity android:name=".SectionDetailActivity" />
         <activity android:name=".SectionInfoActivity" />
+        <activity android:name=".ArchivedConversationsActivity" />
         <activity android:name=".VideoPlayerActivity"
             android:configChanges="orientation|screenSize"
             android:theme="@style/Theme.云湖Old.Fullscreen" />

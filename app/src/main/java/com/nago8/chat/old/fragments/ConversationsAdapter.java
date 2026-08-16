@@ -39,6 +39,7 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
     public interface OnConversationActionListener {
         void onConversationClick(ConversationList.ConversationData data, int position);
         void onPinToggle(ConversationList.ConversationData data, boolean isSticky, int position);
+        void onArchiveConversation(ConversationList.ConversationData data, int position);
         void onDeleteConversation(ConversationList.ConversationData data, int position);
     }
 
@@ -60,6 +61,9 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
                 public void onPinToggle(ConversationList.ConversationData data, boolean isSticky, int position) {}
 
                 @Override
+                public void onArchiveConversation(ConversationList.ConversationData data, int position) {}
+
+                @Override
                 public void onDeleteConversation(ConversationList.ConversationData data, int position) {}
             };
         }
@@ -71,9 +75,16 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
     }
 
     public void setData(List<ConversationList.ConversationData> data) {
-        if (data == null) data = new ArrayList<>();
+        List<ConversationList.ConversationData> filtered = new ArrayList<>();
+        if (data != null) {
+            for (ConversationList.ConversationData item : data) {
+                if (item != null && item.chat_id != null && !com.nago8.chat.old.cache.ArchiveManager.getInstance().isArchived(item.chat_id)) {
+                    filtered.add(item);
+                }
+            }
+        }
         final List<ConversationList.ConversationData> oldList = new ArrayList<>(this.dataList);
-        final List<ConversationList.ConversationData> newList = new ArrayList<>(data);
+        final List<ConversationList.ConversationData> newList = filtered;
 
         boolean oldEmpty = oldList.isEmpty();
         boolean newEmpty = newList.isEmpty();
@@ -282,6 +293,15 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
             });
         }
 
+        if (h.btnArchive != null) {
+            h.btnArchive.setOnClickListener(v -> {
+                if (h.swipeLayout != null) h.swipeLayout.smoothClose();
+                if (actionListener != null) {
+                    actionListener.onArchiveConversation(data, holder.getAdapterPosition());
+                }
+            });
+        }
+
         if (h.btnDelete != null) {
             h.btnDelete.setOnClickListener(v -> {
                 if (h.swipeLayout != null) h.swipeLayout.smoothClose();
@@ -328,7 +348,7 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
         SwipeMenuLayout swipeLayout;
         View rootView;
         ImageView ivAvatar;
-        TextView tvName, tvContent, tvTime, tvUnreadCount, btnPin, btnDelete;
+        TextView tvName, tvContent, tvTime, tvUnreadCount, btnPin, btnArchive, btnDelete;
         androidx.appcompat.widget.AppCompatImageView ivDnd;
 
         public ItemViewHolder(@NonNull View itemView) {
@@ -342,6 +362,7 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
             tvUnreadCount = itemView.findViewById(R.id.tvUnreadCount);
             ivDnd = itemView.findViewById(R.id.ivDnd);
             btnPin = itemView.findViewById(R.id.btnPin);
+            btnArchive = itemView.findViewById(R.id.btnArchive);
             btnDelete = itemView.findViewById(R.id.btnDelete);
         }
     }

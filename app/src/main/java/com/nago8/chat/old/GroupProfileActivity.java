@@ -78,12 +78,16 @@ public class GroupProfileActivity extends AppCompatActivity {
     private SwitchCompat swHideMembers;
     private SwitchCompat swDenyUpload;
 
+    private AppCompatImageButton btnAddGroup;
     private ProgressBar progressBar;
 
     private Call runningCall;
     private Call toggleCall;
     private Call editCall;
     private Call categoryCall;
+    private Call applyCall;
+
+    private com.nago8.chat.old.repository.FriendRepository friendRepository;
 
     private String groupId;
     private info.Group_data currentGroup;
@@ -109,6 +113,10 @@ public class GroupProfileActivity extends AppCompatActivity {
         groupId = getIntent().getStringExtra(EXTRA_GROUP_ID);
 
         AppCompatImageButton btnBack = findViewById(R.id.btnBack);
+        btnAddGroup = findViewById(R.id.btnAddGroup);
+        if (btnAddGroup != null) {
+            btnAddGroup.setOnClickListener(v -> showApplyGroupDialog());
+        }
         ivAvatar = findViewById(R.id.ivAvatar);
         if (ivAvatar != null) {
             ivAvatar.setOnClickListener(v -> {
@@ -181,6 +189,7 @@ public class GroupProfileActivity extends AppCompatActivity {
         if (toggleCall != null) toggleCall.cancel();
         if (editCall != null) editCall.cancel();
         if (categoryCall != null) categoryCall.cancel();
+        if (applyCall != null) applyCall.cancel();
         super.onDestroy();
     }
 
@@ -266,6 +275,12 @@ public class GroupProfileActivity extends AppCompatActivity {
         tvGroupId.setText(getString(R.string.user_id_format, data.group_id));
         ImageUtils.loadAvatar(this, data.avatar_url, ivAvatar);
 
+        // 判断当前用户是否已加入该群（permisson_level > 0 表示成员/管理/群主）
+        boolean isMember = false;
+        if (btnAddGroup != null) {
+            btnAddGroup.setVisibility(isMember ? View.GONE : View.VISIBLE);
+        }
+
         String intro = data.introduction != null && !data.introduction.isEmpty() ? data.introduction : getString(R.string.group_profile_no_ban);
         tvIntroduction.setText(intro);
 
@@ -307,6 +322,75 @@ public class GroupProfileActivity extends AppCompatActivity {
         swHideMembers.setChecked(data.hide_group_members == 1);
         swDenyUpload.setChecked(data.deny_members_upload_to_group_disk == 1);
         bindingSwitches = false;
+    }
+
+    private void showApplyGroupDialog() {
+        if (currentGroup == null) return;
+        if (currentGroup.direct_join == 1) {
+            // 进群免审核，直接发送申请
+            sendGroupApply("");
+            return;
+        }
+
+        com.google.android.material.dialog.MaterialAlertDialogBuilder builder =
+                new com.google.android.material.dialog.MaterialAlertDialogBuilder(this);
+        builder.setTitle(R.string.add_group_dialog_title);
+
+        com.google.android.material.textfield.TextInputLayout inputLayout =
+                new com.google.android.material.textfield.TextInputLayout(this, null, com.google.android.material.R.attr.textInputStyle);
+        inputLayout.setHint(getString(R.string.add_group_remark_hint));
+
+        final com.google.android.material.textfield.TextInputEditText etRemark =
+                new com.google.android.material.textfield.TextInputEditText(inputLayout.getContext());
+        etRemark.setSingleLine(true);
+        inputLayout.addView(etRemark);
+
+        android.widget.FrameLayout container = new android.widget.FrameLayout(this);
+        int padding = (int) (20 * getResources().getDisplayMetrics().density);
+        container.setPadding(padding, padding / 2, padding, padding / 2);
+        container.addView(inputLayout);
+        builder.setView(container);
+
+        builder.setPositiveButton(R.string.dialog_confirm, (dialog, which) -> {
+            String remark = etRemark.getText() != null ? etRemark.getText().toString().trim() : "";
+            sendGroupApply(remark);
+        });
+        builder.setNegativeButton(R.string.dialog_cancel, (dialog, which) -> dialog.dismiss());
+
+        com.nago8.chat.old.utils.ThemeUtils.showThemedDialog(builder);
+    }
+
+    private void sendGroupApply(String remark) {
+        String token = PrefUtils.getToken(this);
+        if (token == null || token.isEmpty()) return;
+
+        if (friendRepository == null) {
+            friendRepository = new com.nago8.chat.old.repository.FriendRepository();
+        }
+
+        if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
+        applyCall = friendRepository.applyFriend(token, groupId, 2, remark, new com.nago8.chat.old.repository.FriendRepository.ApplyFriendCallback() {
+            @Override
+            public void onSuccess(int code, String msg) {
+                runOnUiThread(() -> {
+                    if (progressBar != null) progressBar.setVisibility(View.GONE);
+                    if (code == 1) {
+                        Toast.makeText(GroupProfileActivity.this, R.string.add_group_sent, Toast.LENGTH_SHORT).show();
+                        fetchGroupInfo(groupId);
+                    } else {
+                        Toast.makeText(GroupProfileActivity.this, msg != null && !msg.isEmpty() ? msg : getString(R.string.add_group_failed), Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+
+            @Override
+            public void onError(Exception e) {
+                runOnUiThread(() -> {
+                    if (progressBar != null) progressBar.setVisibility(View.GONE);
+                    Toast.makeText(GroupProfileActivity.this, getString(R.string.add_group_failed) + ": " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                });
+            }
+        });
     }
 
     private void setupSwitchListeners() {

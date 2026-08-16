@@ -1,14 +1,65 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#FF000000">
 
+    <!-- 静态图片层（支持手势缩放） -->
     <com.ortiz.touchview.TouchImageView
         android:id="@+id/zoomableImage"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:contentDescription="@string/image_preview_desc" />
+
+    <!-- 实况视频播放层 (TextureView 硬件加速，API 14+ / Android 4.0+ 原生兼容) -->
+    <TextureView
+        android:id="@+id/textureViewLive"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
+    <!-- 左上角实况徽章 -->
+    <LinearLayout
+        android:id="@+id/layoutLiveBadge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:layout_marginStart="16dp"
+        android:layout_marginLeft="16dp"
+        android:layout_marginTop="50dp"
+        android:background="@drawable/bg_live_photo_badge"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="10dp"
+        android:paddingLeft="10dp"
+        android:paddingTop="5dp"
+        android:paddingEnd="12dp"
+        android:paddingRight="12dp"
+        android:paddingBottom="5dp"
+        android:visibility="gone">
+
+        <!-- 实况同心圆图标 -->
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/ivLiveIcon"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            app:srcCompat="@drawable/ic_live_photo"
+            app:tint="#FFFFFFFF" />
+
+        <TextView
+            android:id="@+id/tvLiveText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_marginLeft="6dp"
+            android:text="实况"
+            android:textColor="#FFFFFFFF"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+    </LinearLayout>
 
     <ProgressBar
         android:id="@+id/itemProgress"

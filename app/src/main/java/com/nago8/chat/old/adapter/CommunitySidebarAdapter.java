@@ -97,10 +97,12 @@ public class CommunitySidebarAdapter extends RecyclerView.Adapter<CommunitySideb
 
         public void bind(SidebarItem item, boolean isSelected) {
             tvSidebarTitle.setText(item.title);
+            int primaryColor = com.nago8.chat.old.utils.ThemeUtils.getThemeColor(context);
             if (isSelected) {
                 indicatorSidebar.setVisibility(View.VISIBLE);
+                indicatorSidebar.setBackgroundColor(primaryColor);
                 tvSidebarTitle.setTypeface(null, Typeface.BOLD);
-                tvSidebarTitle.setTextColor(ContextCompat.getColor(context, R.color.app_primary));
+                tvSidebarTitle.setTextColor(primaryColor);
                 layoutSidebarRoot.setBackgroundColor(0x0A000000);
             } else {
                 indicatorSidebar.setVisibility(View.GONE);

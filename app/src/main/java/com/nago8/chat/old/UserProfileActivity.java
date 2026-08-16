@@ -8,7 +8,6 @@ import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.ArrayAdapter;
-import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -18,7 +17,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.AppCompatImageButton;
@@ -478,7 +476,7 @@ public class UserProfileActivity extends AppCompatActivity {
         });
 
         builder.setNegativeButton(R.string.report_btn_cancel, (dialog, which) -> dialog.dismiss());
-        builder.show();
+        com.nago8.chat.old.utils.ThemeUtils.showThemedDialog(builder);
     }
 
     private void openImagePickerForReport() {

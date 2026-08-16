@@ -136,6 +136,9 @@ public class ConversationCache {
             conversationMap.clear();
             for (ConversationList.ConversationData cd : list) {
                 if (cd != null && cd.chat_id != null && !cd.chat_id.isEmpty()) {
+                    if (ArchiveManager.getInstance().isArchived(cd.chat_id)) {
+                        continue;
+                    }
                     conversationMap.put(cd.chat_id, cd);
                     if (cd.do_not_disturb != 0) {
                         dndSet.add(cd.chat_id);
@@ -155,6 +158,9 @@ public class ConversationCache {
         if (stickyList != null) {
             for (StickyInfo s : stickyList) {
                 if (s != null && s.chatId != null && !s.chatId.isEmpty()) {
+                    if (ArchiveManager.getInstance().isArchived(s.chatId)) {
+                        continue;
+                    }
                     stickySet.add(s.chatId);
 
                     ConversationList.ConversationData mainConv = conversationMap.get(s.chatId);
@@ -265,6 +271,11 @@ public class ConversationCache {
         // 在其他界面时收到 WS 消息，提前增量添加到全局消息缓存中
         saveSinglePushMessage(wsMsg, myUserId);
 
+        // 如果该会话已归档，彻底不放入主会话列表，不增加未读数，不刷新列表
+        if (ArchiveManager.getInstance().isArchived(ctx, chatId)) {
+            return;
+        }
+
         boolean isFromMe = (wsMsg.sender != null && wsMsg.sender.chat_id != null && wsMsg.sender.chat_id.equals(myUserId));
         String activeChatId = WsClient.getInstance().getActiveChatId();
         boolean isActiveChat = (activeChatId != null && activeChatId.equals(chatId));
@@ -319,7 +330,7 @@ public class ConversationCache {
     }
 
     /**
-     * 重新计算未读消息总数（剔除免打扰与屏蔽项）
+     * 重新计算未读消息总数（剔除免打扰与屏蔽项、归档项）
      */
     public synchronized void recalculateUnreadCounts() {
         int total = 0;
@@ -328,6 +339,7 @@ public class ConversationCache {
         for (ConversationList.ConversationData cd : conversationMap.values()) {
             if (cd == null || cd.chat_id == null || cd.chat_id.isEmpty()) continue;
 
+            if (ArchiveManager.getInstance().isArchived(cd.chat_id)) continue;
             if (cd.do_not_disturb != 0 || dndSet.contains(cd.chat_id)) continue;
 
             int unread = cd.unread_message;

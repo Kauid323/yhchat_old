@@ -1,6 +1,7 @@
 package com.nago8.chat.old;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
@@ -18,6 +19,7 @@ import android.text.format.Formatter;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
+import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ProgressBar;
@@ -46,6 +48,7 @@ import com.nago8.chat.old.net.ApiClient;
 import com.nago8.chat.old.proto.list_message_by_mid_seq;
 import com.nago8.chat.old.proto.list_message_by_mid_seq_send;
 import com.nago8.chat.old.proto.Msg;
+import com.nago8.chat.old.utils.LivePhotoUtils;
 import com.nago8.chat.old.utils.LocaleHelper;
 import com.ortiz.touchview.TouchImageView;
 
@@ -54,11 +57,11 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.Serializable;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -67,6 +70,8 @@ import okhttp3.Request;
 import okhttp3.Response;
 
 public class ImagePreviewActivity extends AppCompatActivity {
+
+    private static final String TAG = "ImagePreview";
 
     public static final String EXTRA_IMAGE_URL = "image_url";
     /** 多图模式：ArrayList<String> 图片URL列表 */
@@ -112,6 +117,7 @@ public class ImagePreviewActivity extends AppCompatActivity {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         AppCompatDelegate.setCompatVectorFromResourcesEnabled(true);
         super.onCreate(savedInstanceState);
@@ -134,7 +140,11 @@ public class ImagePreviewActivity extends AppCompatActivity {
 
         // 读取图片列表
         ArrayList<String> urls = getIntent().getStringArrayListExtra(EXTRA_IMAGE_URLS);
-        ArrayList<Long> seqs = (ArrayList<Long>) getIntent().getSerializableExtra(EXTRA_MSG_SEQS);
+        ArrayList<Long> seqs = null;
+        Serializable serializableSeqs = getIntent().getSerializableExtra(EXTRA_MSG_SEQS);
+        if (serializableSeqs instanceof ArrayList) {
+            seqs = (ArrayList<Long>) serializableSeqs;
+        }
         int startIndex = getIntent().getIntExtra(EXTRA_START_INDEX, 0);
 
         if (urls != null && !urls.isEmpty()) {
@@ -199,7 +209,7 @@ public class ImagePreviewActivity extends AppCompatActivity {
 
     private void updatePageCount(int position) {
         if (imageUrls.size() > 1) {
-            tvPageCount.setText((position + 1) + " / " + imageUrls.size());
+            tvPageCount.setText(String.format(Locale.getDefault(), "%d / %d", position + 1, imageUrls.size()));
         }
     }
 
@@ -233,10 +243,10 @@ public class ImagePreviewActivity extends AppCompatActivity {
         long latestCount = older ? 0 : LOAD_MORE_COUNT;
 
         // 用 list_message_by_mid_seq_send：tag3=msg_seq(image_id), tag4=chat_type, tag5=chat_id,
-        // tag6=earlier_quantities, tag7=latest_quantities（复用 unknown/msg_count 字段）
+        // tag6=earlier_quantities, tag7=latest_quantities
         list_message_by_mid_seq_send req = new list_message_by_mid_seq_send.Builder()
                 .msg_seq(refSeq)
-                .chat_type((long) chatType)
+                .chat_type(chatType)
                 .chat_id(chatId)
                 .unknown(earlierCount)
                 .msg_count(latestCount)
@@ -280,7 +290,6 @@ public class ImagePreviewActivity extends AppCompatActivity {
                     if (result != null && result.msg != null) {
                         for (Msg msg : result.msg) {
                             if (msg == null || msg.content == null) continue;
-                            // 图片消息 or 表情消息（sticker_url / image_url）
                             String url = null;
                             if (!TextUtils.isEmpty(msg.content.image_url)) {
                                 url = msg.content.image_url;
@@ -294,9 +303,16 @@ public class ImagePreviewActivity extends AppCompatActivity {
                         }
                     }
                 } catch (Exception e) {
-                    Log.e("ImagePreview", "decode error", e);
+                    Log.e(TAG, "decode error", e);
                 } finally {
                     response.close();
+                }
+
+                if (newUrls.isEmpty()) {
+                    if (older) noMoreOlder = true;
+                    else noMoreNewer = true;
+                    runOnUiThread(() -> progressLoadMore.setVisibility(View.GONE));
+                    return;
                 }
 
                 final List<String> finalUrls = newUrls;
@@ -304,28 +320,20 @@ public class ImagePreviewActivity extends AppCompatActivity {
 
                 runOnUiThread(() -> {
                     progressLoadMore.setVisibility(View.GONE);
-                    if (finalUrls.isEmpty()) {
-                        if (older) noMoreOlder = true;
-                        else noMoreNewer = true;
-                        return;
-                    }
-
-                    int savedPosition = viewPager.getCurrentItem();
 
                     if (older) {
-                        // 往前插入（更早的图在前面）
-                        // 保持从旧到新的顺序（API 返回的按时间排序，旧在前）
-                        for (int i = 0; i < finalUrls.size(); i++) {
+                        // 插入到最前面
+                        for (int i = finalUrls.size() - 1; i >= 0; i--) {
                             String u = finalUrls.get(i);
                             urlSet.add(u);
                             imageUrls.add(0, u);
                             msgSeqs.add(0, finalSeqs.get(i));
                         }
                         adapter.notifyItemRangeInserted(0, finalUrls.size());
-                        // 维持当前浏览位置不跳动
-                        viewPager.setCurrentItem(savedPosition + finalUrls.size(), false);
+                        int newCurrent = viewPager.getCurrentItem() + finalUrls.size();
+                        viewPager.setCurrentItem(newCurrent, false);
                     } else {
-                        // 追加到末尾（更新的图在后面）
+                        // 插入到最后面
                         int insertPos = imageUrls.size();
                         for (int i = 0; i < finalUrls.size(); i++) {
                             String u = finalUrls.get(i);
@@ -364,28 +372,157 @@ public class ImagePreviewActivity extends AppCompatActivity {
         }
 
         @Override
+        public void onViewRecycled(@NonNull PageHolder holder) {
+            super.onViewRecycled(holder);
+            holder.releasePlayer();
+        }
+
+        @Override
         public int getItemCount() {
             return imageUrls.size();
         }
 
         class PageHolder extends RecyclerView.ViewHolder {
             TouchImageView zoomableImage;
+            TextureView textureViewLive;
+            View layoutLiveBadge;
             ProgressBar itemProgress;
 
+            private File currentLiveVideoFile = null;
+            private android.media.MediaPlayer mediaPlayer = null;
+            private boolean isPlayingLive = false;
+
+            @SuppressLint("ClickableViewAccessibility")
             PageHolder(@NonNull View itemView) {
                 super(itemView);
                 zoomableImage = itemView.findViewById(R.id.zoomableImage);
+                textureViewLive = itemView.findViewById(R.id.textureViewLive);
+                layoutLiveBadge = itemView.findViewById(R.id.layoutLiveBadge);
                 itemProgress = itemView.findViewById(R.id.itemProgress);
+
+                // 长按图片播放实况，松开手指停止实况
+                zoomableImage.setOnLongClickListener(v -> {
+                    if (currentLiveVideoFile != null && currentLiveVideoFile.exists()) {
+                        startLivePlayback();
+                        return true;
+                    }
+                    return false;
+                });
+
+                zoomableImage.setOnTouchListener((v, event) -> {
+                    if (isPlayingLive) {
+                        int action = event.getAction();
+                        if (action == android.view.MotionEvent.ACTION_UP || action == android.view.MotionEvent.ACTION_CANCEL) {
+                            stopLivePlayback();
+                            v.performClick();
+                        }
+                    }
+                    return false;
+                });
+
+                // 点击实况徽章切换播放/暂停
+                layoutLiveBadge.setOnClickListener(v -> {
+                    if (isPlayingLive) {
+                        stopLivePlayback();
+                    } else {
+                        startLivePlayback();
+                    }
+                });
+
+                textureViewLive.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
+                    @Override
+                    public void onSurfaceTextureAvailable(@NonNull android.graphics.SurfaceTexture surface, int width, int height) {
+                        if (mediaPlayer != null) {
+                            try {
+                                mediaPlayer.setSurface(new android.view.Surface(surface));
+                            } catch (Exception ignored) {}
+                        }
+                    }
+
+                    @Override
+                    public void onSurfaceTextureSizeChanged(@NonNull android.graphics.SurfaceTexture surface, int width, int height) {}
+
+                    @Override
+                    public boolean onSurfaceTextureDestroyed(@NonNull android.graphics.SurfaceTexture surface) {
+                        if (mediaPlayer != null) {
+                            try {
+                                mediaPlayer.setSurface(null);
+                            } catch (Exception ignored) {}
+                        }
+                        return true;
+                    }
+
+                    @Override
+                    public void onSurfaceTextureUpdated(@NonNull android.graphics.SurfaceTexture surface) {}
+                });
+            }
+
+            private void startLivePlayback() {
+                if (currentLiveVideoFile == null || !currentLiveVideoFile.exists()) return;
+                isPlayingLive = true;
+                textureViewLive.setVisibility(View.VISIBLE);
+
+                try {
+                    if (mediaPlayer == null) {
+                        mediaPlayer = new android.media.MediaPlayer();
+                        mediaPlayer.setLooping(true);
+                        mediaPlayer.setDataSource(currentLiveVideoFile.getAbsolutePath());
+                        if (textureViewLive.getSurfaceTexture() != null) {
+                            mediaPlayer.setSurface(new android.view.Surface(textureViewLive.getSurfaceTexture()));
+                        }
+                        mediaPlayer.setOnPreparedListener(mp -> {
+                            if (isPlayingLive) {
+                                mp.start();
+                            }
+                        });
+                        mediaPlayer.prepareAsync();
+                    } else {
+                        mediaPlayer.start();
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Failed to play live photo video", e);
+                }
+            }
+
+            private void stopLivePlayback() {
+                isPlayingLive = false;
+                textureViewLive.setVisibility(View.GONE);
+                if (mediaPlayer != null) {
+                    try {
+                        if (mediaPlayer.isPlaying()) {
+                            mediaPlayer.pause();
+                            mediaPlayer.seekTo(0);
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+
+            private void releasePlayer() {
+                stopLivePlayback();
+                if (mediaPlayer != null) {
+                    try {
+                        mediaPlayer.stop();
+                        mediaPlayer.release();
+                    } catch (Exception ignored) {}
+                    mediaPlayer = null;
+                }
+                if (currentLiveVideoFile != null && currentLiveVideoFile.exists()) {
+                    //noinspection ResultOfMethodCallIgnored
+                    currentLiveVideoFile.delete();
+                    currentLiveVideoFile = null;
+                }
             }
 
             void bind(String url) {
+                releasePlayer();
                 if (TextUtils.isEmpty(url)) return;
                 itemProgress.setVisibility(View.VISIBLE);
+                layoutLiveBadge.setVisibility(View.GONE);
                 zoomableImage.setImageDrawable(null);
 
-                // 在后台线程下载图片到临时文件再交给 Glide（与原来逻辑一致）
                 final String targetUrl = normalizeUrl(url);
                 new Thread(() -> {
+                    File tempFile = null;
                     try {
                         Request.Builder reqBuilder = new Request.Builder().url(targetUrl);
                         if (targetUrl.contains(".jwznb.com")) {
@@ -396,24 +533,36 @@ public class ImagePreviewActivity extends AppCompatActivity {
                             runOnUiThread(() -> itemProgress.setVisibility(View.GONE));
                             return;
                         }
-                        File tempFile = new File(getCacheDir(), "preview_" + System.nanoTime() + ".tmp");
-                        InputStream is = response.body().byteStream();
-                        FileOutputStream fos = new FileOutputStream(tempFile);
-                        byte[] buf = new byte[8192];
-                        int read;
-                        while ((read = is.read(buf)) != -1) fos.write(buf, 0, read);
-                        fos.flush();
-                        fos.close();
-                        is.close();
+                        tempFile = new File(getCacheDir(), "preview_" + System.nanoTime() + ".tmp");
+                        try (InputStream is = response.body().byteStream();
+                             FileOutputStream fos = new FileOutputStream(tempFile)) {
+                            byte[] buf = new byte[8192];
+                            int read;
+                            while ((read = is.read(buf)) != -1) {
+                                fos.write(buf, 0, read);
+                            }
+                            fos.flush();
+                        }
+
+                        // 探测并提取实况图片中的 MP4 视频
+                        File extractedLiveVideo = LivePhotoUtils.extractLiveVideo(tempFile, getCacheDir());
+                        final File finalTempFile = tempFile;
 
                         runOnUiThread(() -> {
                             if (isFinishing() || (Build.VERSION.SDK_INT >= 17 && isDestroyed())) return;
                             itemProgress.setVisibility(View.GONE);
 
+                            if (extractedLiveVideo != null && extractedLiveVideo.exists()) {
+                                currentLiveVideoFile = extractedLiveVideo;
+                                layoutLiveBadge.setVisibility(View.VISIBLE);
+                            } else {
+                                layoutLiveBadge.setVisibility(View.GONE);
+                            }
+
                             boolean isGif = "gif".equalsIgnoreCase(getExtensionFromUrl(targetUrl));
                             if (isGif) {
                                 Glide.with(getApplicationContext())
-                                        .load(tempFile)
+                                        .load(finalTempFile)
                                         .diskCacheStrategy(DiskCacheStrategy.NONE)
                                         .skipMemoryCache(true)
                                         .into(new CustomTarget<Drawable>() {
@@ -431,7 +580,7 @@ public class ImagePreviewActivity extends AppCompatActivity {
                                             @Override
                                             public void onLoadFailed(@Nullable Drawable errorDrawable) {
                                                 if (isFinishing() || (Build.VERSION.SDK_INT >= 17 && isDestroyed())) return;
-                                                loadSampledBitmapFallback(tempFile);
+                                                loadSampledBitmapFallback(finalTempFile);
                                             }
 
                                             @Override
@@ -440,7 +589,7 @@ public class ImagePreviewActivity extends AppCompatActivity {
                                             }
                                         });
                             } else {
-                                loadSampledBitmapFallback(tempFile);
+                                loadSampledBitmapFallback(finalTempFile);
                             }
                         });
                     } catch (Exception e) {
@@ -557,9 +706,10 @@ public class ImagePreviewActivity extends AppCompatActivity {
             }
             Uri uri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
             if (uri == null) return false;
-            OutputStream os = getContentResolver().openOutputStream(uri);
-            boolean ok = downloadToStream(url, os);
-            if (os != null) os.close();
+            boolean ok;
+            try (OutputStream os = getContentResolver().openOutputStream(uri)) {
+                ok = downloadToStream(url, os);
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 if (ok) {
                     values.clear();
@@ -571,26 +721,35 @@ public class ImagePreviewActivity extends AppCompatActivity {
                 }
             }
             return ok;
-        } catch (Exception e) { return false; }
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private boolean saveImageLegacy(String url) {
         try {
             File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "YunHuOld");
-            if (!dir.exists()) dir.mkdirs();
+            if (!dir.exists()) {
+                //noinspection ResultOfMethodCallIgnored
+                dir.mkdirs();
+            }
             String ext = getExtensionFromUrl(url);
             String fileName = "yhchat_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date()) + "." + ext;
             File file = new File(dir, fileName);
-            FileOutputStream fos = new FileOutputStream(file);
-            boolean ok = downloadToStream(url, fos);
-            fos.close();
+            boolean ok;
+            try (FileOutputStream fos = new FileOutputStream(file)) {
+                ok = downloadToStream(url, fos);
+            }
             if (ok) {
                 android.media.MediaScannerConnection.scanFile(this, new String[]{file.getAbsolutePath()}, new String[]{getMimeFromExtension(ext)}, null);
             } else {
+                //noinspection ResultOfMethodCallIgnored
                 file.delete();
             }
             return ok;
-        } catch (Exception e) { return false; }
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -604,12 +763,16 @@ public class ImagePreviewActivity extends AppCompatActivity {
         new Thread(() -> {
             try {
                 File cacheDir = new File(getCacheDir(), "shared_images");
-                if (!cacheDir.exists()) cacheDir.mkdirs();
+                if (!cacheDir.exists()) {
+                    //noinspection ResultOfMethodCallIgnored
+                    cacheDir.mkdirs();
+                }
                 String ext = getExtensionFromUrl(url);
                 File file = new File(cacheDir, "share_" + System.currentTimeMillis() + "." + ext);
-                FileOutputStream fos = new FileOutputStream(file);
-                boolean ok = downloadToStream(url, fos);
-                fos.close();
+                boolean ok;
+                try (FileOutputStream fos = new FileOutputStream(file)) {
+                    ok = downloadToStream(url, fos);
+                }
                 if (ok) {
                     Uri contentUri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", file);
                     Intent shareIntent = new Intent(Intent.ACTION_SEND);
@@ -637,11 +800,8 @@ public class ImagePreviewActivity extends AppCompatActivity {
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("图片详情");
-        StringBuilder sb = new StringBuilder();
-        sb.append("图片链接：\n").append(url).append("\n\n");
-        sb.append("图片格式：").append(ext).append("\n");
-        sb.append("文件大小：正在计算...");
-        builder.setMessage(sb.toString());
+        String initialMsg = "图片链接：\n" + url + "\n\n图片格式：" + ext + "\n文件大小：正在计算...";
+        builder.setMessage(initialMsg);
         builder.setPositiveButton("确定", null);
         AlertDialog dialog = builder.create();
         dialog.show();
@@ -651,11 +811,8 @@ public class ImagePreviewActivity extends AppCompatActivity {
             String sizeStr = size > 0 ? Formatter.formatFileSize(this, size) : "未知";
             runOnUiThread(() -> {
                 if (dialog.isShowing()) {
-                    StringBuilder sb2 = new StringBuilder();
-                    sb2.append("图片链接：\n").append(url).append("\n\n");
-                    sb2.append("图片格式：").append(ext).append("\n");
-                    sb2.append("文件大小：").append(sizeStr);
-                    dialog.setMessage(sb2.toString());
+                    String updatedMsg = "图片链接：\n" + url + "\n\n图片格式：" + ext + "\n文件大小：" + sizeStr;
+                    dialog.setMessage(updatedMsg);
                 }
             });
         }).start();
@@ -674,7 +831,9 @@ public class ImagePreviewActivity extends AppCompatActivity {
                 String len = r.header("Content-Length");
                 r.close();
                 if (len != null) return Long.parseLong(len);
-            } else r.close();
+            } else {
+                r.close();
+            }
         } catch (Exception ignored) {}
         return -1;
     }
@@ -685,14 +844,19 @@ public class ImagePreviewActivity extends AppCompatActivity {
             if (url.contains(".jwznb.com")) b.header("Referer", "http://myapp.jwznb.com");
             Response r = ApiClient.getClient().newCall(b.build()).execute();
             if (!r.isSuccessful() || r.body() == null) return false;
-            InputStream is = r.body().byteStream();
-            byte[] buf = new byte[8192];
-            int len;
-            while ((len = is.read(buf)) != -1) os.write(buf, 0, len);
-            is.close();
-            r.close();
+            try (InputStream is = r.body().byteStream()) {
+                byte[] buf = new byte[8192];
+                int len;
+                while ((len = is.read(buf)) != -1) {
+                    os.write(buf, 0, len);
+                }
+            } finally {
+                r.close();
+            }
             return true;
-        } catch (Exception e) { return false; }
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private static String getExtensionFromUrl(String url) {
@@ -740,7 +904,7 @@ public class ImagePreviewActivity extends AppCompatActivity {
             }
             return bitmap;
         } catch (Throwable e) {
-            e.printStackTrace();
+            Log.e(TAG, "Failed to decode sampled bitmap", e);
             return null;
         }
     }

@@ -126,6 +126,19 @@
             android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/btnArchive"
+            android:layout_width="80dp"
+            android:layout_height="match_parent"
+            android:background="#10B981"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:text="@string/action_archive"
+            android:textColor="@color/text_white"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
             android:id="@+id/btnDelete"
             android:layout_width="80dp"
             android:layout_height="match_parent"

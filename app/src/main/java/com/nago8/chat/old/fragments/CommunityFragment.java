@@ -87,6 +87,8 @@ public class CommunityFragment extends Fragment {
                     break;
             }
         }).attach();
+
+        com.nago8.chat.old.utils.ThemeUtils.applyThemeToViewTree(view, com.nago8.chat.old.utils.ThemeUtils.getThemeColor(getContext()));
     }
 
     public void openSectionDetail(int baId, String baName) {
