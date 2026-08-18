@@ -457,6 +457,35 @@ public class ImagePreviewActivity extends AppCompatActivity {
                 });
             }
 
+            private void adjustTextureViewSize(int videoWidth, int videoHeight) {
+                if (videoWidth <= 0 || videoHeight <= 0) return;
+                int containerWidth = itemView.getWidth();
+                int containerHeight = itemView.getHeight();
+                if (containerWidth <= 0 || containerHeight <= 0) return;
+
+                float containerRatio = (float) containerWidth / containerHeight;
+                float videoRatio = (float) videoWidth / videoHeight;
+
+                int targetW;
+                int targetH;
+                if (videoRatio > containerRatio) {
+                    targetW = containerWidth;
+                    targetH = (int) (containerWidth / videoRatio);
+                } else {
+                    targetH = containerHeight;
+                    targetW = (int) (containerHeight * videoRatio);
+                }
+
+                ViewGroup.LayoutParams lp = textureViewLive.getLayoutParams();
+                if (lp instanceof android.widget.FrameLayout.LayoutParams) {
+                    android.widget.FrameLayout.LayoutParams flp = (android.widget.FrameLayout.LayoutParams) lp;
+                    flp.width = targetW;
+                    flp.height = targetH;
+                    flp.gravity = android.view.Gravity.CENTER;
+                    textureViewLive.setLayoutParams(flp);
+                }
+            }
+
             private void startLivePlayback() {
                 if (currentLiveVideoFile == null || !currentLiveVideoFile.exists()) return;
                 isPlayingLive = true;
@@ -470,13 +499,16 @@ public class ImagePreviewActivity extends AppCompatActivity {
                         if (textureViewLive.getSurfaceTexture() != null) {
                             mediaPlayer.setSurface(new android.view.Surface(textureViewLive.getSurfaceTexture()));
                         }
+                        mediaPlayer.setOnVideoSizeChangedListener((mp, width, height) -> adjustTextureViewSize(width, height));
                         mediaPlayer.setOnPreparedListener(mp -> {
+                            adjustTextureViewSize(mp.getVideoWidth(), mp.getVideoHeight());
                             if (isPlayingLive) {
                                 mp.start();
                             }
                         });
                         mediaPlayer.prepareAsync();
                     } else {
+                        adjustTextureViewSize(mediaPlayer.getVideoWidth(), mediaPlayer.getVideoHeight());
                         mediaPlayer.start();
                     }
                 } catch (Exception e) {

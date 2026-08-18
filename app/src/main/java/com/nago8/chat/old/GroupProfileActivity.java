@@ -24,6 +24,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.nago8.chat.old.cache.AddressBookCache;
 import com.nago8.chat.old.net.ApiClient;
 import com.nago8.chat.old.proto.group.edit_group;
 import com.nago8.chat.old.proto.group.edit_group_send;
@@ -117,6 +118,7 @@ public class GroupProfileActivity extends AppCompatActivity {
         if (btnAddGroup != null) {
             btnAddGroup.setOnClickListener(v -> showApplyGroupDialog());
         }
+        updateAddGroupButtonVisibility();
         ivAvatar = findViewById(R.id.ivAvatar);
         if (ivAvatar != null) {
             ivAvatar.setOnClickListener(v -> {
@@ -169,12 +171,24 @@ public class GroupProfileActivity extends AppCompatActivity {
         });
 
         // 字符设置项点击事件 (可编辑字符)
-        rowName.setOnClickListener(v -> showEditGroupNameDialog());
-        rowIntroduction.setOnClickListener(v -> showEditGroupIntroDialog());
-        rowGroupCode.setOnClickListener(v -> showEditGroupCodeDialog());
-        rowMyNickname.setOnClickListener(v -> showEditMyNicknameDialog());
-        rowCategory.setOnClickListener(v -> fetchAndShowCategoryDialog());
-        rowAutoDelete.setOnClickListener(v -> showAutoDeleteDialog());
+        rowName.setOnClickListener(v -> {
+            if (checkMemberEditable()) showEditGroupNameDialog();
+        });
+        rowIntroduction.setOnClickListener(v -> {
+            if (checkMemberEditable()) showEditGroupIntroDialog();
+        });
+        rowGroupCode.setOnClickListener(v -> {
+            if (checkMemberEditable()) showEditGroupCodeDialog();
+        });
+        rowMyNickname.setOnClickListener(v -> {
+            if (checkMemberEditable()) showEditMyNicknameDialog();
+        });
+        rowCategory.setOnClickListener(v -> {
+            if (checkMemberEditable()) fetchAndShowCategoryDialog();
+        });
+        rowAutoDelete.setOnClickListener(v -> {
+            if (checkMemberEditable()) showAutoDeleteDialog();
+        });
         rowCommunity.setOnClickListener(v -> Toast.makeText(this, R.string.group_profile_community_readonly, Toast.LENGTH_SHORT).show());
 
         // 按钮项 / 开关项事件
@@ -275,11 +289,8 @@ public class GroupProfileActivity extends AppCompatActivity {
         tvGroupId.setText(getString(R.string.user_id_format, data.group_id));
         ImageUtils.loadAvatar(this, data.avatar_url, ivAvatar);
 
-        // 判断当前用户是否已加入该群（permisson_level > 0 表示成员/管理/群主）
-        boolean isMember = false;
-        if (btnAddGroup != null) {
-            btnAddGroup.setVisibility(isMember ? View.GONE : View.VISIBLE);
-        }
+        // 检查通讯录中是否存在该群聊，不存在则直接显示添加按钮
+        updateAddGroupButtonVisibility();
 
         String intro = data.introduction != null && !data.introduction.isEmpty() ? data.introduction : getString(R.string.group_profile_no_ban);
         tvIntroduction.setText(intro);
@@ -313,6 +324,7 @@ public class GroupProfileActivity extends AppCompatActivity {
         }
 
         // 按钮项 / 开关绑定
+        boolean isMember = isGroupMember();
         bindingSwitches = true;
         swDoNotDisturb.setChecked(data.do_not_disturb == 1);
         swTop.setChecked(data.top == 1);
@@ -321,6 +333,14 @@ public class GroupProfileActivity extends AppCompatActivity {
         swHistoryMsg.setChecked(data.history_msg == 1);
         swHideMembers.setChecked(data.hide_group_members == 1);
         swDenyUpload.setChecked(data.deny_members_upload_to_group_disk == 1);
+
+        swDoNotDisturb.setEnabled(isMember);
+        swTop.setEnabled(isMember);
+        swPrivate.setEnabled(isMember);
+        swDirectJoin.setEnabled(isMember);
+        swHistoryMsg.setEnabled(isMember);
+        swHideMembers.setEnabled(isMember);
+        swDenyUpload.setEnabled(isMember);
         bindingSwitches = false;
     }
 
@@ -393,17 +413,54 @@ public class GroupProfileActivity extends AppCompatActivity {
         });
     }
 
+    private boolean isGroupMember() {
+        if (groupId == null || groupId.isEmpty()) return false;
+        return AddressBookCache.containsUserId(this, groupId);
+    }
+
+    private boolean checkMemberEditable() {
+        if (!isGroupMember()) {
+            Toast.makeText(this, R.string.group_not_member_toast, Toast.LENGTH_SHORT).show();
+            return false;
+        }
+        return true;
+    }
+
+    private void updateAddGroupButtonVisibility() {
+        if (btnAddGroup == null) return;
+        if (groupId == null || groupId.isEmpty()) {
+            btnAddGroup.setVisibility(View.GONE);
+            return;
+        }
+        // 直接在本地通讯录缓存中查找是否存在该群聊 ID
+        boolean inAddressBook = isGroupMember();
+        // 如果通讯录中没有该群，直接显示添加按钮；存在则隐藏
+        btnAddGroup.setVisibility(inAddressBook ? View.GONE : View.VISIBLE);
+    }
+
     private void setupSwitchListeners() {
         swDoNotDisturb.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (bindingSwitches || currentGroup == null) return;
+            if (!checkMemberEditable()) {
+                revertSwitch(swDoNotDisturb, !isChecked);
+                return;
+            }
             updateDoNotDisturb(isChecked);
         });
         swTop.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (bindingSwitches || currentGroup == null) return;
+            if (!checkMemberEditable()) {
+                revertSwitch(swTop, !isChecked);
+                return;
+            }
             updateSticky(isChecked);
         });
         swPrivate.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (bindingSwitches || currentGroup == null) return;
+            if (!checkMemberEditable()) {
+                revertSwitch(swPrivate, !isChecked);
+                return;
+            }
             updateGroupEditProto(currentGroup.name, currentGroup.introduction, currentGroup.direct_join,
                     currentGroup.history_msg, isChecked ? 1 : 0, currentGroup.hide_group_members,
                     () -> currentGroup = currentGroup.newBuilder().private_(isChecked ? 1 : 0).build(),
@@ -411,6 +468,10 @@ public class GroupProfileActivity extends AppCompatActivity {
         });
         swDirectJoin.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (bindingSwitches || currentGroup == null) return;
+            if (!checkMemberEditable()) {
+                revertSwitch(swDirectJoin, !isChecked);
+                return;
+            }
             updateGroupEditProto(currentGroup.name, currentGroup.introduction, isChecked ? 1 : 0,
                     currentGroup.history_msg, currentGroup.private_, currentGroup.hide_group_members,
                     () -> currentGroup = currentGroup.newBuilder().direct_join(isChecked ? 1 : 0).build(),
@@ -418,6 +479,10 @@ public class GroupProfileActivity extends AppCompatActivity {
         });
         swHistoryMsg.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (bindingSwitches || currentGroup == null) return;
+            if (!checkMemberEditable()) {
+                revertSwitch(swHistoryMsg, !isChecked);
+                return;
+            }
             updateGroupEditProto(currentGroup.name, currentGroup.introduction, currentGroup.direct_join,
                     isChecked ? 1 : 0, currentGroup.private_, currentGroup.hide_group_members,
                     () -> currentGroup = currentGroup.newBuilder().history_msg(isChecked ? 1 : 0).build(),
@@ -425,6 +490,10 @@ public class GroupProfileActivity extends AppCompatActivity {
         });
         swHideMembers.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (bindingSwitches || currentGroup == null) return;
+            if (!checkMemberEditable()) {
+                revertSwitch(swHideMembers, !isChecked);
+                return;
+            }
             updateGroupEditProto(currentGroup.name, currentGroup.introduction, currentGroup.direct_join,
                     currentGroup.history_msg, currentGroup.private_, isChecked ? 1L : 0L,
                     () -> currentGroup = currentGroup.newBuilder().hide_group_members(isChecked ? 1L : 0L).build(),
@@ -432,6 +501,10 @@ public class GroupProfileActivity extends AppCompatActivity {
         });
         swDenyUpload.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (bindingSwitches || currentGroup == null) return;
+            if (!checkMemberEditable()) {
+                revertSwitch(swDenyUpload, !isChecked);
+                return;
+            }
             JsonObject bodyJson = new JsonObject();
             bodyJson.addProperty("groupId", groupId);
             bodyJson.addProperty("denyMembersUploadToGroupDisk", isChecked ? 1 : 0);

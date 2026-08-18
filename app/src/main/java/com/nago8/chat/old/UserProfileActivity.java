@@ -27,6 +27,7 @@ import com.nago8.chat.old.cache.AddressBookCache;
 import com.nago8.chat.old.proto.user.Medal_info;
 import com.nago8.chat.old.proto.user.ProfileInfo;
 import com.nago8.chat.old.proto.user.get_user;
+import com.nago8.chat.old.proto.user.info;
 import com.nago8.chat.old.repository.FriendRepository;
 import com.nago8.chat.old.repository.ReportRepository;
 import com.nago8.chat.old.repository.UserRepository;
@@ -66,6 +67,8 @@ public class UserProfileActivity extends AppCompatActivity {
     private TextView tvIntroduction;
     private TextView tvIpGeo;
     private TextView tvMedals;
+    private TextView tvCoin;
+    private TextView tvInvitationCode;
     private ProgressBar progressBar;
     private UserRepository repository;
     private FriendRepository friendRepository;
@@ -121,6 +124,8 @@ public class UserProfileActivity extends AppCompatActivity {
         tvIntroduction = findViewById(R.id.tvIntroduction);
         tvIpGeo = findViewById(R.id.tvIpGeo);
         tvMedals = findViewById(R.id.tvMedals);
+        tvCoin = findViewById(R.id.tvCoin);
+        tvInvitationCode = findViewById(R.id.tvInvitationCode);
         progressBar = findViewById(R.id.progressBar);
 
         fabMain = findViewById(R.id.fabMain);
@@ -131,51 +136,89 @@ public class UserProfileActivity extends AppCompatActivity {
         fabReport = findViewById(R.id.fabReport);
         tvAddOrChatLabel = findViewById(R.id.tvAddOrChatLabel);
 
-        if (fabMain != null) {
-            fabMain.setOnClickListener(v -> toggleFabMenu());
-        }
-        if (fabOverlay != null) {
-            fabOverlay.setOnClickListener(v -> collapseFabMenu());
-        }
-        if (fabReport != null) {
-            fabReport.setOnClickListener(v -> {
-                collapseFabMenu();
-                showReportDialog();
-            });
-        }
-        if (layoutSubReport != null) {
-            layoutSubReport.setOnClickListener(v -> {
-                collapseFabMenu();
-                showReportDialog();
-            });
-        }
-        if (fabAddOrChat != null) {
-            fabAddOrChat.setOnClickListener(v -> {
-                collapseFabMenu();
-                boolean isFriend = AddressBookCache.containsUserId(this, currentUserId);
-                if (isFriend) {
-                    Intent intent = new Intent(this, ChatActivity.class);
-                    intent.putExtra(ChatActivity.EXTRA_CHAT_ID, currentUserId);
-                    intent.putExtra(ChatActivity.EXTRA_CHAT_TYPE, 1);
-                    intent.putExtra(ChatActivity.EXTRA_CHAT_NAME, currentUserName);
-                    intent.putExtra(ChatActivity.EXTRA_CHAT_AVATAR, currentUserAvatar);
-                    startActivity(intent);
-                } else {
-                    showAddFriendDialog();
-                }
-            });
+        repository = new UserRepository();
+
+        if (isSelf()) {
+            if (fabMain != null) fabMain.setVisibility(View.GONE);
+            if (layoutSubAddOrChat != null) layoutSubAddOrChat.setVisibility(View.GONE);
+            if (layoutSubReport != null) layoutSubReport.setVisibility(View.GONE);
+            fetchSelfUser();
+        } else {
+            if (fabMain != null) {
+                fabMain.setOnClickListener(v -> toggleFabMenu());
+            }
+            if (fabOverlay != null) {
+                fabOverlay.setOnClickListener(v -> collapseFabMenu());
+            }
+            if (fabReport != null) {
+                fabReport.setOnClickListener(v -> {
+                    collapseFabMenu();
+                    showReportDialog();
+                });
+            }
+            if (layoutSubReport != null) {
+                layoutSubReport.setOnClickListener(v -> {
+                    collapseFabMenu();
+                    showReportDialog();
+                });
+            }
+            if (fabAddOrChat != null) {
+                fabAddOrChat.setOnClickListener(v -> {
+                    collapseFabMenu();
+                    boolean isFriend = AddressBookCache.containsUserId(this, currentUserId);
+                    if (isFriend) {
+                        Intent intent = new Intent(this, ChatActivity.class);
+                        intent.putExtra(ChatActivity.EXTRA_CHAT_ID, currentUserId);
+                        intent.putExtra(ChatActivity.EXTRA_CHAT_TYPE, 1);
+                        intent.putExtra(ChatActivity.EXTRA_CHAT_NAME, currentUserName);
+                        intent.putExtra(ChatActivity.EXTRA_CHAT_AVATAR, currentUserAvatar);
+                        startActivity(intent);
+                    } else {
+                        showAddFriendDialog();
+                    }
+                });
+            }
+            fetchUser(userId);
         }
 
         btnBack.setOnClickListener(v -> onBackPressed());
+    }
 
-        repository = new UserRepository();
-        fetchUser(userId);
+    private boolean isSelf() {
+        String myUserId = PrefUtils.getUserId(this);
+        return (currentUserId != null && currentUserId.equals(myUserId)) || (currentUserId == null || currentUserId.isEmpty());
     }
 
     @Override
     protected void onDestroy() {
         if (runningCall != null) runningCall.cancel();
         super.onDestroy();
+    }
+
+    private void fetchSelfUser() {
+        progressBar.setVisibility(View.VISIBLE);
+        String token = PrefUtils.getToken(this);
+        runningCall = repository.getSelfInfo(token, new UserRepository.GetSelfInfoCallback() {
+            @Override
+            public void onSuccess(info response) {
+                runOnUiThread(() -> {
+                    progressBar.setVisibility(View.GONE);
+                    if (response == null || response.data == null) {
+                        Toast.makeText(UserProfileActivity.this, R.string.user_profile_load_failed, Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    bindSelfUser(response.data);
+                });
+            }
+
+            @Override
+            public void onError(Exception error) {
+                runOnUiThread(() -> {
+                    progressBar.setVisibility(View.GONE);
+                    Toast.makeText(UserProfileActivity.this, R.string.user_profile_load_failed, Toast.LENGTH_SHORT).show();
+                });
+            }
+        });
     }
 
     private void fetchUser(String userId) {
@@ -210,6 +253,48 @@ public class UserProfileActivity extends AppCompatActivity {
         });
     }
 
+    private void bindSelfUser(info.Data data) {
+        if (data == null) return;
+        currentUserName = (data.name != null && !"未知用户".equals(data.name) && !"Unknown user".equals(data.name)) ? data.name : "";
+        currentUserAvatar = data.avatar_url != null ? data.avatar_url : "";
+        currentUserId = data.id != null ? data.id : currentUserId;
+
+        PrefUtils.saveUserId(this, data.id);
+        PrefUtils.saveIsVip(this, data.is_vip == 1);
+
+        tvName.setText(currentUserName);
+        tvUserId.setText(getString(R.string.user_id_format, data.id));
+        ImageUtils.loadAvatar(this, currentUserAvatar, ivAvatar);
+
+        if (data.is_vip == 1) {
+            tvVip.setVisibility(View.VISIBLE);
+            tvVip.setText(R.string.user_profile_vip);
+        } else {
+            tvVip.setVisibility(View.GONE);
+        }
+
+        // 展示硬币
+        if (tvCoin != null) {
+            tvCoin.setText(getString(R.string.user_profile_coin, data.coin));
+            tvCoin.setVisibility(View.VISIBLE);
+        }
+
+        // 展示邀请码（若存在）
+        if (tvInvitationCode != null) {
+            if (data.invitation_code != null && !data.invitation_code.isEmpty()) {
+                tvInvitationCode.setText(getString(R.string.user_profile_invitation_code, data.invitation_code));
+                tvInvitationCode.setVisibility(View.VISIBLE);
+            } else {
+                tvInvitationCode.setVisibility(View.GONE);
+            }
+        }
+
+        // 隐藏手机号和邮箱（严格遵守隐私保护，不展示手机号和邮箱）
+
+        // 继续拉取注册时间、在线天数、连续在线、性别、生日、个性签名、IP 属地等详细资料以完整展示
+        fetchUser(data.id != null ? data.id : currentUserId);
+    }
+
     private void bindUser(get_user.Data data) {
         if (data == null) return;
         currentUserName = (data.name != null && !"未知用户".equals(data.name) && !"Unknown user".equals(data.name)) ? data.name : "";
@@ -226,8 +311,11 @@ public class UserProfileActivity extends AppCompatActivity {
             tvVip.setVisibility(View.GONE);
         }
 
+        tvRegisterTime.setVisibility(View.VISIBLE);
         tvRegisterTime.setText(getString(R.string.user_profile_register_time, data.register_time != null ? data.register_time : ""));
+        tvOnlineDay.setVisibility(View.VISIBLE);
         tvOnlineDay.setText(getString(R.string.user_profile_online_day, data.online_day));
+        tvContinuousOnline.setVisibility(View.VISIBLE);
         tvContinuousOnline.setText(getString(R.string.user_profile_continuous_online, data.continuous_online_day));
 
         ProfileInfo profile = data.profile_info;
@@ -239,6 +327,7 @@ public class UserProfileActivity extends AppCompatActivity {
                 case 3: genderRes = R.string.user_profile_gender_other; break;
                 default: genderRes = R.string.user_profile_gender_unknown; break;
             }
+            tvGender.setVisibility(View.VISIBLE);
             tvGender.setText(getString(R.string.user_profile_gender, getString(genderRes)));
 
             if (profile.birthday > 0) {
@@ -247,21 +336,30 @@ public class UserProfileActivity extends AppCompatActivity {
             } else {
                 tvBirthday.setText(getString(R.string.user_profile_birthday, getString(R.string.user_profile_gender_unknown)));
             }
+            tvBirthday.setVisibility(View.VISIBLE);
 
             String lastActive = profile.last_active_time != null ? profile.last_active_time : "";
+            tvLastActive.setVisibility(View.VISIBLE);
             tvLastActive.setText(getString(R.string.user_profile_last_active, lastActive));
 
             String intro = profile.introduction != null && profile.introduction.length() > 0 ? profile.introduction : "";
+            tvIntroduction.setVisibility(View.VISIBLE);
             tvIntroduction.setText(getString(R.string.user_profile_introduction, intro));
         } else {
+            tvGender.setVisibility(View.VISIBLE);
             tvGender.setText(getString(R.string.user_profile_gender, getString(R.string.user_profile_gender_unknown)));
+            tvBirthday.setVisibility(View.VISIBLE);
             tvBirthday.setText(getString(R.string.user_profile_birthday, getString(R.string.user_profile_gender_unknown)));
+            tvLastActive.setVisibility(View.VISIBLE);
             tvLastActive.setText(getString(R.string.user_profile_last_active, ""));
+            tvIntroduction.setVisibility(View.VISIBLE);
             tvIntroduction.setText(getString(R.string.user_profile_introduction, ""));
         }
 
+        tvIpGeo.setVisibility(View.VISIBLE);
         tvIpGeo.setText(getString(R.string.user_profile_ip_geo, data.ipGeo != null ? data.ipGeo : ""));
 
+        tvMedals.setVisibility(View.VISIBLE);
         List<Medal_info> medals = data.yh_user_medal;
         if (medals != null && !medals.isEmpty()) {
             StringBuilder sb = new StringBuilder();
@@ -275,6 +373,12 @@ public class UserProfileActivity extends AppCompatActivity {
             tvMedals.setText(getString(R.string.user_profile_medals, sb.length() > 0 ? sb.toString() : getString(R.string.user_profile_no_medal)));
         } else {
             tvMedals.setText(getString(R.string.user_profile_medals, getString(R.string.user_profile_no_medal)));
+        }
+
+        if (isSelf()) {
+            if (fabMain != null) fabMain.setVisibility(View.GONE);
+            if (layoutSubAddOrChat != null) layoutSubAddOrChat.setVisibility(View.GONE);
+            if (layoutSubReport != null) layoutSubReport.setVisibility(View.GONE);
         }
     }
 

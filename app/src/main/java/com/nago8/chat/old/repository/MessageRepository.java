@@ -10,6 +10,11 @@ import com.nago8.chat.old.proto.list_message;
 import com.nago8.chat.old.proto.list_message_by_seq;
 import com.nago8.chat.old.proto.list_message_by_seq_send;
 import com.nago8.chat.old.proto.list_message_send;
+import com.nago8.chat.old.model.ChatInstruction;
+import com.nago8.chat.old.proto.group.bot_list;
+import com.nago8.chat.old.proto.group.bot_list_send;
+import com.nago8.chat.old.proto.instruction.get_bot_instruction;
+import com.nago8.chat.old.proto.instruction.instruction_list;
 import com.nago8.chat.old.proto.recall_msg;
 import com.nago8.chat.old.proto.recall_msg_send;
 import com.nago8.chat.old.proto.send_message;
@@ -18,6 +23,7 @@ import com.nago8.chat.old.utils.FileUploadUtils;
 import com.nago8.chat.old.utils.ImageUploadUtils;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -194,6 +200,15 @@ public class MessageRepository {
     @SuppressWarnings("UnusedReturnValue")
     public Call sendMessage(String token, String chatId, int chatType, String text,
                             String quoteId, String quoteText, SendMessageCallback callback) {
+        return sendMessage(token, chatId, chatType, text, quoteId, quoteText, null, null, null, 0, callback);
+    }
+
+    @SuppressWarnings("UnusedReturnValue")
+    public Call sendMessage(String token, String chatId, int chatType, String text,
+                            String quoteId, String quoteText,
+                            String quoteImageUrl, String quoteImageName,
+                            String quoteVideoUrl, long quoteVideoTime,
+                            SendMessageCallback callback) {
         if (token == null || token.isEmpty()) {
             callback.onError(new IllegalArgumentException("token is empty"));
             return null;
@@ -213,6 +228,18 @@ public class MessageRepository {
                 .text(text);
         if (quoteText != null && !quoteText.isEmpty()) {
             contentBuilder.quote_msg_text(quoteText);
+        }
+        if (quoteImageUrl != null && !quoteImageUrl.isEmpty()) {
+            contentBuilder.quote_image_url(quoteImageUrl);
+        }
+        if (quoteImageName != null && !quoteImageName.isEmpty()) {
+            contentBuilder.quote_image_name(quoteImageName);
+        }
+        if (quoteVideoUrl != null && !quoteVideoUrl.isEmpty()) {
+            contentBuilder.quote_video_url(quoteVideoUrl);
+        }
+        if (quoteVideoTime > 0) {
+            contentBuilder.quote_video_time(quoteVideoTime);
         }
 
         send_message_send.Builder msgBuilder = new send_message_send.Builder()
@@ -797,6 +824,284 @@ public class MessageRepository {
                     if (callback != null) callback.onError(e.getMessage());
                 } finally {
                     response.body().close();
+                }
+            }
+        });
+        return call;
+    }
+
+    public interface InstructionCallback {
+        void onSuccess(List<ChatInstruction> instructions);
+        void onError(Exception error);
+    }
+
+    /**
+     * 获取群聊指令列表 (POST /v1/group/bot-list)
+     */
+    public Call getGroupInstructions(String token, String groupId, InstructionCallback callback) {
+        if (token == null || token.isEmpty() || groupId == null || groupId.isEmpty()) {
+            if (callback != null) callback.onError(new IllegalArgumentException("invalid params"));
+            return null;
+        }
+
+        bot_list_send req = new bot_list_send.Builder().group_id(groupId).build();
+        RequestBody body = RequestBody.create(
+                MediaType.parse("application/x-protobuf"),
+                req.encode()
+        );
+
+        Request request = new Request.Builder()
+                .url(ApiClient.BASE_URL + "/v1/group/bot-list")
+                .header("token", token)
+                .post(body)
+                .build();
+
+        Call call = ApiClient.getClient().newCall(request);
+        call.enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                if (callback != null) callback.onError(e);
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
+                try {
+                    if (!response.isSuccessful() || response.body() == null) {
+                        if (callback != null) callback.onError(new IOException("HTTP " + response.code()));
+                        return;
+                    }
+                    bot_list res = bot_list.ADAPTER.decode(response.body().source());
+                    List<ChatInstruction> result = new ArrayList<>();
+                    if (res != null && res.instruction != null) {
+                        for (bot_list.Instruction_data data : res.instruction) {
+                            if (data != null) {
+                                result.add(new ChatInstruction(
+                                        data.id,
+                                        data.bot_id != null ? data.bot_id : "",
+                                        data.bot_name != null ? data.bot_name : "",
+                                        data.name != null ? data.name : "",
+                                        data.desc != null ? data.desc : "",
+                                        data.hint_text != null ? data.hint_text : "",
+                                        data.default_text != null ? data.default_text : "",
+                                        data.type,
+                                        data.form != null ? data.form : "",
+                                        ""
+                                ));
+                            }
+                        }
+                    }
+                    if (callback != null) callback.onSuccess(result);
+                } catch (Exception e) {
+                    if (callback != null) callback.onError(e);
+                } finally {
+                    if (response.body() != null) response.body().close();
+                }
+            }
+        });
+        return call;
+    }
+
+    /**
+     * 获取机器人指令列表 (POST /v1/instruction/bot-instruction)
+     */
+    public Call getBotInstructions(String token, String botId, InstructionCallback callback) {
+        if (token == null || token.isEmpty() || botId == null || botId.isEmpty()) {
+            if (callback != null) callback.onError(new IllegalArgumentException("invalid params"));
+            return null;
+        }
+
+        get_bot_instruction req = new get_bot_instruction.Builder().id(botId).build();
+        RequestBody body = RequestBody.create(
+                MediaType.parse("application/x-protobuf"),
+                req.encode()
+        );
+
+        Request request = new Request.Builder()
+                .url(ApiClient.BASE_URL + "/v1/instruction/bot-instruction")
+                .header("token", token)
+                .post(body)
+                .build();
+
+        Call call = ApiClient.getClient().newCall(request);
+        call.enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                if (callback != null) callback.onError(e);
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
+                try {
+                    if (!response.isSuccessful() || response.body() == null) {
+                        if (callback != null) callback.onError(new IOException("HTTP " + response.code()));
+                        return;
+                    }
+                    instruction_list res = instruction_list.ADAPTER.decode(response.body().source());
+                    List<ChatInstruction> result = new ArrayList<>();
+                    if (res != null && res.data != null) {
+                        for (instruction_list.Data data : res.data) {
+                            if (data != null) {
+                                result.add(new ChatInstruction(
+                                        data.command_id,
+                                        data.bot_id != null ? data.bot_id : "",
+                                        "",
+                                        data.command_name != null ? data.command_name : "",
+                                        data.command_description != null ? data.command_description : "",
+                                        "",
+                                        data.default_text != null ? data.default_text : "",
+                                        (int) data.instruction_type,
+                                        "",
+                                        data.bot_settings_json != null ? data.bot_settings_json : ""
+                                ));
+                            }
+                        }
+                    }
+                    if (callback != null) callback.onSuccess(result);
+                } catch (Exception e) {
+                    if (callback != null) callback.onError(e);
+                } finally {
+                    if (response.body() != null) response.body().close();
+                }
+            }
+        });
+        return call;
+    }
+
+    /**
+     * 发送指令消息 (POST /v1/msg/send-message)
+     */
+    public Call sendInstructionMessage(String token, String chatId, int chatType,
+                                       long commandId, String text,
+                                       SendMessageCallback callback) {
+        if (token == null || token.isEmpty()) {
+            if (callback != null) callback.onError(new IllegalArgumentException("token is empty"));
+            return null;
+        }
+        if (chatId == null || chatId.isEmpty()) {
+            if (callback != null) callback.onError(new IllegalArgumentException("chatId is empty"));
+            return null;
+        }
+
+        String msgId = UUID.randomUUID().toString().replace("-", "");
+
+        send_message_send.Content.Builder contentBuilder = new send_message_send.Content.Builder()
+                .text(text != null ? text : "");
+
+        send_message_send.Builder msgBuilder = new send_message_send.Builder()
+                .msg_id(msgId)
+                .chat_id(chatId)
+                .chat_type(chatType)
+                .content(contentBuilder.build())
+                .content_type(1)
+                .command_id(commandId);
+
+        send_message_send requestProto = msgBuilder.build();
+
+        RequestBody body = RequestBody.create(
+                MediaType.parse("application/x-protobuf"),
+                requestProto.encode()
+        );
+
+        Request request = new Request.Builder()
+                .url(ApiClient.BASE_URL + "/v1/msg/send-message")
+                .header("token", token)
+                .post(body)
+                .build();
+
+        Call call = ApiClient.getClient().newCall(request);
+        call.enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                if (callback != null) callback.onError(e);
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
+                try {
+                    if (!response.isSuccessful() || response.body() == null) {
+                        if (callback != null) callback.onError(new IOException("HTTP " + response.code()));
+                        return;
+                    }
+                    if (callback != null) callback.onSuccess(send_message.ADAPTER.decode(response.body().source()));
+                } catch (Exception e) {
+                    if (callback != null) callback.onError(e);
+                } finally {
+                    if (response.body() != null) {
+                        response.body().close();
+                    }
+                }
+            }
+        });
+        return call;
+    }
+
+    /**
+     * 发送自定义/表单指令消息 (POST /v1/msg/send-message)
+     */
+    public Call sendFormInstructionMessage(String token, String chatId, int chatType,
+                                           long commandId, String formJson, String text,
+                                           SendMessageCallback callback) {
+        if (token == null || token.isEmpty()) {
+            if (callback != null) callback.onError(new IllegalArgumentException("token is empty"));
+            return null;
+        }
+        if (chatId == null || chatId.isEmpty()) {
+            if (callback != null) callback.onError(new IllegalArgumentException("chatId is empty"));
+            return null;
+        }
+
+        String msgId = UUID.randomUUID().toString().replace("-", "");
+
+        send_message_send.Content.Builder contentBuilder = new send_message_send.Content.Builder();
+        if (text != null && !text.isEmpty()) {
+            contentBuilder.text(text);
+        }
+        if (formJson != null && !formJson.isEmpty()) {
+            contentBuilder.form(formJson);
+        }
+
+        send_message_send.Builder msgBuilder = new send_message_send.Builder()
+                .msg_id(msgId)
+                .chat_id(chatId)
+                .chat_type(chatType)
+                .content(contentBuilder.build())
+                .content_type(5)
+                .command_id(commandId);
+
+        send_message_send requestProto = msgBuilder.build();
+
+        RequestBody body = RequestBody.create(
+                MediaType.parse("application/x-protobuf"),
+                requestProto.encode()
+        );
+
+        Request request = new Request.Builder()
+                .url(ApiClient.BASE_URL + "/v1/msg/send-message")
+                .header("token", token)
+                .post(body)
+                .build();
+
+        Call call = ApiClient.getClient().newCall(request);
+        call.enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                if (callback != null) callback.onError(e);
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
+                try {
+                    if (!response.isSuccessful() || response.body() == null) {
+                        if (callback != null) callback.onError(new IOException("HTTP " + response.code()));
+                        return;
+                    }
+                    if (callback != null) callback.onSuccess(send_message.ADAPTER.decode(response.body().source()));
+                } catch (Exception e) {
+                    if (callback != null) callback.onError(e);
+                } finally {
+                    if (response.body() != null) {
+                        response.body().close();
+                    }
                 }
             }
         });

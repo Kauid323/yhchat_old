@@ -25,6 +25,8 @@ import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.AppCompatButton;
 import androidx.appcompat.widget.AppCompatImageView;
 import android.content.res.ColorStateList;
+
+import androidx.core.content.ContextCompat;
 import androidx.core.widget.ImageViewCompat;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
@@ -193,10 +195,12 @@ public class PostDetailActivity extends AppCompatActivity {
             }
         });
 
-        // Tab layout
+        // Tab layout (与 CommunityFragment 保持一致)
         TabLayout tabLayout = findViewById(R.id.tabLayout);
-        tabLayout.addTab(tabLayout.newTab().setText("文章"));
-        tabLayout.addTab(tabLayout.newTab().setText("互动"));
+        tabLayout.setSelectedTabIndicatorColor(primaryColor);
+        tabLayout.setTabTextColors(ContextCompat.getColor(this, R.color.text_secondary), primaryColor);
+        tabLayout.addTab(tabLayout.newTab().setText(R.string.post_tab_article));
+        tabLayout.addTab(tabLayout.newTab().setText(R.string.post_tab_interaction));
         tabLayout.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
             @Override
             public void onTabSelected(TabLayout.Tab tab) {
@@ -427,7 +431,7 @@ public class PostDetailActivity extends AppCompatActivity {
 
     private void showRewardDialog() {
         if (isRewarded) {
-            Toast.makeText(this, "已经投过币了", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.post_reward_already, Toast.LENGTH_SHORT).show();
             return;
         }
         String token = PrefUtils.getToken(this);
@@ -438,7 +442,7 @@ public class PostDetailActivity extends AppCompatActivity {
         layout.setPadding(dp(20), dp(16), dp(20), dp(8));
 
         TextView tvSubtitle = new TextView(this);
-        tvSubtitle.setText("快捷选择投币数量：");
+        tvSubtitle.setText(R.string.post_reward_preset_title);
         tvSubtitle.setTextSize(13f);
         tvSubtitle.setTextColor(getResources().getColor(R.color.text_secondary));
         layout.addView(tvSubtitle);
@@ -456,7 +460,7 @@ public class PostDetailActivity extends AppCompatActivity {
         final TextView[] presetBtns = new TextView[presetAmounts.length];
 
         final EditText input = new EditText(this);
-        input.setHint("自定义投币数量");
+        input.setHint(R.string.post_reward_custom_hint);
         input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
         input.setText("1");
         input.setTextSize(14f);
@@ -466,7 +470,7 @@ public class PostDetailActivity extends AppCompatActivity {
         for (int i = 0; i < presetAmounts.length; i++) {
             final int val = presetAmounts[i];
             TextView btn = new TextView(this);
-            btn.setText(val + "金币");
+            btn.setText(getString(R.string.post_reward_coins_format, val));
             btn.setTextSize(13f);
             btn.setGravity(Gravity.CENTER);
             btn.setPadding(0, dp(8), 0, dp(8));
@@ -507,7 +511,7 @@ public class PostDetailActivity extends AppCompatActivity {
         layout.addView(presetRow);
 
         TextView tvCustomLabel = new TextView(this);
-        tvCustomLabel.setText("自定义数量：");
+        tvCustomLabel.setText(R.string.post_reward_custom_hint);
         tvCustomLabel.setTextSize(13f);
         tvCustomLabel.setTextColor(getResources().getColor(R.color.text_secondary));
         layout.addView(tvCustomLabel);
@@ -519,15 +523,15 @@ public class PostDetailActivity extends AppCompatActivity {
         layout.addView(input);
 
         new AlertDialog.Builder(this)
-                .setTitle("文章投币")
+                .setTitle(R.string.post_reward_title)
                 .setView(layout)
-                .setPositiveButton("确认投币", (dialog, which) -> {
+                .setPositiveButton(R.string.dialog_confirm, (dialog, which) -> {
                     String amountStr = input.getText().toString().trim();
                     if (amountStr.isEmpty()) return;
                     try {
                         double amount = Double.parseDouble(amountStr);
                         if (amount <= 0) {
-                            Toast.makeText(this, "请输入有效金币数量", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(this, R.string.post_reward_invalid_amount, Toast.LENGTH_SHORT).show();
                             return;
                         }
                         communityRepo.rewardPost(token, postId, senderId, amount, new CommunityRepository.SimpleCallback() {
@@ -536,18 +540,18 @@ public class PostDetailActivity extends AppCompatActivity {
                                     isRewarded = true;
                                     rewardNum += amount;
                                     updateRewardUI();
-                                    Toast.makeText(PostDetailActivity.this, "投币成功！", Toast.LENGTH_SHORT).show();
+                                    Toast.makeText(PostDetailActivity.this, R.string.post_reward_success, Toast.LENGTH_SHORT).show();
                                 });
                             }
                             @Override public void onError(String msg) {
-                                runOnUiThread(() -> Toast.makeText(PostDetailActivity.this, "投币失败: " + msg, Toast.LENGTH_SHORT).show());
+                                runOnUiThread(() -> Toast.makeText(PostDetailActivity.this, getString(R.string.post_reward_failed_format, msg), Toast.LENGTH_SHORT).show());
                             }
                         });
                     } catch (NumberFormatException e) {
-                        Toast.makeText(this, "请输入有效金币数量", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, R.string.post_reward_invalid_amount, Toast.LENGTH_SHORT).show();
                     }
                 })
-                .setNegativeButton("取消", null)
+                .setNegativeButton(R.string.dialog_cancel, null)
                 .show();
     }
 
@@ -815,7 +819,7 @@ public class PostDetailActivity extends AppCompatActivity {
 
         // Reply button
         TextView tvReplyBtn = new TextView(this);
-        tvReplyBtn.setText("回复");
+        tvReplyBtn.setText(R.string.post_reply_btn);
         tvReplyBtn.setTextSize(12f);
         tvReplyBtn.setTextColor(getResources().getColor(R.color.app_primary));
         tvReplyBtn.setPadding(0, dp(4), 0, dp(4));
@@ -827,7 +831,7 @@ public class PostDetailActivity extends AppCompatActivity {
         tvReplyBtn.setFocusable(true);
         tvReplyBtn.setOnClickListener(v -> {
             replyTargetCommentId = commentId;
-            replyHint = "回复 @" + senderNick + "...";
+            replyHint = getString(R.string.post_reply_hint_format, senderNick);
             etComment.setHint(replyHint);
             etComment.requestFocus();
             InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
@@ -835,7 +839,6 @@ public class PostDetailActivity extends AppCompatActivity {
         });
         commentCard.addView(tvReplyBtn);
 
-        // Replies (nested)
         // Replies (nested)
         if (replies.size() > 0) {
             LinearLayout repliesContainer = new LinearLayout(this);
@@ -857,7 +860,7 @@ public class PostDetailActivity extends AppCompatActivity {
             int extraCount = replies.size() - 1;
             if (extraCount > 0) {
                 TextView tvExpandReplies = new TextView(this);
-                tvExpandReplies.setText("展开剩余 " + extraCount + " 条回复 ▼");
+                tvExpandReplies.setText(getString(R.string.post_expand_replies_format, extraCount));
                 tvExpandReplies.setTextSize(12f);
                 tvExpandReplies.setTextColor(getResources().getColor(R.color.app_primary));
                 tvExpandReplies.setPadding(0, dp(6), 0, dp(4));
@@ -961,7 +964,7 @@ public class PostDetailActivity extends AppCompatActivity {
         final String finalNick = nick;
         View.OnClickListener replyClickListener = v -> {
             replyTargetCommentId = parentCommentId;
-            replyHint = "回复 @" + (finalNick.isEmpty() ? "" : finalNick) + "...";
+            replyHint = getString(R.string.post_reply_hint_format, (finalNick.isEmpty() ? "" : finalNick));
             etComment.setHint(replyHint);
             etComment.requestFocus();
             InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);

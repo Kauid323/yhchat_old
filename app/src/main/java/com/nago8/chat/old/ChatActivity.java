@@ -12,7 +12,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
-import android.view.Menu;
+import android.text.TextUtils;
 import android.view.View;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -23,7 +23,6 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.AppCompatImageButton;
-import androidx.appcompat.widget.PopupMenu;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
@@ -32,6 +31,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.nago8.chat.old.fragments.MessagesAdapter;
 import com.nago8.chat.old.model.MessageGroup;
+import com.nago8.chat.old.model.VoicePlaylistItem;
 import com.nago8.chat.old.repository.MessageRepository;
 import com.nago8.chat.old.repository.GroupRepository;
 import com.nago8.chat.old.proto.Msg;
@@ -41,6 +41,7 @@ import com.nago8.chat.old.proto.list_message_by_seq;
 import com.nago8.chat.old.proto.group.info;
 import com.nago8.chat.old.utils.PrefUtils;
 import com.nago8.chat.old.utils.LocaleHelper;
+import com.nago8.chat.old.utils.VoicePlaylistManager;
 import com.nago8.chat.old.utils.WsMsgConverter;
 import com.nago8.chat.old.ws.WsClient;
 import com.nago8.chat.old.proto.chat_ws_go.WsMsg;
@@ -567,6 +568,14 @@ public class ChatActivity extends AppCompatActivity {
     private void setupComposeInput() {
         chatInputBar = findViewById(R.id.chatInputBar);
         if (chatInputBar != null) {
+            // 私聊普通用户时不展示指令按钮，群聊与机器人私聊时展示
+            if (chatType == 1) {
+                chatInputBar.setInstructionButtonVisibility(View.GONE);
+            } else {
+                chatInputBar.setInstructionButtonVisibility(View.VISIBLE);
+            }
+
+            chatInputBar.setOnInstructionButtonClickListener(this::openInstructionSheet);
             chatInputBar.setOnSendClickListener(this::performSend);
             chatInputBar.setOnQuoteDismissListener(() -> { /* quote cleared by user tapping ✕ */ });
             chatInputBar.setOnPanelActionClickListener(actionType -> {
@@ -599,6 +608,37 @@ public class ChatActivity extends AppCompatActivity {
         }
     }
 
+    private void openInstructionSheet() {
+        com.nago8.chat.old.widget.ChatInstructionBottomSheetDialog dialog =
+                new com.nago8.chat.old.widget.ChatInstructionBottomSheetDialog(
+                        this, chatId, chatType, this::sendInstruction
+                );
+        dialog.show();
+    }
+
+    private void sendInstruction(com.nago8.chat.old.model.ChatInstruction instruction, String paramText) {
+        String token = PrefUtils.getToken(this);
+        if (token == null || token.isEmpty()) {
+            Toast.makeText(this, R.string.chat_not_logged_in, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        repository.sendInstructionMessage(token, chatId, chatType, instruction.commandId, paramText, new MessageRepository.SendMessageCallback() {
+            @Override
+            public void onSuccess(send_message response) {
+                runOnUiThread(() -> {
+                    Toast.makeText(ChatActivity.this, R.string.send_success, Toast.LENGTH_SHORT).show();
+                    fetchLatestMessage();
+                });
+            }
+
+            @Override
+            public void onError(Exception error) {
+                runOnUiThread(() -> Toast.makeText(ChatActivity.this, getString(R.string.chat_send_failed_format, error.getMessage()), Toast.LENGTH_SHORT).show());
+            }
+        });
+    }
+
     private void performSend(String text) {
         if (text == null || text.trim().isEmpty()) return;
         String token = PrefUtils.getToken(this);
@@ -608,20 +648,48 @@ public class ChatActivity extends AppCompatActivity {
         com.nago8.chat.old.proto.Msg quoteMsg = chatInputBar != null ? chatInputBar.getPendingQuoteMsg() : null;
         String quoteId = null;
         String quoteText = null;
+        String quoteImageUrl = null;
+        String quoteImageName = null;
+        String quoteVideoUrl = null;
+        long quoteVideoTime = 0;
+
         if (quoteMsg != null) {
-            quoteId = quoteMsg.quote_msg_id != null && !quoteMsg.quote_msg_id.isEmpty()
-                    ? quoteMsg.quote_msg_id : quoteMsg.msg_id;
+            // 被引用的实际目标消息 ID
+            quoteId = (quoteMsg.msg_id != null && !quoteMsg.msg_id.isEmpty()) ? quoteMsg.msg_id : quoteMsg.quote_msg_id;
             String senderName = (quoteMsg.sender != null && quoteMsg.sender.name != null && !quoteMsg.sender.name.isEmpty())
                     ? quoteMsg.sender.name : getString(R.string.chat_msg_default);
             String msgContent;
-            if (quoteMsg.content != null && quoteMsg.content.text != null && !quoteMsg.content.text.isEmpty()) {
-                msgContent = quoteMsg.content.text;
-            } else if (quoteMsg.content != null && quoteMsg.content.image_url != null && !quoteMsg.content.image_url.isEmpty()) {
-                msgContent = getString(R.string.preview_image);
-            } else if (quoteMsg.content != null && quoteMsg.content.video_url != null && !quoteMsg.content.video_url.isEmpty()) {
-                msgContent = getString(R.string.preview_video);
-            } else if (quoteMsg.content != null && quoteMsg.content.file_name != null && !quoteMsg.content.file_name.isEmpty()) {
-                msgContent = quoteMsg.content.file_name;
+
+            if (quoteMsg.content != null) {
+                // 1. 提取图片媒体
+                if (!TextUtils.isEmpty(quoteMsg.content.quote_image_url)) {
+                    quoteImageUrl = quoteMsg.content.quote_image_url;
+                    quoteImageName = !TextUtils.isEmpty(quoteMsg.content.quote_image_name) ? quoteMsg.content.quote_image_name : extractFileName(quoteImageUrl, "image.jpg");
+                } else if (!TextUtils.isEmpty(quoteMsg.content.image_url)) {
+                    quoteImageUrl = quoteMsg.content.image_url;
+                    quoteImageName = !TextUtils.isEmpty(quoteMsg.content.file_name) ? quoteMsg.content.file_name : extractFileName(quoteImageUrl, "image.jpg");
+                }
+
+                // 2. 提取视频媒体
+                if (!TextUtils.isEmpty(quoteMsg.content.quote_video_url)) {
+                    quoteVideoUrl = quoteMsg.content.quote_video_url;
+                    quoteVideoTime = quoteMsg.content.quote_video_time;
+                } else if (!TextUtils.isEmpty(quoteMsg.content.video_url)) {
+                    quoteVideoUrl = quoteMsg.content.video_url;
+                }
+
+                // 3. 构建引用文字描述
+                if (quoteMsg.content.text != null && !quoteMsg.content.text.isEmpty()) {
+                    msgContent = quoteMsg.content.text;
+                } else if (quoteImageUrl != null) {
+                    msgContent = getString(R.string.preview_image);
+                } else if (quoteVideoUrl != null) {
+                    msgContent = getString(R.string.preview_video);
+                } else if (quoteMsg.content.file_name != null && !quoteMsg.content.file_name.isEmpty()) {
+                    msgContent = quoteMsg.content.file_name;
+                } else {
+                    msgContent = getString(R.string.preview_unknown);
+                }
             } else {
                 msgContent = getString(R.string.preview_unknown);
             }
@@ -630,7 +698,16 @@ public class ChatActivity extends AppCompatActivity {
 
         final String finalQuoteId = quoteId;
         final String finalQuoteText = quoteText;
-        sendCall = repository.sendMessage(token, chatId, chatType, text, finalQuoteId, finalQuoteText, new MessageRepository.SendMessageCallback() {
+        final String finalQuoteImageUrl = quoteImageUrl;
+        final String finalQuoteImageName = quoteImageName;
+        final String finalQuoteVideoUrl = quoteVideoUrl;
+        final long finalQuoteVideoTime = quoteVideoTime;
+
+        sendCall = repository.sendMessage(token, chatId, chatType, text,
+                finalQuoteId, finalQuoteText,
+                finalQuoteImageUrl, finalQuoteImageName,
+                finalQuoteVideoUrl, finalQuoteVideoTime,
+                new MessageRepository.SendMessageCallback() {
             @Override
             public void onSuccess(send_message response) {
                 runOnUiThread(() -> {
@@ -653,6 +730,20 @@ public class ChatActivity extends AppCompatActivity {
                 });
             }
         });
+    }
+
+    private String extractFileName(String url, String defaultName) {
+        if (url == null || url.isEmpty()) return defaultName;
+        try {
+            int slashIndex = url.lastIndexOf('/');
+            if (slashIndex >= 0 && slashIndex < url.length() - 1) {
+                String name = url.substring(slashIndex + 1);
+                int queryIndex = name.indexOf('?');
+                if (queryIndex > 0) name = name.substring(0, queryIndex);
+                if (!name.isEmpty()) return name;
+            }
+        } catch (Exception ignored) {}
+        return defaultName;
     }
 
     public void fetchLatestMessage() {
@@ -884,6 +975,16 @@ public class ChatActivity extends AppCompatActivity {
         if (!copyContent.isEmpty()) {
             options.add(getString(R.string.menu_copy));
             actions.add(1);
+
+            options.add(getString(R.string.menu_free_copy));
+            actions.add(5);
+        }
+
+        // 语音消息支持添加到播放列表
+        boolean isAudioMsg = msg.content_type == 11 || (msg.content != null && !android.text.TextUtils.isEmpty(msg.content.audio_url));
+        if (isAudioMsg) {
+            options.add(getString(R.string.menu_add_to_playlist));
+            actions.add(6);
         }
 
         // 回复
@@ -907,7 +1008,7 @@ public class ChatActivity extends AppCompatActivity {
         // 构建对话框标题（发件人 + 消息摘要）
         String senderName = msg.sender != null && !android.text.TextUtils.isEmpty(msg.sender.name)
                 ? msg.sender.name : getString(R.string.chat_msg_default);
-        String previewText = !copyContent.isEmpty() ? copyContent : getString(R.string.preview_unknown);
+        String previewText = !copyContent.isEmpty() ? copyContent : (isAudioMsg ? getString(R.string.message_voice) : getString(R.string.preview_unknown));
         if (previewText.length() > 20) {
             previewText = previewText.substring(0, 20) + "…";
         }
@@ -922,6 +1023,14 @@ public class ChatActivity extends AppCompatActivity {
                             case 1:
                                 copyToClipboard(copyContent);
                                 break;
+                            case 5:
+                                Intent freeCopyIntent = new Intent(this, FreeCopyActivity.class);
+                                freeCopyIntent.putExtra(FreeCopyActivity.EXTRA_CONTENT, copyContent);
+                                startActivity(freeCopyIntent);
+                                break;
+                            case 6:
+                                addToVoicePlaylist(msg, senderName);
+                                break;
                             case 2:
                                 replyToMessage(msg);
                                 break;
@@ -935,6 +1044,32 @@ public class ChatActivity extends AppCompatActivity {
                     }
                 })
                 .show();
+    }
+
+    private void addToVoicePlaylist(Msg msg, String senderName) {
+        if (msg == null || msg.content == null) return;
+        String audioUrl = msg.content.audio_url;
+        if (android.text.TextUtils.isEmpty(audioUrl)) return;
+
+        VoicePlaylistManager.getInstance().init(this);
+        int durationSec = (int) msg.content.audio_time;
+        String title = !android.text.TextUtils.isEmpty(senderName) ? senderName : (chatName != null ? chatName : getString(R.string.message_voice));
+        String subtitle = chatName != null && !chatName.isEmpty() ? chatName : "";
+
+        VoicePlaylistItem item = new VoicePlaylistItem(
+                msg.msg_id != null ? msg.msg_id : "",
+                audioUrl,
+                durationSec,
+                title,
+                subtitle
+        );
+
+        boolean added = VoicePlaylistManager.getInstance().addItem(item);
+        if (added) {
+            Toast.makeText(this, R.string.toast_added_to_playlist, Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(this, R.string.toast_already_in_playlist, Toast.LENGTH_SHORT).show();
+        }
     }
 
     private String getCopyableContent(Msg msg) {
@@ -982,7 +1117,7 @@ public class ChatActivity extends AppCompatActivity {
                     }
                     if (foundIndex >= 0) {
                         Msg updatedMsg = allMessages.get(foundIndex).newBuilder()
-                                .msg_delete_time(System.currentTimeMillis() / 1000L)
+                                .msg_delete_time(System.currentTimeMillis())
                                 .build();
                         allMessages.set(foundIndex, updatedMsg);
                     }

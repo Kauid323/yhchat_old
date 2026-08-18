@@ -61,6 +61,11 @@ public class SettingsActivity extends AppCompatActivity {
 
         findViewById(R.id.menuThemeColor).setOnClickListener(v -> showThemeColorDialog());
 
+        findViewById(R.id.menuVoicePlaylist).setOnClickListener(v -> {
+            Intent intent = new Intent(this, VoicePlaylistActivity.class);
+            startActivity(intent);
+        });
+
         findViewById(R.id.menuArchived).setOnClickListener(v -> {
             Intent intent = new Intent(this, ArchivedConversationsActivity.class);
             startActivity(intent);

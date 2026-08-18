@@ -59,6 +59,7 @@
         <activity android:name=".WsLogActivity" />
         <activity android:name=".CreateChatActivity" />
         <activity android:name=".AddContactActivity" />
+        <activity android:name=".CustomInstructionActivity" />
         <activity android:name=".MyPostsActivity" />
         <activity android:name=".MyCollectsActivity" />
         <activity android:name=".BlockedUsersActivity" />
@@ -91,6 +92,8 @@
         <activity android:name=".SectionDetailActivity" />
         <activity android:name=".SectionInfoActivity" />
         <activity android:name=".ArchivedConversationsActivity" />
+        <activity android:name=".FreeCopyActivity" />
+        <activity android:name=".VoicePlaylistActivity" />
         <activity android:name=".VideoPlayerActivity"
             android:configChanges="orientation|screenSize"
             android:theme="@style/Theme.云湖Old.Fullscreen" />

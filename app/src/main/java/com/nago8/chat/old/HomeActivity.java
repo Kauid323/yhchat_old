@@ -15,6 +15,9 @@ import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -50,6 +53,7 @@ import com.nago8.chat.old.net.ApiClient;
 import com.nago8.chat.old.proto.chat_ws_go.WsMsg;
 import com.nago8.chat.old.proto.conversation.ConversationList;
 import com.nago8.chat.old.proto.user.info;
+import com.nago8.chat.old.utils.AudioPlayerManager;
 import com.nago8.chat.old.utils.ImageUtils;
 import com.nago8.chat.old.utils.LocaleHelper;
 import com.nago8.chat.old.utils.NotificationHelper;
@@ -62,6 +66,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -119,6 +124,9 @@ public class HomeActivity extends AppCompatActivity {
             }
         }
 
+        // 初始化全局语音播放列表管理
+        com.nago8.chat.old.utils.VoicePlaylistManager.getInstance().init(this);
+
         try {
             setContentView(R.layout.activity_home);
         } catch (Exception e) {
@@ -134,6 +142,20 @@ public class HomeActivity extends AppCompatActivity {
         ivAvatar = findViewById(R.id.ivAvatar);
         tvUsername = findViewById(R.id.tvUsername);
         tvUserId = findViewById(R.id.tvUserId);
+        View layoutUserHeader = findViewById(R.id.layoutUserHeader);
+        if (layoutUserHeader != null) {
+            layoutUserHeader.setOnClickListener(v -> {
+                String myUserId = PrefUtils.getUserId(HomeActivity.this);
+                if (myUserId != null && !myUserId.isEmpty()) {
+                    Intent intent = new Intent(HomeActivity.this, UserProfileActivity.class);
+                    intent.putExtra(UserProfileActivity.EXTRA_USER_ID, myUserId);
+                    startActivity(intent);
+                }
+                if (drawerLayout != null) {
+                    drawerLayout.closeDrawer(GravityCompat.START);
+                }
+            });
+        }
 
         hideStatusBarFiller(findViewById(R.id.contentStatusBarFiller));
         hideStatusBarFiller(findViewById(R.id.sidebarStatusBarFiller));
@@ -154,6 +176,7 @@ public class HomeActivity extends AppCompatActivity {
         }));
 
         setupMenuClickListeners();
+        setupVoicePlaybackCard();
         initConversationTabs();
         WsClient.getInstance().setAppContext(this);
         WsClient.getInstance().setDndChecker(this::isDoNotDisturb);
@@ -192,6 +215,13 @@ public class HomeActivity extends AppCompatActivity {
                 WsLogManager.getInstance().logInfo("resuming: reconnecting WebSocket");
                 WsClient.getInstance().reconnect();
             }
+        }
+        if (globalAudioPlayListener != null) {
+            updateVoiceCardState(
+                    AudioPlayerManager.getInstance().getCurrentState(),
+                    AudioPlayerManager.getInstance().getCurrentPosition(),
+                    AudioPlayerManager.getInstance().getDuration()
+            );
         }
     }
 
@@ -767,5 +797,135 @@ public class HomeActivity extends AppCompatActivity {
             return info[1];
         }
         return null;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    //  侧边栏语音播放浮动卡片
+    // ──────────────────────────────────────────────────────────────────────
+
+    private LinearLayout layoutVoiceCard;
+    private androidx.appcompat.widget.AppCompatImageView ivDrawerVoicePlayPause;
+    private com.nago8.chat.old.widget.VoiceProgressSlider drawerVoiceSlider;
+    private TextView tvDrawerVoiceTime;
+    private TextView tvDrawerVoiceTitle;
+    private androidx.appcompat.widget.AppCompatImageView ivDrawerVoiceClose;
+    private AudioPlayerManager.GlobalAudioPlayListener globalAudioPlayListener;
+
+    private void setupVoicePlaybackCard() {
+        layoutVoiceCard = findViewById(R.id.layoutVoiceCard);
+        ivDrawerVoicePlayPause = findViewById(R.id.ivDrawerVoicePlayPause);
+        drawerVoiceSlider = findViewById(R.id.drawerVoiceSlider);
+        tvDrawerVoiceTime = findViewById(R.id.tvDrawerVoiceTime);
+        tvDrawerVoiceTitle = findViewById(R.id.tvDrawerVoiceTitle);
+        ivDrawerVoiceClose = findViewById(R.id.ivDrawerVoiceClose);
+
+        if (layoutVoiceCard == null) return;
+
+        // 主题色与自适应前景色
+        int primaryColor = com.nago8.chat.old.utils.ThemeUtils.getThemeColor(this);
+        int fgColor = com.nago8.chat.old.utils.ThemeUtils.getContrastingForegroundColor(primaryColor);
+
+        android.graphics.drawable.GradientDrawable cardBg = new android.graphics.drawable.GradientDrawable();
+        cardBg.setCornerRadius(14 * getResources().getDisplayMetrics().density);
+        cardBg.setColor(primaryColor);
+        layoutVoiceCard.setBackground(cardBg);
+
+        if (ivDrawerVoicePlayPause != null) {
+            ivDrawerVoicePlayPause.setColorFilter(fgColor);
+            ivDrawerVoicePlayPause.setOnClickListener(v -> AudioPlayerManager.getInstance().toggleCurrentPlay());
+        }
+
+        if (ivDrawerVoiceClose != null) {
+            ivDrawerVoiceClose.setColorFilter(fgColor);
+            ivDrawerVoiceClose.setOnClickListener(v -> {
+                AudioPlayerManager.getInstance().stop();
+                layoutVoiceCard.setVisibility(View.GONE);
+            });
+        }
+
+        if (tvDrawerVoiceTime != null) {
+            tvDrawerVoiceTime.setTextColor(fgColor);
+        }
+        if (tvDrawerVoiceTitle != null) {
+            tvDrawerVoiceTitle.setTextColor(fgColor);
+        }
+
+        if (drawerVoiceSlider != null) {
+            drawerVoiceSlider.setColors(fgColor, (fgColor & 0x00FFFFFF) | 0x40000000, fgColor);
+            drawerVoiceSlider.setOnSeekChangeListener(new com.nago8.chat.old.widget.VoiceProgressSlider.OnSeekChangeListener() {
+                @Override
+                public void onProgressChanged(com.nago8.chat.old.widget.VoiceProgressSlider s, int progress, boolean fromUser) {
+                    if (fromUser && tvDrawerVoiceTime != null) {
+                        tvDrawerVoiceTime.setText(formatDuration(progress, true) + " / " + formatDuration(s.getMax(), true));
+                    }
+                }
+
+                @Override
+                public void onStartTrackingTouch(com.nago8.chat.old.widget.VoiceProgressSlider s) {}
+
+                @Override
+                public void onStopTrackingTouch(com.nago8.chat.old.widget.VoiceProgressSlider s, int progress) {
+                    AudioPlayerManager.getInstance().seekTo(progress);
+                }
+            });
+        }
+
+        globalAudioPlayListener = (state, msgId, currentMs, totalMs) -> runOnUiThread(() -> updateVoiceCardState(state, currentMs, totalMs));
+        AudioPlayerManager.getInstance().addGlobalListener(globalAudioPlayListener);
+
+        // 初始状态同步
+        updateVoiceCardState(
+                AudioPlayerManager.getInstance().getCurrentState(),
+                AudioPlayerManager.getInstance().getCurrentPosition(),
+                AudioPlayerManager.getInstance().getDuration()
+        );
+    }
+
+    private void updateVoiceCardState(AudioPlayerManager.State state, int currentMs, int totalMs) {
+        if (layoutVoiceCard == null) return;
+
+        if (state == AudioPlayerManager.State.PLAYING || state == AudioPlayerManager.State.PREPARING) {
+            layoutVoiceCard.setVisibility(View.VISIBLE);
+            if (ivDrawerVoicePlayPause != null) {
+                ivDrawerVoicePlayPause.setImageResource(R.drawable.ic_pause);
+            }
+            if (drawerVoiceSlider != null && totalMs > 0) {
+                drawerVoiceSlider.setMax(totalMs);
+                drawerVoiceSlider.setProgress(currentMs);
+            }
+            if (tvDrawerVoiceTime != null && totalMs > 0) {
+                tvDrawerVoiceTime.setText(formatDuration(currentMs, true) + " / " + formatDuration(totalMs, true));
+            }
+        } else if (state == AudioPlayerManager.State.PAUSED) {
+            layoutVoiceCard.setVisibility(View.VISIBLE);
+            if (ivDrawerVoicePlayPause != null) {
+                ivDrawerVoicePlayPause.setImageResource(R.drawable.ic_play);
+            }
+            if (drawerVoiceSlider != null && totalMs > 0) {
+                drawerVoiceSlider.setMax(totalMs);
+                drawerVoiceSlider.setProgress(currentMs);
+            }
+            if (tvDrawerVoiceTime != null && totalMs > 0) {
+                tvDrawerVoiceTime.setText(formatDuration(currentMs, true) + " / " + formatDuration(totalMs, true));
+            }
+        } else {
+            layoutVoiceCard.setVisibility(View.GONE);
+        }
+    }
+
+    private static String formatDuration(int duration, boolean isMs) {
+        int totalSec = isMs ? (duration / 1000) : duration;
+        if (totalSec < 0) totalSec = 0;
+        int min = totalSec / 60;
+        int sec = totalSec % 60;
+        return String.format(Locale.getDefault(), "%02d:%02d", min, sec);
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (globalAudioPlayListener != null) {
+            AudioPlayerManager.getInstance().removeGlobalListener(globalAudioPlayListener);
+        }
+        super.onDestroy();
     }
 }

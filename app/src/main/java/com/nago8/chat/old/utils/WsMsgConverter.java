@@ -47,9 +47,9 @@ public class WsMsgConverter {
             if (wsMsg.content.post_content_type != null) contentBuilder.post_content_type(wsMsg.content.post_content_type);
         }
 
-        // 构建 Cmd
+        // 构建 Cmd（仅保留真正的业务指令，严格排除 WebSocket 内部控制事件名）
         Msg.Cmd cmd = null;
-        if (wsMsg.cmd != null) {
+        if (wsMsg.cmd != null && isBusinessCommand(wsMsg.cmd.name)) {
             cmd = new Msg.Cmd.Builder()
                     .name(wsMsg.cmd.name != null ? wsMsg.cmd.name : "")
                     .type(0)
@@ -79,7 +79,7 @@ public class WsMsgConverter {
 
     /**
      * 智能融合已有消息 existing 与推送新消息 newMsg。
-     * 当收到编辑消息推送时，如果推送缺失 sender、direction、content_type 等，自动安全继承旧消息元数据。
+     * 当收到编辑或撤回消息推送时，严格继承原有发送者元数据，并正确同步状态。
      */
     public static Msg mergeMsg(Msg existing, Msg newMsg) {
         if (existing == null) return newMsg;
@@ -87,7 +87,7 @@ public class WsMsgConverter {
 
         Msg.Builder builder = newMsg.newBuilder();
 
-        // 1. 严格继承原始发送时间与序列号（消息编辑绝不能改变其历史时间线与排序位置）
+        // 1. 严格继承原始发送时间与序列号（消息编辑/撤回绝不能改变其历史时间线与排序位置）
         if (existing.send_time > 0) {
             builder.send_time(existing.send_time);
         }
@@ -95,11 +95,11 @@ public class WsMsgConverter {
             builder.msg_seq(existing.msg_seq);
         }
 
-        // 2. 如果新消息没有 sender 或 sender 字段不完整，保留原有 sender
-        if (newMsg.sender == null || android.text.TextUtils.isEmpty(newMsg.sender.chat_id)) {
-            if (existing.sender != null) {
-                builder.sender(existing.sender);
-            }
+        // 2. 严格继承原有 sender（无论谁执行撤回或编辑，原消息作者与头像绝不能变！）
+        if (existing.sender != null && !android.text.TextUtils.isEmpty(existing.sender.chat_id)) {
+            builder.sender(existing.sender);
+        } else if (newMsg.sender != null && !android.text.TextUtils.isEmpty(newMsg.sender.chat_id)) {
+            builder.sender(newMsg.sender);
         }
 
         // 3. 继承 direction（方向不变）
@@ -140,12 +140,13 @@ public class WsMsgConverter {
             builder.content(contentBuilder.build());
         }
 
-        // 7. 设值 edit_time
-        long editTime = newMsg.edit_time;
-        if (editTime <= 0) {
-            editTime = existing.edit_time > 0 ? existing.edit_time : System.currentTimeMillis();
-        }
+        // 7. 合并 edit_time（只有明确新编辑时间时才更新，绝不将未编辑的消息默认赋为当前时间）
+        long editTime = newMsg.edit_time > 0 ? newMsg.edit_time : existing.edit_time;
         builder.edit_time(editTime);
+
+        // 8. 合并 msg_delete_time
+        long deleteTime = newMsg.msg_delete_time > 0 ? newMsg.msg_delete_time : existing.msg_delete_time;
+        builder.msg_delete_time(deleteTime);
 
         return builder.build();
     }
@@ -211,5 +212,30 @@ public class WsMsgConverter {
                 }
                 return text.length() > 0 ? text : ctx.getString(R.string.preview_unknown);
         }
+    }
+
+    /**
+     * 判断是否为真正的用户/机器人业务指令，严格排除 WebSocket 系统内部操作事件
+     */
+    public static boolean isBusinessCommand(String cmdName) {
+        if (cmdName == null || cmdName.trim().isEmpty()) return false;
+        String lower = cmdName.trim().toLowerCase();
+        return !lower.equals("send_message")
+                && !lower.equals("new_message")
+                && !lower.equals("edit_message")
+                && !lower.equals("edit")
+                && !lower.equals("recall_message")
+                && !lower.equals("msg_delete")
+                && !lower.equals("batch_recall_message")
+                && !lower.equals("heartbeat")
+                && !lower.equals("ping")
+                && !lower.equals("pong")
+                && !lower.equals("login")
+                && !lower.equals("blocked_message")
+                && !lower.equals("blocked")
+                && !lower.equals("stream_message")
+                && !lower.equals("file_send_message")
+                && !lower.equals("bot_board_message")
+                && !lower.equals("push_message");
     }
 }

@@ -171,9 +171,13 @@
 
         <!-- User Info Header -->
         <LinearLayout
+            android:id="@+id/layoutUserHeader"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:background="?attr/colorPrimary"
+            android:foreground="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
             android:orientation="horizontal"
             android:padding="16dp"
             android:gravity="center_vertical">
@@ -245,6 +249,80 @@
                 <LinearLayout android:id="@+id/menu_discovery" style="@style/MenuButtonStyle">
                     <androidx.appcompat.widget.AppCompatImageView style="@style/MenuIconStyle" app:srcCompat="@drawable/ic_explore" />
                     <TextView style="@style/MenuTextStyle" android:text="@string/menu_discovery" />
+                </LinearLayout>
+
+                <!-- 侧边栏语音播放卡片 -->
+                <LinearLayout
+                    android:id="@+id/layoutVoiceCard"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="12dp"
+                    android:background="@drawable/bg_voice_card"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="10dp"
+                    android:visibility="gone">
+
+                    <!-- 播放/暂停按钮 -->
+                    <androidx.appcompat.widget.AppCompatImageView
+                        android:id="@+id/ivDrawerVoicePlayPause"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:padding="2dp"
+                        app:srcCompat="@drawable/ic_play"
+                        app:tint="@color/text_white" />
+
+                    <!-- 中间进度与时间 -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_marginLeft="8dp"
+                        android:layout_marginEnd="8dp"
+                        android:layout_marginRight="8dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <com.nago8.chat.old.widget.VoiceProgressSlider
+                            android:id="@+id/drawerVoiceSlider"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/tvDrawerVoiceTime"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:textColor="@color/text_white"
+                                android:textSize="11sp"
+                                android:alpha="0.85" />
+
+                            <TextView
+                                android:id="@+id/tvDrawerVoiceTitle"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/message_voice"
+                                android:textColor="@color/text_white"
+                                android:textSize="11sp"
+                                android:alpha="0.65" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <!-- 右侧关闭按钮 -->
+                    <androidx.appcompat.widget.AppCompatImageView
+                        android:id="@+id/ivDrawerVoiceClose"
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:padding="4dp"
+                        app:srcCompat="@drawable/ic_close"
+                        app:tint="@color/text_white" />
                 </LinearLayout>
 
             </LinearLayout>

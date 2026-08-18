@@ -34,15 +34,21 @@ public class ChatInputBar extends LinearLayout {
         void onActionClick(String actionType);
     }
 
+    public interface OnInstructionButtonClickListener {
+        void onInstructionButtonClick();
+    }
+
     private EditText etMessage;
     private ImageButton btnSend;
     private ImageButton btnTogglePanel;
+    private ImageButton btnInstruction;
     private View panelMore;
 
     private boolean isPanelExpanded = false;
 
     private OnSendClickListener sendClickListener;
     private OnPanelActionClickListener panelActionClickListener;
+    private OnInstructionButtonClickListener instructionButtonClickListener;
 
     /** Callback invoked when the user dismisses the quote preview bar. */
     public interface OnQuoteDismissListener {
@@ -84,10 +90,19 @@ public class ChatInputBar extends LinearLayout {
         etMessage = findViewById(R.id.etMessage);
         btnSend = findViewById(R.id.btnSend);
         btnTogglePanel = findViewById(R.id.btnTogglePanel);
+        btnInstruction = findViewById(R.id.btnInstruction);
         panelMore = findViewById(R.id.panelMore);
 
         if (btnTogglePanel != null) {
             btnTogglePanel.setOnClickListener(v -> togglePanel());
+        }
+
+        if (btnInstruction != null) {
+            btnInstruction.setOnClickListener(v -> {
+                if (instructionButtonClickListener != null) {
+                    instructionButtonClickListener.onInstructionButtonClick();
+                }
+            });
         }
 
         if (btnSend != null) {
@@ -222,6 +237,16 @@ public class ChatInputBar extends LinearLayout {
 
     public void setOnQuoteDismissListener(OnQuoteDismissListener listener) {
         this.quoteDismissListener = listener;
+    }
+
+    public void setOnInstructionButtonClickListener(OnInstructionButtonClickListener listener) {
+        this.instructionButtonClickListener = listener;
+    }
+
+    public void setInstructionButtonVisibility(int visibility) {
+        if (btnInstruction != null) {
+            btnInstruction.setVisibility(visibility);
+        }
     }
 
     private void setupPanelActions() {

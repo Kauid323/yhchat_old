@@ -13,12 +13,52 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 
+import com.nago8.chat.old.proto.user.info;
+
 public class UserRepository {
 
     public interface GetUserCallback {
         void onSuccess(get_user response);
-
         void onError(Exception error);
+    }
+
+    public interface GetSelfInfoCallback {
+        void onSuccess(info response);
+        void onError(Exception error);
+    }
+
+    public Call getSelfInfo(String token, GetSelfInfoCallback callback) {
+        Request request = new Request.Builder()
+                .url(ApiClient.BASE_URL + "/v1/user/info")
+                .header("token", token == null ? "" : token)
+                .get()
+                .build();
+
+        Call call = ApiClient.getClient().newCall(request);
+        call.enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                callback.onError(e);
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                try {
+                    if (!response.isSuccessful() || response.body() == null) {
+                        callback.onError(new IOException("HTTP " + response.code()));
+                        return;
+                    }
+                    callback.onSuccess(info.ADAPTER.decode(response.body().source()));
+                } catch (Exception e) {
+                    callback.onError(e);
+                } finally {
+                    if (response.body() != null) {
+                        response.body().close();
+                    }
+                }
+            }
+        });
+        return call;
     }
 
     public Call getUser(String token, String userId, GetUserCallback callback) {

@@ -26,6 +26,7 @@ import com.nago8.chat.old.VideoPlayerActivity;
 import com.nago8.chat.old.model.MessageGroup;
 import com.nago8.chat.old.net.FileDownloadManager;
 import com.nago8.chat.old.proto.Msg;
+import com.nago8.chat.old.utils.AudioPlayerManager;
 import com.nago8.chat.old.utils.FengEmojiRenderer;
 import com.nago8.chat.old.utils.ImageUtils;
 import com.nago8.chat.old.utils.InternalLinkUtils;
@@ -300,6 +301,9 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
 
         private View createRawBubble(MessagesAdapter adapter, MessageGroup group, Msg msg, int index, int count, Markwon markwon) {
             if (msg != null && msg.msg_delete_time <= 0) {
+                if (msg.content_type == 11 || (msg.content != null && msg.content.audio_url != null && !msg.content.audio_url.isEmpty())) {
+                    return createAudioBubble(group, msg, index, count);
+                }
                 if (msg.content_type == 10 || (msg.content != null && msg.content.video_url != null && !msg.content.video_url.isEmpty())) {
                     return createVideoBubble(group, msg, index, count);
                 }
@@ -342,21 +346,27 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
 
             String quoteTextStr = (msg != null && msg.msg_delete_time <= 0) ? getQuoteText(msg) : null;
             boolean hasQuote = !TextUtils.isEmpty(quoteTextStr);
+            boolean hasCmd = (msg != null && msg.cmd != null && com.nago8.chat.old.utils.WsMsgConverter.isBusinessCommand(msg.cmd.name));
 
-            if (hasQuote) {
+            if (hasQuote || hasCmd) {
                 Context ctx = itemView.getContext();
                 LinearLayout container = new LinearLayout(ctx);
                 container.setOrientation(LinearLayout.VERTICAL);
                 applyBubbleStyle(container, group.mine, isEdited, index, count);
                 container.setPadding(dp(12), dp(8), dp(12), dp(8));
 
-                View quoteView = createQuoteView(ctx, quoteTextStr);
+                View cmdBadge = createCmdBadgeView(ctx, msg, group.mine);
+                if (cmdBadge != null) {
+                    container.addView(cmdBadge);
+                }
+
+                View quoteView = createQuoteView(ctx, msg, quoteTextStr);
                 if (quoteView != null) {
                     container.addView(quoteView);
                 }
 
                 LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                textParams.topMargin = dp(4);
+                textParams.topMargin = (hasQuote || hasCmd) ? dp(3) : 0;
                 textView.setLayoutParams(textParams);
                 container.addView(textView);
 
@@ -423,9 +433,14 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             container.setClickable(true);
             container.setFocusable(true);
 
+            View cmdBadge = createCmdBadgeView(ctx, msg, group.mine);
+            if (cmdBadge != null) {
+                container.addView(cmdBadge);
+            }
+
             String quoteTextStr = getQuoteText(msg);
             if (!TextUtils.isEmpty(quoteTextStr)) {
-                View quoteView = createQuoteView(ctx, quoteTextStr);
+                View quoteView = createQuoteView(ctx, msg, quoteTextStr);
                 if (quoteView != null) {
                     container.addView(quoteView);
                 }
@@ -720,7 +735,21 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             return null;
         }
 
-        private View createQuoteView(Context ctx, String quoteMsgText) {
+        private View createCmdBadgeView(Context ctx, Msg msg, boolean mine) {
+            if (msg == null || msg.cmd == null || !com.nago8.chat.old.utils.WsMsgConverter.isBusinessCommand(msg.cmd.name)) return null;
+            TextView tvCmd = new TextView(ctx);
+            tvCmd.setText(String.format("/%s", msg.cmd.name));
+            tvCmd.setTextSize(12);
+            int baseColor = mine ? 0xFFFFFFFF : ContextCompat.getColor(ctx, R.color.bubble_text_left);
+            tvCmd.setTextColor(baseColor);
+            tvCmd.setAlpha(0.65f); // 淡一点的文字
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.bottomMargin = dp(2);
+            tvCmd.setLayoutParams(lp);
+            return tvCmd;
+        }
+
+        private View createQuoteView(Context ctx, Msg msg, String quoteMsgText) {
             if (TextUtils.isEmpty(quoteMsgText) || quoteMsgText.trim().isEmpty()) return null;
 
             LinearLayout quoteBlock = new LinearLayout(ctx);
@@ -732,23 +761,346 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
 
             View quoteBar = new View(ctx);
             int barW = dp(3);
-            int barH = dp(26);
+            int barH = dp(28);
             LinearLayout.LayoutParams barParams = new LinearLayout.LayoutParams(barW, barH);
             barParams.rightMargin = dp(8);
             quoteBar.setLayoutParams(barParams);
             quoteBar.setBackgroundColor(ContextCompat.getColor(ctx, R.color.divider_color));
             quoteBlock.addView(quoteBar);
 
-            TextView quoteText = new TextView(ctx);
-            quoteText.setText(FengEmojiRenderer.apply(ctx, quoteMsgText, dp(18)), TextView.BufferType.SPANNABLE);
-            quoteText.setTextSize(13);
-            quoteText.setTextColor(ContextCompat.getColor(ctx, R.color.text_secondary));
-            quoteText.setMaxLines(3);
-            quoteText.setMaxWidth(getMaxBubbleWidth(ctx));
-            quoteText.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            quoteBlock.addView(quoteText);
+            LinearLayout contentCol = new LinearLayout(ctx);
+            contentCol.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams contentColParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            contentCol.setLayoutParams(contentColParams);
+            quoteBlock.addView(contentCol);
+
+            // 检查媒体内容
+            String mediaUrl = null;
+            boolean isImage = false;
+            boolean isVideo = false;
+            boolean isLink = false;
+            if (msg != null && msg.content != null) {
+                if (!TextUtils.isEmpty(msg.content.quote_image_url)) {
+                    mediaUrl = msg.content.quote_image_url;
+                    isImage = true;
+                } else if (!TextUtils.isEmpty(msg.content.quote_video_url)) {
+                    mediaUrl = msg.content.quote_video_url;
+                    isVideo = true;
+                }
+            }
+
+            // 如果 quoteMsgText 本身含有 http(s):// 媒体链接，也进行提取
+            if (mediaUrl == null && quoteMsgText != null) {
+                String trimmed = quoteMsgText.trim();
+                if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+                    mediaUrl = trimmed;
+                    String lower = trimmed.toLowerCase();
+                    if (lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png") || lower.endsWith(".gif") || lower.endsWith(".webp")) {
+                        isImage = true;
+                    } else if (lower.endsWith(".mp4") || lower.endsWith(".mov") || lower.endsWith(".mkv") || lower.endsWith(".3gp")) {
+                        isVideo = true;
+                    } else {
+                        isLink = true;
+                    }
+                }
+            }
+
+            // 是否是纯 URL 文本（如果是纯 URL 则不重复显示一长串 URL，直接展示媒体按钮）
+            boolean isPureUrl = (mediaUrl != null && quoteMsgText.trim().equals(mediaUrl));
+
+            if (!isPureUrl) {
+                TextView quoteText = new TextView(ctx);
+                quoteText.setText(FengEmojiRenderer.apply(ctx, quoteMsgText, dp(18)), TextView.BufferType.SPANNABLE);
+                quoteText.setTextSize(13);
+                quoteText.setTextColor(ContextCompat.getColor(ctx, R.color.text_secondary));
+                quoteText.setMaxLines(3);
+                quoteText.setMaxWidth(getMaxBubbleWidth(ctx));
+                quoteText.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                contentCol.addView(quoteText);
+            }
+
+            // 如果有媒体内容，添加醒目的操作按钮/提示胶囊
+            if (mediaUrl != null) {
+                final String finalUrl = mediaUrl;
+                final boolean finalIsImage = isImage;
+                final boolean finalIsVideo = isVideo;
+
+                LinearLayout mediaBtn = new LinearLayout(ctx);
+                mediaBtn.setOrientation(LinearLayout.HORIZONTAL);
+                mediaBtn.setGravity(Gravity.CENTER_VERTICAL);
+                mediaBtn.setBackgroundResource(R.drawable.bg_quote_media_badge);
+                mediaBtn.setPadding(dp(8), dp(4), dp(10), dp(4));
+                mediaBtn.setClickable(true);
+                mediaBtn.setFocusable(true);
+
+                LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                if (!isPureUrl) {
+                    btnParams.topMargin = dp(4);
+                }
+                mediaBtn.setLayoutParams(btnParams);
+
+                // 图标
+                ImageView icon = new ImageView(ctx);
+                int iconSize = dp(16);
+                LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(iconSize, iconSize);
+                iconParams.rightMargin = dp(5);
+                icon.setLayoutParams(iconParams);
+
+                int iconRes;
+                int textRes;
+                if (finalIsImage) {
+                    iconRes = R.drawable.ic_image;
+                    textRes = R.string.quote_view_image;
+                } else if (finalIsVideo) {
+                    iconRes = R.drawable.ic_video;
+                    textRes = R.string.quote_view_video;
+                } else {
+                    iconRes = R.drawable.ic_link;
+                    textRes = R.string.quote_view_link;
+                }
+                icon.setImageResource(iconRes);
+                icon.setColorFilter(ContextCompat.getColor(ctx, R.color.app_primary));
+                mediaBtn.addView(icon);
+
+                // 提示文字
+                TextView tvLabel = new TextView(ctx);
+                tvLabel.setText(textRes);
+                tvLabel.setTextSize(12);
+                tvLabel.setTextColor(ContextCompat.getColor(ctx, R.color.app_primary));
+                tvLabel.setTypeface(null, android.graphics.Typeface.BOLD);
+                mediaBtn.addView(tvLabel);
+
+                // 点击动作
+                View.OnClickListener mediaClickListener = v -> {
+                    if (finalIsImage) {
+                        Intent intent = new Intent(ctx, ImagePreviewActivity.class);
+                        intent.putExtra(ImagePreviewActivity.EXTRA_IMAGE_URL, finalUrl);
+                        ctx.startActivity(intent);
+                    } else if (finalIsVideo) {
+                        Intent intent = new Intent(ctx, VideoPlayerActivity.class);
+                        intent.putExtra(VideoPlayerActivity.EXTRA_VIDEO_URL, finalUrl);
+                        ctx.startActivity(intent);
+                    } else {
+                        try {
+                            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(finalUrl));
+                            ctx.startActivity(intent);
+                        } catch (Exception ignored) {}
+                    }
+                };
+
+                mediaBtn.setOnClickListener(mediaClickListener);
+                quoteBlock.setOnClickListener(mediaClickListener);
+                contentCol.addView(mediaBtn);
+            }
 
             return quoteBlock;
+        }
+
+        private View createAudioBubble(MessageGroup group, Msg msg, int index, int count) {
+            final Context ctx = itemView.getContext();
+            final String audioUrl = msg != null && msg.content != null ? msg.content.audio_url : null;
+            final int audioTimeSec = msg != null && msg.content != null ? (int) msg.content.audio_time : 0;
+            final String msgId = msg != null && msg.msg_id != null ? msg.msg_id : "";
+
+            boolean isEdited = msg != null && msg.edit_time > 0;
+            int primaryColor = com.nago8.chat.old.utils.ThemeUtils.getThemeColor(ctx);
+            int fgColor = com.nago8.chat.old.utils.ThemeUtils.getContrastingForegroundColor(primaryColor);
+            int textColor = isEdited ? 0xFFFFFFFF : (group.mine ? fgColor : ContextCompat.getColor(ctx, R.color.bubble_text_left));
+
+            final LinearLayout container = new LinearLayout(ctx);
+            container.setOrientation(LinearLayout.VERTICAL);
+            applyBubbleStyle(container, group.mine, isEdited, index, count);
+            container.setPadding(dp(12), dp(8), dp(12), dp(8));
+
+            View cmdBadge = createCmdBadgeView(ctx, msg, group.mine);
+            if (cmdBadge != null) {
+                container.addView(cmdBadge);
+            }
+
+            String quoteTextStr = getQuoteText(msg);
+            View quoteView = createQuoteView(ctx, msg, quoteTextStr);
+            if (quoteView != null) {
+                container.addView(quoteView);
+            }
+
+            LinearLayout audioRow = new LinearLayout(ctx);
+            audioRow.setOrientation(LinearLayout.HORIZONTAL);
+            audioRow.setGravity(Gravity.CENTER_VERTICAL);
+
+            // 播放/暂停图标
+            final ImageView ivPlayPause = new ImageView(ctx);
+            int iconSize = dp(30);
+            LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(iconSize, iconSize);
+            iconParams.rightMargin = dp(8);
+            ivPlayPause.setLayoutParams(iconParams);
+            ivPlayPause.setImageResource(R.drawable.ic_play);
+            ivPlayPause.setColorFilter(textColor);
+            audioRow.addView(ivPlayPause);
+
+            // 中间进度与时间列
+            LinearLayout trackCol = new LinearLayout(ctx);
+            trackCol.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams trackParams = new LinearLayout.LayoutParams(dp(160), ViewGroup.LayoutParams.WRAP_CONTENT);
+            trackCol.setLayoutParams(trackParams);
+
+            final com.nago8.chat.old.widget.VoiceProgressSlider slider = new com.nago8.chat.old.widget.VoiceProgressSlider(ctx);
+            slider.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            int initialMax = audioTimeSec > 0 ? audioTimeSec * 1000 : 1000;
+            slider.setMax(initialMax);
+            slider.setColors(primaryColor, group.mine);
+            trackCol.addView(slider);
+
+            LinearLayout infoRow = new LinearLayout(ctx);
+            infoRow.setOrientation(LinearLayout.HORIZONTAL);
+            infoRow.setPadding(dp(4), 0, dp(4), 0);
+
+            final TextView tvTime = new TextView(ctx);
+            tvTime.setTextSize(11);
+            tvTime.setTextColor(textColor);
+            tvTime.setAlpha(0.85f);
+            tvTime.setText(formatDuration(audioTimeSec, false));
+            LinearLayout.LayoutParams tvTimeParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT);
+            tvTimeParams.weight = 1;
+            tvTime.setLayoutParams(tvTimeParams);
+            infoRow.addView(tvTime);
+
+            TextView tvLabel = new TextView(ctx);
+            tvLabel.setTextSize(11);
+            tvLabel.setTextColor(textColor);
+            tvLabel.setAlpha(0.65f);
+            tvLabel.setText(R.string.message_voice);
+            infoRow.addView(tvLabel);
+
+            trackCol.addView(infoRow);
+            audioRow.addView(trackCol);
+            container.addView(audioRow);
+
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            params.topMargin = dp(2);
+            params.leftMargin = group.mine ? dp(48) : 0;
+            params.rightMargin = group.mine ? 0 : dp(48);
+            params.gravity = group.mine ? Gravity.END : Gravity.START;
+            container.setLayoutParams(params);
+
+            // 检查当前播放器的状态进行恢复
+            AudioPlayerManager.State currentState = AudioPlayerManager.getInstance().getCurrentState(msgId);
+            if (currentState == AudioPlayerManager.State.PLAYING || currentState == AudioPlayerManager.State.PREPARING) {
+                ivPlayPause.setImageResource(R.drawable.ic_pause);
+                int curPos = AudioPlayerManager.getInstance().getCurrentPosition(msgId);
+                int totalDur = AudioPlayerManager.getInstance().getDuration(msgId);
+                if (totalDur > 0) {
+                    slider.setMax(totalDur);
+                    slider.setProgress(curPos);
+                    tvTime.setText(formatDuration(curPos, true) + " / " + formatDuration(totalDur, true));
+                }
+            } else if (currentState == AudioPlayerManager.State.PAUSED) {
+                ivPlayPause.setImageResource(R.drawable.ic_play);
+                int curPos = AudioPlayerManager.getInstance().getCurrentPosition(msgId);
+                int totalDur = AudioPlayerManager.getInstance().getDuration(msgId);
+                if (totalDur > 0) {
+                    slider.setMax(totalDur);
+                    slider.setProgress(curPos);
+                    tvTime.setText(formatDuration(curPos, true) + " / " + formatDuration(totalDur, true));
+                }
+            } else {
+                ivPlayPause.setImageResource(R.drawable.ic_play);
+                slider.setProgress(0);
+                tvTime.setText(formatDuration(audioTimeSec, false));
+            }
+
+            // 监听器
+            AudioPlayerManager.OnAudioPlayListener playListener = new AudioPlayerManager.OnAudioPlayListener() {
+                @Override
+                public void onStartPrepare() {
+                    ivPlayPause.setImageResource(R.drawable.ic_pause);
+                }
+
+                @Override
+                public void onPrepared(int totalDurationMs) {
+                    ivPlayPause.setImageResource(R.drawable.ic_pause);
+                    if (totalDurationMs > 0) {
+                        slider.setMax(totalDurationMs);
+                    }
+                }
+
+                @Override
+                public void onProgress(int currentMs, int totalMs) {
+                    ivPlayPause.setImageResource(R.drawable.ic_pause);
+                    if (totalMs > 0) {
+                        slider.setMax(totalMs);
+                    }
+                    slider.setProgress(currentMs);
+                    tvTime.setText(formatDuration(currentMs, true) + " / " + formatDuration(totalMs > 0 ? totalMs : (audioTimeSec * 1000), true));
+                }
+
+                @Override
+                public void onPause() {
+                    ivPlayPause.setImageResource(R.drawable.ic_play);
+                }
+
+                @Override
+                public void onResume() {
+                    ivPlayPause.setImageResource(R.drawable.ic_pause);
+                }
+
+                @Override
+                public void onComplete() {
+                    ivPlayPause.setImageResource(R.drawable.ic_play);
+                    slider.setProgress(0);
+                    tvTime.setText(formatDuration(audioTimeSec, false));
+                }
+
+                @Override
+                public void onError(String errorMsg) {
+                    ivPlayPause.setImageResource(R.drawable.ic_play);
+                    slider.setProgress(0);
+                    tvTime.setText(formatDuration(audioTimeSec, false));
+                    if (!TextUtils.isEmpty(errorMsg)) {
+                        android.widget.Toast.makeText(ctx, errorMsg, android.widget.Toast.LENGTH_SHORT).show();
+                    }
+                }
+            };
+
+            // 如果当前就是正在播放的条目，重新注册监听
+            if (msgId.equals(AudioPlayerManager.getInstance().getCurrentMsgId())) {
+                AudioPlayerManager.getInstance().registerListener(msgId, playListener);
+            }
+
+            // 播放/暂停点击
+            ivPlayPause.setOnClickListener(v -> {
+                if (TextUtils.isEmpty(audioUrl)) return;
+                AudioPlayerManager.getInstance().togglePlay(ctx, audioUrl, msgId, audioTimeSec, playListener);
+            });
+
+            // 拖动监听
+            slider.setOnSeekChangeListener(new com.nago8.chat.old.widget.VoiceProgressSlider.OnSeekChangeListener() {
+                @Override
+                public void onProgressChanged(com.nago8.chat.old.widget.VoiceProgressSlider s, int progress, boolean fromUser) {
+                    if (fromUser) {
+                        tvTime.setText(formatDuration(progress, true) + " / " + formatDuration(s.getMax(), true));
+                    }
+                }
+
+                @Override
+                public void onStartTrackingTouch(com.nago8.chat.old.widget.VoiceProgressSlider s) {}
+
+                @Override
+                public void onStopTrackingTouch(com.nago8.chat.old.widget.VoiceProgressSlider s, int progress) {
+                    if (msgId.equals(AudioPlayerManager.getInstance().getCurrentMsgId())) {
+                        AudioPlayerManager.getInstance().seekTo(progress);
+                    }
+                }
+            });
+
+            return container;
+        }
+
+        private static String formatDuration(int duration, boolean isMs) {
+            int totalSec = isMs ? (duration / 1000) : duration;
+            if (totalSec < 0) totalSec = 0;
+            int min = totalSec / 60;
+            int sec = totalSec % 60;
+            return String.format(Locale.getDefault(), "%02d:%02d", min, sec);
         }
 
         private View createImageBubble(MessagesAdapter adapter, MessageGroup group, Msg msg, int index, int count) {
@@ -764,8 +1116,13 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             container.setPadding(dp(12), dp(8), dp(12), dp(8));
             container.setClickable(true);
 
+            View cmdBadge = createCmdBadgeView(ctx, msg, group.mine);
+            if (cmdBadge != null) {
+                container.addView(cmdBadge);
+            }
+
             String quoteTextStr = getQuoteText(msg);
-            View quoteView = createQuoteView(ctx, quoteTextStr);
+            View quoteView = createQuoteView(ctx, msg, quoteTextStr);
             if (quoteView != null) {
                 container.addView(quoteView);
             }
@@ -804,7 +1161,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                     ArrayList<String> allUrls = new ArrayList<>();
                     ArrayList<Long> allSeqs = new ArrayList<>();
                     int startIdx = 0;
-                    if (adapter != null && adapter.groups != null) {
+                    if (adapter != null) {
                         for (MessageGroup g : adapter.groups) {
                             if (g.messages == null) continue;
                             for (Msg m : g.messages) {
@@ -872,6 +1229,11 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                 return formatRecallTime(msg.msg_delete_time);
             }
             if (msg == null || msg.content == null) return itemView.getContext().getString(R.string.message_unsupported);
+            if (msg.content_type == 11 || !TextUtils.isEmpty(msg.content.audio_url)) {
+                long sec = msg.content.audio_time;
+                if (sec > 0) return itemView.getContext().getString(R.string.message_voice) + " (" + sec + "s)";
+                return itemView.getContext().getString(R.string.message_voice);
+            }
             if (!TextUtils.isEmpty(msg.content.text)) return msg.content.text;
             if (!TextUtils.isEmpty(msg.content.image_url)) return itemView.getContext().getString(R.string.message_image);
             if (!TextUtils.isEmpty(msg.content.file_name)) return itemView.getContext().getString(R.string.message_file, msg.content.file_name);
