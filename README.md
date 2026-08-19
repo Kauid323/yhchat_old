@@ -8,4 +8,4 @@
 https://yhfx.jwznb.com/share?key=Bxs87oVNHAxR&ts=1786896037 
 群ID: 325134750
 
-获取Owner自己构建的APK
+获取最新PreRelease构建
