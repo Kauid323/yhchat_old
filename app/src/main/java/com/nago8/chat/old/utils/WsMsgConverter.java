@@ -173,10 +173,10 @@ public class WsMsgConverter {
             msgCal.setTimeInMillis(tsMs);
 
             String pattern = msgCal.get(java.util.Calendar.YEAR) < nowCal.get(java.util.Calendar.YEAR)
-                    ? "yyyy年M月d日 HH:mm" : "M月d日 HH:mm";
+                    ? ctx.getString(R.string.time_format_year_datetime) : ctx.getString(R.string.time_format_month_datetime);
 
             java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat(pattern, java.util.Locale.getDefault());
-            return "该消息已于 " + sdf.format(msgCal.getTime()) + " 撤回";
+            return ctx.getString(R.string.message_recalled_at_format, sdf.format(msgCal.getTime()));
         }
 
         if (wsMsg.content == null) {

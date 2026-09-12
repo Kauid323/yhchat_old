@@ -8,7 +8,7 @@
     <LinearLayout
         android:id="@+id/layoutDragHandle"
         android:layout_width="match_parent"
-        android:layout_height="22dp"
+        android:layout_height="26dp"
         android:gravity="center"
         android:background="?attr/selectableItemBackground">
 
@@ -46,6 +46,7 @@
 
         <!-- Tabs Container (Scrollable) -->
         <HorizontalScrollView
+            android:id="@+id/scrollTabs"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"

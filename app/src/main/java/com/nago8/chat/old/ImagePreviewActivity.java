@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.drawable.Animatable;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Build;
@@ -40,10 +41,17 @@ import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager2.widget.ViewPager2;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.DataSource;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
+import com.bumptech.glide.load.engine.GlideException;
 import com.bumptech.glide.load.resource.gif.GifDrawable;
 import com.bumptech.glide.request.target.CustomTarget;
+import com.bumptech.glide.request.target.Target;
 import com.bumptech.glide.request.transition.Transition;
+
+import com.bumptech.glide.load.model.GlideUrl;
+import com.bumptech.glide.load.model.LazyHeaders;
+import com.nago8.chat.old.cache.StickerCache;
 import com.nago8.chat.old.net.ApiClient;
 import com.nago8.chat.old.proto.list_message_by_mid_seq;
 import com.nago8.chat.old.proto.list_message_by_mid_seq_send;
@@ -167,7 +175,9 @@ public class ImagePreviewActivity extends AppCompatActivity {
             }
         }
 
+        Log.i(TAG, "[ImagePreview] onCreate() loaded " + imageUrls.size() + " URLs, startIndex=" + startIndex + ", urls=" + imageUrls);
         if (imageUrls.isEmpty()) {
+            Log.w(TAG, "[ImagePreview] imageUrls is empty, finishing activity");
             Toast.makeText(this, R.string.image_preview_load_failed, Toast.LENGTH_SHORT).show();
             finish();
             return;
@@ -375,6 +385,10 @@ public class ImagePreviewActivity extends AppCompatActivity {
         public void onViewRecycled(@NonNull PageHolder holder) {
             super.onViewRecycled(holder);
             holder.releasePlayer();
+            stopGifIfRunning(holder.zoomableImage);
+            try {
+                Glide.with(getApplicationContext()).clear(holder.zoomableImage);
+            } catch (Exception ignored) {}
         }
 
         @Override
@@ -547,114 +561,272 @@ public class ImagePreviewActivity extends AppCompatActivity {
 
             void bind(String url) {
                 releasePlayer();
-                if (TextUtils.isEmpty(url)) return;
+                if (TextUtils.isEmpty(url)) {
+                    Log.w(TAG, "[ImagePreview] bind() called with empty URL");
+                    return;
+                }
                 itemProgress.setVisibility(View.VISIBLE);
                 layoutLiveBadge.setVisibility(View.GONE);
                 zoomableImage.setImageDrawable(null);
 
                 final String targetUrl = normalizeUrl(url);
+                final String cleanUrl = stripQiniuParams(targetUrl);
+                Log.i(TAG, "[ImagePreview] === BIND START ===");
+                Log.i(TAG, "[ImagePreview] Raw URL: " + url);
+                Log.i(TAG, "[ImagePreview] Target URL: " + targetUrl);
+                Log.i(TAG, "[ImagePreview] Clean URL: " + cleanUrl);
+
                 new Thread(() -> {
                     File tempFile = null;
                     try {
-                        Request.Builder reqBuilder = new Request.Builder().url(targetUrl);
-                        if (targetUrl.contains(".jwznb.com")) {
-                            reqBuilder.addHeader("Referer", "http://myapp.jwznb.com");
+                        // 1. 本地文件直接加载
+                        if (targetUrl.startsWith("/") || targetUrl.startsWith("file://")) {
+                            String path = targetUrl.startsWith("file://") ? targetUrl.substring(7) : targetUrl;
+                            File localFile = new File(path);
+                            Log.i(TAG, "[ImagePreview] Checking local path: " + path + ", exists=" + localFile.exists() + ", len=" + (localFile.exists() ? localFile.length() : 0));
+                            if (localFile.exists() && localFile.length() > 0) {
+                                renderFileOrFallback(localFile, cleanUrl);
+                                return;
+                            }
+                        }
+
+                        // 2. 对于大图/GIF预览，绝不使用 AvatarCache(其为120x120静态缩略图)，始终请求完整原图/完整GIF
+                        // 如果是表情包，仅当命中 StickerCache 时复用
+                        String lowerClean = cleanUrl.toLowerCase(Locale.getDefault());
+                        boolean isGif = lowerClean.contains(".gif") || lowerClean.contains("/expression/") || lowerClean.contains(".tmp");
+                        if (!isGif) {
+                            File cachedSticker = StickerCache.getStickerFile(ImagePreviewActivity.this, cleanUrl);
+                            if (cachedSticker != null && cachedSticker.exists() && cachedSticker.length() > 64) {
+                                Log.i(TAG, "[ImagePreview] Found valid StickerCache file: " + cachedSticker.getAbsolutePath() + ", size=" + cachedSticker.length());
+                                renderFileOrFallback(cachedSticker, cleanUrl);
+                                return;
+                            }
+                        }
+
+                        // 3. 网络下载到本地临时文件
+                        Log.i(TAG, "[ImagePreview] Downloading via OkHttp from: " + cleanUrl);
+                        Request.Builder reqBuilder = new Request.Builder().url(cleanUrl);
+                        if (cleanUrl.contains(".jwznb.com")) {
+                            reqBuilder.addHeader("Referer", "https://myapp.jwznb.com");
+                            reqBuilder.addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36");
                         }
                         Response response = ApiClient.getClient().newCall(reqBuilder.build()).execute();
-                        if (!response.isSuccessful() || response.body() == null) {
-                            runOnUiThread(() -> itemProgress.setVisibility(View.GONE));
-                            return;
-                        }
-                        tempFile = new File(getCacheDir(), "preview_" + System.nanoTime() + ".tmp");
-                        try (InputStream is = response.body().byteStream();
-                             FileOutputStream fos = new FileOutputStream(tempFile)) {
-                            byte[] buf = new byte[8192];
-                            int read;
-                            while ((read = is.read(buf)) != -1) {
-                                fos.write(buf, 0, read);
+                        Log.i(TAG, "[ImagePreview] OkHttp response code=" + response.code() + ", contentType=" + response.header("Content-Type"));
+                        
+                        if ((!response.isSuccessful() || response.body() == null) && !cleanUrl.equals(targetUrl)) {
+                            Log.w(TAG, "[ImagePreview] Clean URL failed with code " + response.code() + ", retrying targetUrl: " + targetUrl);
+                            reqBuilder = new Request.Builder().url(targetUrl);
+                            if (targetUrl.contains(".jwznb.com")) {
+                                reqBuilder.addHeader("Referer", "https://myapp.jwznb.com");
+                                reqBuilder.addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36");
                             }
-                            fos.flush();
+                            response = ApiClient.getClient().newCall(reqBuilder.build()).execute();
+                            Log.i(TAG, "[ImagePreview] Retried targetUrl response code=" + response.code());
                         }
 
-                        // 探测并提取实况图片中的 MP4 视频
-                        File extractedLiveVideo = LivePhotoUtils.extractLiveVideo(tempFile, getCacheDir());
-                        final File finalTempFile = tempFile;
+                        if (response.isSuccessful() && response.body() != null) {
+                            byte[] bytes = response.body().bytes();
+                            int byteLen = bytes != null ? bytes.length : 0;
+                            Log.i(TAG, "[ImagePreview] OkHttp received bytes length=" + byteLen);
+                            if (bytes != null && bytes.length > 64) {
+                                String head = new String(bytes, 0, Math.min(bytes.length, 64)).toLowerCase(Locale.getDefault());
+                                if (!head.contains("html") && !head.contains("xml") && !head.contains("error") && !head.contains("denied")) {
+                                    String ext = getExtensionFromUrl(cleanUrl);
+                                    tempFile = new File(getCacheDir(), "preview_" + System.nanoTime() + "." + ext);
+                                    try (FileOutputStream fos = new FileOutputStream(tempFile)) {
+                                        fos.write(bytes);
+                                        fos.flush();
+                                    }
+                                    Log.i(TAG, "[ImagePreview] Saved temp file: " + tempFile.getAbsolutePath() + ", ext=" + ext + ", size=" + tempFile.length());
+                                    renderFileOrFallback(tempFile, cleanUrl);
+                                    return;
+                                } else {
+                                    Log.e(TAG, "[ImagePreview] OkHttp response body is error/HTML content: " + head);
+                                }
+                            }
+                        } else {
+                            Log.e(TAG, "[ImagePreview] OkHttp download unsuccessful, code=" + response.code());
+                        }
 
+                        // 4. OkHttp 无法直接下载时，降级使用 Glide Url 自带网络加载
+                        Log.i(TAG, "[ImagePreview] Falling back to direct Glide Url loading: " + cleanUrl);
                         runOnUiThread(() -> {
                             if (isFinishing() || (Build.VERSION.SDK_INT >= 17 && isDestroyed())) return;
-                            itemProgress.setVisibility(View.GONE);
-
-                            if (extractedLiveVideo != null && extractedLiveVideo.exists()) {
-                                currentLiveVideoFile = extractedLiveVideo;
-                                layoutLiveBadge.setVisibility(View.VISIBLE);
-                            } else {
-                                layoutLiveBadge.setVisibility(View.GONE);
-                            }
-
-                            boolean isGif = "gif".equalsIgnoreCase(getExtensionFromUrl(targetUrl));
-                            if (isGif) {
-                                Glide.with(getApplicationContext())
-                                        .load(finalTempFile)
-                                        .diskCacheStrategy(DiskCacheStrategy.NONE)
-                                        .skipMemoryCache(true)
-                                        .into(new CustomTarget<Drawable>() {
-                                            @Override
-                                            public void onResourceReady(@NonNull Drawable resource, @Nullable Transition<? super Drawable> transition) {
-                                                if (isFinishing() || (Build.VERSION.SDK_INT >= 17 && isDestroyed())) return;
-                                                if (resource instanceof GifDrawable) {
-                                                    GifDrawable gif = (GifDrawable) resource;
-                                                    gif.setLoopCount(GifDrawable.LOOP_INTRINSIC);
-                                                    gif.start();
-                                                }
-                                                zoomableImage.setImageDrawable(resource);
-                                            }
-
-                                            @Override
-                                            public void onLoadFailed(@Nullable Drawable errorDrawable) {
-                                                if (isFinishing() || (Build.VERSION.SDK_INT >= 17 && isDestroyed())) return;
-                                                loadSampledBitmapFallback(finalTempFile);
-                                            }
-
-                                            @Override
-                                            public void onLoadCleared(@Nullable Drawable placeholder) {
-                                                stopGifIfRunning(zoomableImage);
-                                            }
-                                        });
-                            } else {
-                                loadSampledBitmapFallback(finalTempFile);
-                            }
+                            loadGlideDirectly(cleanUrl);
                         });
                     } catch (Exception e) {
-                        runOnUiThread(() -> itemProgress.setVisibility(View.GONE));
+                        Log.e(TAG, "[ImagePreview] Error during image loading pipeline", e);
+                        runOnUiThread(() -> {
+                            if (isFinishing() || (Build.VERSION.SDK_INT >= 17 && isDestroyed())) return;
+                            loadGlideDirectly(cleanUrl);
+                        });
                     }
                 }).start();
             }
 
-            private void loadSampledBitmapFallback(File file) {
-                try {
-                    Bitmap bmp = decodeSampledBitmapFromFile(file.getAbsolutePath(), 2048, 2048);
-                    if (bmp != null) {
-                        zoomableImage.setImageBitmap(bmp);
+            private void renderFileOrFallback(File file, String sourceUrl) {
+                File extractedLiveVideo = LivePhotoUtils.extractLiveVideo(file, getCacheDir());
+                runOnUiThread(() -> {
+                    if (isFinishing() || (Build.VERSION.SDK_INT >= 17 && isDestroyed())) return;
+                    itemProgress.setVisibility(View.GONE);
+
+                    if (extractedLiveVideo != null && extractedLiveVideo.exists()) {
+                        currentLiveVideoFile = extractedLiveVideo;
+                        layoutLiveBadge.setVisibility(View.VISIBLE);
+                        Log.i(TAG, "[ImagePreview] Live photo detected: " + extractedLiveVideo.getAbsolutePath());
+                    } else {
+                        layoutLiveBadge.setVisibility(View.GONE);
                     }
-                } catch (Throwable ignored) {}
+
+                    Log.i(TAG, "[ImagePreview] Calling Glide.load(File): " + file.getAbsolutePath() + ", size=" + file.length());
+                    Glide.with(ImagePreviewActivity.this)
+                            .asDrawable()
+                            .load(file)
+                            .override(Target.SIZE_ORIGINAL, Target.SIZE_ORIGINAL)
+                            .diskCacheStrategy(DiskCacheStrategy.NONE)
+                            .skipMemoryCache(true)
+                            .into(new CustomTarget<Drawable>() {
+                                @Override
+                                public void onResourceReady(@NonNull Drawable resource, @Nullable Transition<? super Drawable> transition) {
+                                    if (isFinishing() || (Build.VERSION.SDK_INT >= 17 && isDestroyed())) return;
+                                    itemProgress.setVisibility(View.GONE);
+                                    boolean isAnim = resource instanceof Animatable;
+                                    Log.i(TAG, "[ImagePreview] Glide.load(File) onResourceReady: class=" + resource.getClass().getName()
+                                            + ", animatable=" + isAnim + ", size=[" + resource.getIntrinsicWidth() + "x" + resource.getIntrinsicHeight() + "]");
+                                    zoomableImage.setImageDrawable(resource);
+                                    if (isAnim) {
+                                        ((Animatable) resource).start();
+                                    }
+                                    zoomableImage.post(() -> {
+                                        try {
+                                            zoomableImage.resetZoom();
+                                            zoomableImage.invalidate();
+                                        } catch (Exception ignored) {}
+                                    });
+                                }
+
+                                @Override
+                                public void onLoadCleared(@Nullable Drawable placeholder) {
+                                    zoomableImage.setImageDrawable(placeholder);
+                                }
+
+                                @Override
+                                public void onLoadFailed(@Nullable Drawable errorDrawable) {
+                                    Log.e(TAG, "[ImagePreview] Glide.load(File) onLoadFailed for " + file.getAbsolutePath());
+                                    if (isFinishing() || (Build.VERSION.SDK_INT >= 17 && isDestroyed())) return;
+                                    loadGlideDirectly(sourceUrl);
+                                }
+                            });
+                });
+            }
+
+            private void loadGlideDirectly(String sourceUrl) {
+                if (TextUtils.isEmpty(sourceUrl)) {
+                    Log.w(TAG, "[ImagePreview] loadGlideDirectly called with empty sourceUrl");
+                    itemProgress.setVisibility(View.GONE);
+                    return;
+                }
+                Log.i(TAG, "[ImagePreview] loadGlideDirectly() starting for: " + sourceUrl);
+                GlideUrl glideUrl;
+                if (sourceUrl.contains(".jwznb.com")) {
+                    glideUrl = new GlideUrl(sourceUrl, new LazyHeaders.Builder()
+                            .addHeader("Referer", "https://myapp.jwznb.com")
+                            .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36")
+                            .build());
+                } else {
+                    glideUrl = new GlideUrl(sourceUrl);
+                }
+
+                Glide.with(ImagePreviewActivity.this)
+                        .asDrawable()
+                        .load(glideUrl)
+                        .override(Target.SIZE_ORIGINAL, Target.SIZE_ORIGINAL)
+                        .placeholder(R.drawable.ic_image)
+                        .error(R.drawable.ic_image)
+                        .diskCacheStrategy(DiskCacheStrategy.ALL)
+                        .into(new CustomTarget<Drawable>() {
+                            @Override
+                            public void onResourceReady(@NonNull Drawable resource, @Nullable Transition<? super Drawable> transition) {
+                                if (isFinishing() || (Build.VERSION.SDK_INT >= 17 && isDestroyed())) return;
+                                itemProgress.setVisibility(View.GONE);
+                                boolean isAnim = resource instanceof Animatable;
+                                Log.i(TAG, "[ImagePreview] loadGlideDirectly() onResourceReady: class=" + resource.getClass().getName()
+                                        + ", animatable=" + isAnim + ", size=[" + resource.getIntrinsicWidth() + "x" + resource.getIntrinsicHeight() + "]");
+                                zoomableImage.setImageDrawable(resource);
+                                if (isAnim) {
+                                    ((Animatable) resource).start();
+                                }
+                                zoomableImage.post(() -> {
+                                    try {
+                                        zoomableImage.resetZoom();
+                                        zoomableImage.invalidate();
+                                    } catch (Exception ignored) {}
+                                });
+                            }
+
+                            @Override
+                            public void onLoadCleared(@Nullable Drawable placeholder) {
+                                zoomableImage.setImageDrawable(placeholder);
+                            }
+
+                            @Override
+                            public void onLoadFailed(@Nullable Drawable errorDrawable) {
+                                itemProgress.setVisibility(View.GONE);
+                                Log.e(TAG, "[ImagePreview] loadGlideDirectly() onLoadFailed for: " + sourceUrl);
+                            }
+                        });
             }
         }
+    }
+
+    private static String stripQiniuParams(String url) {
+        if (url == null) return "";
+        int qIdx = url.indexOf('?');
+        if (qIdx != -1) {
+            String lower = url.toLowerCase(Locale.getDefault());
+            if (lower.contains("imageview2") || lower.contains("imagemogr2") || lower.contains(".tmp") || lower.contains(".gif")) {
+                return url.substring(0, qIdx);
+            }
+        }
+        return url;
     }
 
     private String normalizeUrl(String url) {
         if (url == null) return "";
         String trimmed = url.trim();
-        if (Build.VERSION.SDK_INT < 21 || trimmed.contains(".jwznb.com")) {
-            if (trimmed.startsWith("https://")) {
-                return "http://" + trimmed.substring(8);
+        if (trimmed.isEmpty()) return "";
+
+        // 本地绝对路径或 file:// / content://
+        if (trimmed.startsWith("/") || trimmed.startsWith("file://") || trimmed.startsWith("content://")) {
+            return trimmed;
+        }
+
+        // 补全前缀
+        if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+            if (trimmed.startsWith("/")) {
+                trimmed = "https://chat-img.jwznb.com" + trimmed;
+            } else {
+                trimmed = "https://chat-img.jwznb.com/" + trimmed;
             }
+        }
+
+        // Android 4.x SSL 兼容
+        if (Build.VERSION.SDK_INT < 21 && trimmed.startsWith("https://")) {
+            trimmed = "http://" + trimmed.substring(8);
         }
         return trimmed;
     }
 
     private void stopGifIfRunning(TouchImageView iv) {
-        Drawable d = iv.getDrawable();
-        if (d instanceof GifDrawable) ((GifDrawable) d).stop();
+        if (iv != null) {
+            Drawable d = iv.getDrawable();
+            if (d instanceof Animatable) {
+                try {
+                    ((Animatable) d).stop();
+                } catch (Exception ignored) {}
+            }
+            iv.setImageDrawable(null);
+        }
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -664,9 +836,9 @@ public class ImagePreviewActivity extends AppCompatActivity {
     private void showPopupMenu(View anchorView) {
         PopupMenu popup = new PopupMenu(this, anchorView);
         Menu menu = popup.getMenu();
-        menu.add(0, 1, 0, "保存");
-        menu.add(0, 2, 1, "分享");
-        menu.add(0, 3, 2, "详情");
+        menu.add(0, 1, 0, R.string.action_save);
+        menu.add(0, 2, 1, R.string.action_share);
+        menu.add(0, 3, 2, R.string.action_details);
 
         popup.setOnMenuItemClickListener(item -> {
             int id = item.getItemId();
@@ -713,12 +885,12 @@ public class ImagePreviewActivity extends AppCompatActivity {
     }
 
     private void performSaveInBackground(boolean isScopedStorage) {
-        Toast.makeText(this, "正在保存图片...", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, R.string.image_saving, Toast.LENGTH_SHORT).show();
         final String url = currentImageUrl();
         new Thread(() -> {
             boolean success = isScopedStorage ? saveImageScopedStorage(url) : saveImageLegacy(url);
             runOnUiThread(() -> {
-                if (success) Toast.makeText(this, "已保存至相册", Toast.LENGTH_SHORT).show();
+                if (success) Toast.makeText(this, R.string.image_saved_to_album, Toast.LENGTH_SHORT).show();
                 else Toast.makeText(this, R.string.image_preview_save_failed, Toast.LENGTH_SHORT).show();
             });
         }).start();
@@ -791,7 +963,7 @@ public class ImagePreviewActivity extends AppCompatActivity {
     private void shareImage() {
         final String url = currentImageUrl();
         if (url.isEmpty()) return;
-        Toast.makeText(this, "正在准备分享...", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, R.string.image_preparing_share, Toast.LENGTH_SHORT).show();
         new Thread(() -> {
             try {
                 File cacheDir = new File(getCacheDir(), "shared_images");
@@ -812,12 +984,12 @@ public class ImagePreviewActivity extends AppCompatActivity {
                     shareIntent.putExtra(Intent.EXTRA_STREAM, contentUri);
                     shareIntent.putExtra(Intent.EXTRA_TEXT, url);
                     shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                    runOnUiThread(() -> startActivity(Intent.createChooser(shareIntent, "分享图片")));
+                    runOnUiThread(() -> startActivity(Intent.createChooser(shareIntent, getString(R.string.action_share_image))));
                 } else {
-                    runOnUiThread(() -> Toast.makeText(this, "分享失败", Toast.LENGTH_SHORT).show());
+                    runOnUiThread(() -> Toast.makeText(this, R.string.image_share_failed, Toast.LENGTH_SHORT).show());
                 }
             } catch (Exception e) {
-                runOnUiThread(() -> Toast.makeText(this, "分享失败: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                runOnUiThread(() -> Toast.makeText(this, getString(R.string.chat_send_failed_format, e.getMessage()), Toast.LENGTH_SHORT).show());
             }
         }).start();
     }
@@ -831,19 +1003,19 @@ public class ImagePreviewActivity extends AppCompatActivity {
         String ext = getExtensionFromUrl(url).toUpperCase(Locale.getDefault());
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("图片详情");
-        String initialMsg = "图片链接：\n" + url + "\n\n图片格式：" + ext + "\n文件大小：正在计算...";
+        builder.setTitle(R.string.image_details_title);
+        String initialMsg = getString(R.string.image_details_format, url, ext, getString(R.string.image_details_calculating));
         builder.setMessage(initialMsg);
-        builder.setPositiveButton("确定", null);
+        builder.setPositiveButton(R.string.action_ok, null);
         AlertDialog dialog = builder.create();
         dialog.show();
 
         new Thread(() -> {
             long size = getRemoteFileSize(url);
-            String sizeStr = size > 0 ? Formatter.formatFileSize(this, size) : "未知";
+            String sizeStr = size > 0 ? Formatter.formatFileSize(this, size) : getString(R.string.unknown);
             runOnUiThread(() -> {
                 if (dialog.isShowing()) {
-                    String updatedMsg = "图片链接：\n" + url + "\n\n图片格式：" + ext + "\n文件大小：" + sizeStr;
+                    String updatedMsg = getString(R.string.image_details_format, url, ext, sizeStr);
                     dialog.setMessage(updatedMsg);
                 }
             });
@@ -872,9 +1044,22 @@ public class ImagePreviewActivity extends AppCompatActivity {
 
     private boolean downloadToStream(String url, OutputStream os) {
         try {
-            Request.Builder b = new Request.Builder().url(url);
-            if (url.contains(".jwznb.com")) b.header("Referer", "http://myapp.jwznb.com");
+            String fullUrl = normalizeUrl(url);
+            String cleanUrl = stripQiniuParams(fullUrl);
+            Request.Builder b = new Request.Builder().url(cleanUrl);
+            if (cleanUrl.contains(".jwznb.com")) {
+                b.header("Referer", "https://myapp.jwznb.com");
+                b.header("User-Agent", "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36");
+            }
             Response r = ApiClient.getClient().newCall(b.build()).execute();
+            if ((!r.isSuccessful() || r.body() == null) && !cleanUrl.equals(fullUrl)) {
+                b = new Request.Builder().url(fullUrl);
+                if (fullUrl.contains(".jwznb.com")) {
+                    b.header("Referer", "https://myapp.jwznb.com");
+                    b.header("User-Agent", "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36");
+                }
+                r = ApiClient.getClient().newCall(b.build()).execute();
+            }
             if (!r.isSuccessful() || r.body() == null) return false;
             try (InputStream is = r.body().byteStream()) {
                 byte[] buf = new byte[8192];
@@ -893,12 +1078,16 @@ public class ImagePreviewActivity extends AppCompatActivity {
 
     private static String getExtensionFromUrl(String url) {
         if (url == null) return "jpg";
-        String lower = url.toLowerCase(Locale.getDefault());
+        String clean = stripQiniuParams(url);
+        String lower = clean.toLowerCase(Locale.getDefault());
         if (lower.contains(".gif")) return "gif";
+        if (lower.contains(".png")) return "png";
+        if (lower.contains(".jpg") || lower.contains(".jpeg")) return "jpg";
         if (lower.contains(".webp")) return "webp";
         if (lower.contains(".avif")) return "avif";
-        if (lower.contains(".png")) return "png";
         if (lower.contains(".bmp")) return "bmp";
+        if (lower.contains(".tmp") || lower.contains("/expression/")) return "gif";
+        if (lower.contains("/sticker/")) return "png";
         return "jpg";
     }
 

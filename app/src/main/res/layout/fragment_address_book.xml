@@ -43,7 +43,7 @@
                 android:id="@+id/tvFilterTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="默认排序"
+                android:text="@string/address_book_sort_default"
                 android:textColor="@android:color/white"
                 android:textSize="13sp" />
 

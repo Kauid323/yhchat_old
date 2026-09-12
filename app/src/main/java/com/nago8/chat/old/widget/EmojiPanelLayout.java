@@ -7,13 +7,16 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.text.TextUtils;
 import android.util.AttributeSet;
+import android.util.SparseArray;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
+import android.view.VelocityTracker;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.animation.DecelerateInterpolator;
-import android.widget.GridView;
+import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -22,21 +25,26 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager.widget.PagerAdapter;
 import androidx.viewpager.widget.ViewPager;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.nago8.chat.old.R;
+import com.nago8.chat.old.StickerPackDetailActivity;
 import com.nago8.chat.old.StickerPackManagerActivity;
 import com.nago8.chat.old.adapter.EmojiGridAdapter;
 import com.nago8.chat.old.adapter.ExpressionGridAdapter;
 import com.nago8.chat.old.adapter.StickerGridAdapter;
+import com.nago8.chat.old.cache.StickerMemoryCache;
 import com.nago8.chat.old.model.EmojiData;
 import com.nago8.chat.old.model.Expression;
 import com.nago8.chat.old.model.StickerItem;
 import com.nago8.chat.old.model.StickerPack;
 import com.nago8.chat.old.repository.ExpressionRepository;
 import com.nago8.chat.old.repository.StickerRepository;
+import com.nago8.chat.old.utils.FengEmojiRenderer;
 import com.nago8.chat.old.utils.ImageUtils;
 import com.nago8.chat.old.utils.PrefUtils;
 import com.nago8.chat.old.utils.ThemeUtils;
@@ -63,6 +71,7 @@ public class EmojiPanelLayout extends LinearLayout {
     }
 
     private ViewPager viewPagerEmoji;
+    private HorizontalScrollView scrollTabs;
     private LinearLayout layoutTabsContainer;
     private View btnBackspace;
     private View btnManageStickers;
@@ -70,10 +79,18 @@ public class EmojiPanelLayout extends LinearLayout {
 
     private int minHeightPx;
     private ValueAnimator heightAnimator;
+    private int touchSlop;
+    private VelocityTracker velocityTracker;
+    private float lastTouchRawY;
+    private float touchDownRawX;
+    private float touchDownRawY;
+    private long touchDownTime;
+    private boolean isPanelDragging = false;
+    private boolean isDraggingFromHandle = false;
 
     private final List<Expression> favoriteExpressions = new ArrayList<>();
     private final List<StickerPack> stickerPacks = new ArrayList<>();
-    private final List<View> pageViews = new ArrayList<>();
+    private final SparseArray<View> cachedPageViews = new SparseArray<>();
     private final List<View> tabViews = new ArrayList<>();
 
     private OnEmojiSelectedListener emojiSelectedListener;
@@ -104,65 +121,21 @@ public class EmojiPanelLayout extends LinearLayout {
         LayoutInflater.from(context).inflate(R.layout.layout_emoji_panel, this, true);
 
         viewPagerEmoji = findViewById(R.id.viewPagerEmoji);
+        scrollTabs = findViewById(R.id.scrollTabs);
         layoutTabsContainer = findViewById(R.id.layoutTabsContainer);
         btnBackspace = findViewById(R.id.btnBackspace);
         btnManageStickers = findViewById(R.id.btnManageStickers);
         layoutDragHandle = findViewById(R.id.layoutDragHandle);
 
-        minHeightPx = dp(320);
+        touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
+        minHeightPx = dp(280);
+
+        if (viewPagerEmoji != null) {
+            viewPagerEmoji.setOffscreenPageLimit(1);
+        }
 
         if (layoutDragHandle != null) {
-            layoutDragHandle.setOnTouchListener(new OnTouchListener() {
-                private float startY;
-                private int startHeight;
-                private boolean isDragging = false;
-                private long touchDownTime;
-
-                @Override
-                public boolean onTouch(View v, MotionEvent event) {
-                    int maxH = getMaxHeightPx();
-                    switch (event.getActionMasked()) {
-                        case MotionEvent.ACTION_DOWN:
-                            startY = event.getRawY();
-                            startHeight = getHeight();
-                            touchDownTime = System.currentTimeMillis();
-                            isDragging = false;
-                            if (heightAnimator != null && heightAnimator.isRunning()) {
-                                heightAnimator.cancel();
-                            }
-                            return true;
-
-                        case MotionEvent.ACTION_MOVE:
-                            float rawY = event.getRawY();
-                            float deltaFromStart = rawY - startY;
-                            if (!isDragging && Math.abs(deltaFromStart) > dp(4)) {
-                                isDragging = true;
-                            }
-                            if (isDragging) {
-                                int newH = (int) Math.max(minHeightPx, Math.min(maxH, startHeight - deltaFromStart));
-                                setPanelHeight(newH);
-                                return true;
-                            }
-                            break;
-
-                        case MotionEvent.ACTION_UP:
-                            long duration = System.currentTimeMillis() - touchDownTime;
-                            float totalMoved = Math.abs(event.getRawY() - startY);
-                            if (!isDragging || (totalMoved < dp(6) && duration < 300)) {
-                                toggleExpand();
-                            } else {
-                                checkEdgeSnap();
-                            }
-                            isDragging = false;
-                            return true;
-
-                        case MotionEvent.ACTION_CANCEL:
-                            isDragging = false;
-                            break;
-                    }
-                    return false;
-                }
-            });
+            layoutDragHandle.setOnClickListener(v -> toggleExpand());
         }
 
         if (btnBackspace != null) {
@@ -197,9 +170,227 @@ public class EmojiPanelLayout extends LinearLayout {
             public void onPageScrollStateChanged(int state) {}
         });
 
-        // 默认初始化 Emoji 页面
-        reloadTabs();
+        // 优先从内存会话缓存加载
+        if (StickerMemoryCache.isInitialized()) {
+            favoriteExpressions.clear();
+            favoriteExpressions.addAll(StickerMemoryCache.getFavoriteExpressions());
+            stickerPacks.clear();
+            stickerPacks.addAll(StickerMemoryCache.getStickerPacks());
+            reloadTabs();
+        } else {
+            reloadTabs();
+            reloadStickers(false);
+        }
     }
+
+    private void acquireVelocityTracker() {
+        if (velocityTracker == null) {
+            velocityTracker = VelocityTracker.obtain();
+        }
+    }
+
+    private void recycleVelocityTracker() {
+        if (velocityTracker != null) {
+            velocityTracker.recycle();
+            velocityTracker = null;
+        }
+    }
+
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent ev) {
+        int action = ev.getActionMasked();
+        switch (action) {
+            case MotionEvent.ACTION_DOWN:
+                touchDownRawX = ev.getRawX();
+                touchDownRawY = ev.getRawY();
+                lastTouchRawY = ev.getRawY();
+                touchDownTime = System.currentTimeMillis();
+                isPanelDragging = false;
+
+                int handleH = (layoutDragHandle != null && layoutDragHandle.getHeight() > 0)
+                        ? layoutDragHandle.getHeight() : dp(30);
+                isDraggingFromHandle = (ev.getY() <= handleH);
+
+                if (heightAnimator != null && heightAnimator.isRunning()) {
+                    heightAnimator.cancel();
+                }
+                acquireVelocityTracker();
+                velocityTracker.addMovement(ev);
+                break;
+
+            case MotionEvent.ACTION_MOVE:
+                acquireVelocityTracker();
+                velocityTracker.addMovement(ev);
+
+                if (isPanelDragging) {
+                    return true;
+                }
+
+                float dx = ev.getRawX() - touchDownRawX;
+                float dy = ev.getRawY() - touchDownRawY;
+
+                // 水平滑动切换 Tab 时不拦截
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    return false;
+                }
+
+                if (Math.abs(dy) > touchSlop) {
+                    int curH = getHeight();
+                    int maxH = getMaxHeightPx();
+                    int minH = minHeightPx;
+
+                    // 1. 如果手指在顶部拖拽条上滑动，直接拦截接管拖拽
+                    if (isDraggingFromHandle) {
+                        isPanelDragging = true;
+                        lastTouchRawY = ev.getRawY();
+                        return true;
+                    }
+
+                    // 2. 面板未完全展开时，向上滑动（dy < 0）直接拦截并向上拉伸展开面板
+                    if (dy < 0 && curH < maxH) {
+                        isPanelDragging = true;
+                        lastTouchRawY = ev.getRawY();
+                        return true;
+                    }
+
+                    // 3. 向下滑动（dy > 0）：若当前面板高于 minH 且内部列表已处于最顶部，拦截并开始收缩面板
+                    if (dy > 0 && curH > minH) {
+                        RecyclerView rv = getCurrentPageRecyclerView();
+                        if (rv == null || !rv.canScrollVertically(-1)) {
+                            isPanelDragging = true;
+                            lastTouchRawY = ev.getRawY();
+                            return true;
+                        }
+                    }
+                }
+                break;
+
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                isPanelDragging = false;
+                isDraggingFromHandle = false;
+                recycleVelocityTracker();
+                break;
+        }
+        return isPanelDragging;
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent ev) {
+        acquireVelocityTracker();
+        velocityTracker.addMovement(ev);
+
+        int action = ev.getActionMasked();
+        switch (action) {
+            case MotionEvent.ACTION_DOWN:
+                touchDownRawX = ev.getRawX();
+                touchDownRawY = ev.getRawY();
+                lastTouchRawY = ev.getRawY();
+                touchDownTime = System.currentTimeMillis();
+                isPanelDragging = false;
+                int handleH = (layoutDragHandle != null && layoutDragHandle.getHeight() > 0)
+                        ? layoutDragHandle.getHeight() : dp(30);
+                isDraggingFromHandle = (ev.getY() <= handleH);
+
+                if (heightAnimator != null && heightAnimator.isRunning()) {
+                    heightAnimator.cancel();
+                }
+                return true;
+
+            case MotionEvent.ACTION_MOVE:
+                float rawY = ev.getRawY();
+                float frameDy = rawY - lastTouchRawY;
+                lastTouchRawY = rawY;
+
+                if (!isPanelDragging) {
+                    float totalDy = rawY - touchDownRawY;
+                    if (Math.abs(totalDy) > touchSlop) {
+                        isPanelDragging = true;
+                    }
+                }
+
+                if (isPanelDragging) {
+                    int curH = getHeight();
+                    int maxH = getMaxHeightPx();
+                    int minH = minHeightPx;
+
+                    // 帧增量平滑物理位移：手指向上 (frameDy < 0) 高度增加；手指向下 (frameDy > 0) 高度减小
+                    int targetH = curH - (int) frameDy;
+                    int clampedH = Math.max(minH, Math.min(maxH, targetH));
+                    if (clampedH != curH) {
+                        setPanelHeight(clampedH);
+                    }
+                    return true;
+                }
+                break;
+
+            case MotionEvent.ACTION_UP:
+                acquireVelocityTracker();
+                velocityTracker.computeCurrentVelocity(1000);
+                float vy = velocityTracker.getYVelocity();
+
+                long duration = System.currentTimeMillis() - touchDownTime;
+                float totalMoved = (float) Math.hypot(ev.getRawX() - touchDownRawX, ev.getRawY() - touchDownRawY);
+
+                if (isDraggingFromHandle && totalMoved < touchSlop && duration < 300) {
+                    toggleExpand();
+                } else if (isPanelDragging) {
+                    int curH = getHeight();
+                    int maxH = getMaxHeightPx();
+                    int minH = minHeightPx;
+
+                    if (vy < -1500) {
+                        // 快速向上猛甩：平滑展开至最大高度
+                        animateToHeight(maxH);
+                    } else if (vy > 1500) {
+                        // 快速向下猛甩：平滑收缩至默认高度
+                        animateToHeight(minH);
+                    } else {
+                        // 随心所欲自由悬停：松手直接停留在当前任意高度，超出安全边界才回弹
+                        if (curH < minH) {
+                            animateToHeight(minH);
+                        } else if (curH > maxH) {
+                            animateToHeight(maxH);
+                        }
+                    }
+                }
+                isPanelDragging = false;
+                isDraggingFromHandle = false;
+                recycleVelocityTracker();
+                return true;
+
+            case MotionEvent.ACTION_CANCEL:
+                if (isPanelDragging) {
+                    int curH = getHeight();
+                    int maxH = getMaxHeightPx();
+                    int minH = minHeightPx;
+                    if (curH < minH) {
+                        animateToHeight(minH);
+                    } else if (curH > maxH) {
+                        animateToHeight(maxH);
+                    }
+                }
+                isPanelDragging = false;
+                isDraggingFromHandle = false;
+                recycleVelocityTracker();
+                return true;
+        }
+        return super.onTouchEvent(ev);
+    }
+
+    private RecyclerView getCurrentPageRecyclerView() {
+        if (viewPagerEmoji == null) return null;
+        int currentItem = viewPagerEmoji.getCurrentItem();
+        View page = cachedPageViews.get(currentItem);
+        if (page instanceof RecyclerView) {
+            return (RecyclerView) page;
+        } else if (page instanceof ViewGroup) {
+            return findRecyclerView((ViewGroup) page);
+        }
+        return null;
+    }
+
+    // ======================================================================================
 
     /**
      * 计算面板可拉伸的最大高度（恰好使聊天输入框触碰顶栏底部）
@@ -236,12 +427,29 @@ public class EmojiPanelLayout extends LinearLayout {
         return minHeightPx;
     }
 
-    /**
-     * 重新加载表情包及个人表情收藏数据
-     */
+    public void setMinHeightPx(int minHeightPx) {
+        this.minHeightPx = minHeightPx;
+    }
+
     public void reloadStickers() {
+        reloadStickers(false);
+    }
+
+    /**
+     * 加载表情包及个人表情收藏数据（带会话内存缓存与冷启动网络同步）
+     */
+    public void reloadStickers(boolean forceRefresh) {
         String token = PrefUtils.getToken(getContext());
         if (TextUtils.isEmpty(token)) {
+            reloadTabs();
+            return;
+        }
+
+        if (!forceRefresh && StickerMemoryCache.isInitialized()) {
+            favoriteExpressions.clear();
+            favoriteExpressions.addAll(StickerMemoryCache.getFavoriteExpressions());
+            stickerPacks.clear();
+            stickerPacks.addAll(StickerMemoryCache.getStickerPacks());
             reloadTabs();
             return;
         }
@@ -255,6 +463,7 @@ public class EmojiPanelLayout extends LinearLayout {
                     if (expressions != null) {
                         favoriteExpressions.addAll(expressions);
                     }
+                    StickerMemoryCache.setFavoriteExpressions(favoriteExpressions);
                     reloadTabs();
                 });
             }
@@ -272,6 +481,7 @@ public class EmojiPanelLayout extends LinearLayout {
                     if (packs != null) {
                         stickerPacks.addAll(packs);
                     }
+                    StickerMemoryCache.setStickerPacks(stickerPacks);
                     reloadTabs();
                 });
             }
@@ -283,33 +493,28 @@ public class EmojiPanelLayout extends LinearLayout {
 
     private void reloadTabs() {
         int previousPage = viewPagerEmoji.getCurrentItem();
-        pageViews.clear();
+        cachedPageViews.clear();
         tabViews.clear();
         layoutTabsContainer.removeAllViews();
 
         Context ctx = getContext();
 
-        // 1. Page 0: 默认 Emoji + Twemoji 页面
-        View emojiPageView = createEmojiPageView(ctx);
-        pageViews.add(emojiPageView);
+        // 1. Tab 0: 默认 Emoji + Twemoji 页面
         addTextTab(ctx, "😀", 0);
 
-        // 2. Page 1: 我的表情收藏页面
-        View favPageView = createFavoriteExpressionsPageView(ctx);
-        pageViews.add(favPageView);
+        // 2. Tab 1: 我的表情收藏页面
         addTextTab(ctx, "❤️", 1);
 
-        // 3. Page 2..N: 各个表情包页面
+        // 3. Tab 2..N: 各个表情包页面
         for (int i = 0; i < stickerPacks.size(); i++) {
             final int pageIndex = i + 2;
             StickerPack pack = stickerPacks.get(i);
-            View packPageView = createStickerPackPageView(ctx, pack);
-            pageViews.add(packPageView);
             addStickerPackTab(ctx, pack, pageIndex);
         }
 
-        viewPagerEmoji.setAdapter(new EmojiPagerAdapter(pageViews));
-        int safePage = Math.min(previousPage, pageViews.size() - 1);
+        viewPagerEmoji.setAdapter(new EmojiPagerAdapter());
+        int totalPages = 2 + stickerPacks.size();
+        int safePage = Math.min(previousPage, totalPages - 1);
         viewPagerEmoji.setCurrentItem(Math.max(0, safePage), false);
         updateSelectedTab(viewPagerEmoji.getCurrentItem());
     }
@@ -342,15 +547,16 @@ public class EmojiPanelLayout extends LinearLayout {
         subTabRow.addView(tvTwemoji);
         layout.addView(subTabRow);
 
-        GridView gridView = new GridView(ctx);
-        gridView.setNumColumns(7);
-        gridView.setGravity(Gravity.CENTER);
-        gridView.setVerticalSpacing(dp(6));
-        gridView.setHorizontalSpacing(dp(4));
-        gridView.setPadding(dp(8), dp(4), dp(8), dp(8));
-        gridView.setClipToPadding(false);
-        gridView.setScrollbarFadingEnabled(true);
-        gridView.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        RecyclerView recyclerView = new RecyclerView(ctx);
+        recyclerView.setLayoutManager(new GridLayoutManager(ctx, 7));
+        recyclerView.setHasFixedSize(true);
+        recyclerView.setItemAnimator(null);
+        recyclerView.setNestedScrollingEnabled(true);
+        recyclerView.setItemViewCacheSize(35);
+        recyclerView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        recyclerView.setPadding(dp(8), dp(4), dp(8), dp(8));
+        recyclerView.setClipToPadding(false);
+        recyclerView.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
         final EmojiGridAdapter unicodeAdapter = new EmojiGridAdapter(ctx, EmojiData.UNICODE_EMOJIS, false, emojiText -> {
             if (emojiSelectedListener != null) {
@@ -365,29 +571,28 @@ public class EmojiPanelLayout extends LinearLayout {
             }
         });
 
-        gridView.setAdapter(unicodeAdapter);
-        attachScrollExpansionToGrid(gridView);
+        recyclerView.setAdapter(unicodeAdapter);
 
         tvUnicode.setOnClickListener(v -> {
             tvUnicode.setTextColor(ThemeUtils.getThemeColor(ctx));
             tvTwemoji.setTextColor(ContextCompat.getColor(ctx, R.color.text_secondary));
-            gridView.setAdapter(unicodeAdapter);
+            recyclerView.setAdapter(unicodeAdapter);
         });
 
         tvTwemoji.setOnClickListener(v -> {
             tvTwemoji.setTextColor(ThemeUtils.getThemeColor(ctx));
             tvUnicode.setTextColor(ContextCompat.getColor(ctx, R.color.text_secondary));
-            gridView.setAdapter(twemojiAdapter);
+            recyclerView.setAdapter(twemojiAdapter);
         });
 
-        layout.addView(gridView);
+        layout.addView(recyclerView);
         return layout;
     }
 
     private View createFavoriteExpressionsPageView(Context ctx) {
         if (favoriteExpressions.isEmpty()) {
             TextView tvEmpty = new TextView(ctx);
-            tvEmpty.setText("暂无收藏的表情\n长按聊天中的图片添加到表情收藏");
+            tvEmpty.setText(R.string.emoji_favorite_empty_tip);
             tvEmpty.setGravity(Gravity.CENTER);
             tvEmpty.setLineSpacing(dp(4), 1f);
             tvEmpty.setTextColor(ContextCompat.getColor(ctx, R.color.text_secondary));
@@ -395,13 +600,16 @@ public class EmojiPanelLayout extends LinearLayout {
             return tvEmpty;
         }
 
-        GridView gridView = new GridView(ctx);
-        gridView.setNumColumns(4);
-        gridView.setGravity(Gravity.CENTER);
-        gridView.setVerticalSpacing(dp(8));
-        gridView.setHorizontalSpacing(dp(8));
-        gridView.setPadding(dp(12), dp(10), dp(12), dp(10));
-        gridView.setClipToPadding(false);
+        RecyclerView recyclerView = new RecyclerView(ctx);
+        recyclerView.setLayoutManager(new GridLayoutManager(ctx, 4));
+        recyclerView.setHasFixedSize(true);
+        recyclerView.setItemAnimator(null);
+        recyclerView.setNestedScrollingEnabled(true);
+        recyclerView.setItemViewCacheSize(30);
+        recyclerView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        recyclerView.setPadding(dp(12), dp(10), dp(12), dp(10));
+        recyclerView.setClipToPadding(false);
+        recyclerView.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         ExpressionGridAdapter adapter = new ExpressionGridAdapter(ctx, favoriteExpressions, new ExpressionGridAdapter.OnExpressionClickListener() {
             @Override
@@ -418,15 +626,14 @@ public class EmojiPanelLayout extends LinearLayout {
             }
         });
 
-        gridView.setAdapter(adapter);
-        attachScrollExpansionToGrid(gridView);
-        return gridView;
+        recyclerView.setAdapter(adapter);
+        return recyclerView;
     }
 
     private void showExpressionActionDialog(Context ctx, Expression expression) {
-        String[] options = {"置顶表情", "删除表情"};
+        String[] options = {ctx.getString(R.string.emoji_action_top), ctx.getString(R.string.emoji_action_delete)};
         new MaterialAlertDialogBuilder(ctx)
-                .setTitle("表情操作")
+                .setTitle(R.string.emoji_action_title)
                 .setItems(options, (dialog, which) -> {
                     String token = PrefUtils.getToken(ctx);
                     if (TextUtils.isEmpty(token)) return;
@@ -436,8 +643,8 @@ public class EmojiPanelLayout extends LinearLayout {
                             @Override
                             public void onSuccess() {
                                 post(() -> {
-                                    Toast.makeText(ctx, "已置顶", Toast.LENGTH_SHORT).show();
-                                    reloadStickers();
+                                    Toast.makeText(ctx, R.string.emoji_topped, Toast.LENGTH_SHORT).show();
+                                    reloadStickers(true);
                                 });
                             }
 
@@ -451,8 +658,8 @@ public class EmojiPanelLayout extends LinearLayout {
                             @Override
                             public void onSuccess() {
                                 post(() -> {
-                                    Toast.makeText(ctx, "已删除", Toast.LENGTH_SHORT).show();
-                                    reloadStickers();
+                                    Toast.makeText(ctx, R.string.emoji_deleted, Toast.LENGTH_SHORT).show();
+                                    reloadStickers(true);
                                 });
                             }
 
@@ -467,15 +674,65 @@ public class EmojiPanelLayout extends LinearLayout {
     }
 
     private View createStickerPackPageView(Context ctx, StickerPack pack) {
-        GridView gridView = new GridView(ctx);
-        gridView.setNumColumns(4);
-        gridView.setGravity(Gravity.CENTER);
-        gridView.setVerticalSpacing(dp(8));
-        gridView.setHorizontalSpacing(dp(8));
-        gridView.setPadding(dp(12), dp(10), dp(12), dp(10));
-        gridView.setClipToPadding(false);
+        LinearLayout container = new LinearLayout(ctx);
+        container.setOrientation(VERTICAL);
+        container.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        List<StickerItem> items = pack.stickerItems != null ? pack.stickerItems : new ArrayList<>();
+        // 顶部小巧 Header Row：左边表情包名称，右边箭头，点击直接进入表情包详情页
+        LinearLayout headerRow = new LinearLayout(ctx);
+        headerRow.setOrientation(HORIZONTAL);
+        headerRow.setGravity(Gravity.CENTER_VERTICAL);
+        headerRow.setPadding(dp(14), dp(5), dp(14), dp(3));
+        headerRow.setBackgroundResource(R.drawable.bg_item_ripple);
+        headerRow.setClickable(true);
+        headerRow.setFocusable(true);
+
+        TextView tvPackName = new TextView(ctx);
+        tvPackName.setText(pack != null && !TextUtils.isEmpty(pack.name) ? pack.name : "");
+        tvPackName.setTextSize(12);
+        tvPackName.setTextColor(ContextCompat.getColor(ctx, R.color.text_secondary));
+        tvPackName.setMaxLines(1);
+        tvPackName.setEllipsize(TextUtils.TruncateAt.END);
+        tvPackName.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        ImageView ivArrow = new ImageView(ctx);
+        ivArrow.setImageResource(R.drawable.ic_chevron_right);
+        int arrowSize = dp(14);
+        LinearLayout.LayoutParams arrowLp = new LinearLayout.LayoutParams(arrowSize, arrowSize);
+        arrowLp.setMarginStart(dp(4));
+        ivArrow.setLayoutParams(arrowLp);
+        ivArrow.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        ivArrow.setColorFilter(ContextCompat.getColor(ctx, R.color.text_secondary));
+
+        headerRow.addView(tvPackName);
+        headerRow.addView(ivArrow);
+
+        if (pack != null) {
+            headerRow.setOnClickListener(v -> {
+                Intent intent = new Intent(ctx, StickerPackDetailActivity.class);
+                intent.putExtra(StickerPackDetailActivity.EXTRA_PACK_ID, pack.id);
+                ctx.startActivity(intent);
+            });
+        }
+
+        container.addView(headerRow);
+
+        RecyclerView recyclerView = new RecyclerView(ctx);
+        recyclerView.setLayoutManager(new GridLayoutManager(ctx, 4));
+        recyclerView.setHasFixedSize(true);
+        recyclerView.setItemAnimator(null);
+        recyclerView.setNestedScrollingEnabled(true);
+        recyclerView.setItemViewCacheSize(30);
+        recyclerView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        recyclerView.setPadding(dp(12), dp(4), dp(12), dp(10));
+        recyclerView.setClipToPadding(false);
+        recyclerView.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        List<StickerItem> cachedItems = (pack != null) ? StickerMemoryCache.getPackItems(pack.id) : null;
+        if (cachedItems != null && !cachedItems.isEmpty()) {
+            pack.stickerItems = cachedItems;
+        }
+        List<StickerItem> items = (pack != null && pack.stickerItems != null) ? pack.stickerItems : new ArrayList<>();
         StickerGridAdapter adapter = new StickerGridAdapter(ctx, items, new StickerGridAdapter.OnStickerClickListener() {
             @Override
             public void onStickerClick(StickerItem item) {
@@ -488,10 +745,9 @@ public class EmojiPanelLayout extends LinearLayout {
             public void onStickerLongClick(StickerItem item) {}
         });
 
-        gridView.setAdapter(adapter);
-        attachScrollExpansionToGrid(gridView);
+        recyclerView.setAdapter(adapter);
 
-        if (items.isEmpty()) {
+        if (pack != null && items.isEmpty()) {
             String token = PrefUtils.getToken(ctx);
             if (!TextUtils.isEmpty(token)) {
                 stickerRepository.getStickerPackDetail(token, pack.id, new StickerRepository.StickerPackDetailCallback() {
@@ -503,7 +759,13 @@ public class EmojiPanelLayout extends LinearLayout {
                             }
                             pack.stickerItems.clear();
                             pack.stickerItems.addAll(detailPack.stickerItems);
-                            post(() -> adapter.setItems(pack.stickerItems));
+                            StickerMemoryCache.putPackItems(pack.id, pack.stickerItems);
+                            post(() -> {
+                                if (tvPackName != null && !TextUtils.isEmpty(detailPack.name)) {
+                                    tvPackName.setText(detailPack.name);
+                                }
+                                adapter.setItems(pack.stickerItems);
+                            });
                         }
                     }
 
@@ -513,66 +775,36 @@ public class EmojiPanelLayout extends LinearLayout {
             }
         }
 
-        return gridView;
+        container.addView(recyclerView);
+        return container;
     }
 
-    private void attachScrollExpansionToGrid(GridView gridView) {
-        if (gridView == null) return;
-        gridView.setOnTouchListener(new OnTouchListener() {
-            private float startY;
-            private float lastY;
-            private boolean isDraggingPanel = false;
-
-            @Override
-            public boolean onTouch(View v, MotionEvent event) {
-                int maxH = getMaxHeightPx();
-                switch (event.getActionMasked()) {
-                    case MotionEvent.ACTION_DOWN:
-                        startY = event.getRawY();
-                        lastY = startY;
-                        isDraggingPanel = false;
-                        if (heightAnimator != null && heightAnimator.isRunning()) {
-                            heightAnimator.cancel();
-                        }
-                        break;
-                    case MotionEvent.ACTION_MOVE:
-                        float rawY = event.getRawY();
-                        float deltaY = rawY - lastY;
-                        lastY = rawY;
-
-                        boolean isAtTop = isGridAtTop(gridView);
-                        int curH = getHeight();
-
-                        // 只有在顶部向下拉或者在未完全展开时向上推，才联动调整面板高度
-                        if (deltaY < 0 && curH < maxH && isAtTop) {
-                            int newH = (int) Math.min(maxH, curH - deltaY);
-                            setPanelHeight(newH);
-                            isDraggingPanel = true;
-                            return true;
-                        } else if (deltaY > 0 && isAtTop && curH > minHeightPx) {
-                            int newH = (int) Math.max(minHeightPx, curH - deltaY);
-                            setPanelHeight(newH);
-                            isDraggingPanel = true;
-                            return true;
-                        }
-                        break;
-                    case MotionEvent.ACTION_UP:
-                    case MotionEvent.ACTION_CANCEL:
-                        if (isDraggingPanel) {
-                            isDraggingPanel = false;
-                            checkEdgeSnap();
-                            return true;
-                        }
-                        break;
+    public void smoothScrollCurrentPageToTop() {
+        int cur = viewPagerEmoji.getCurrentItem();
+        View page = cachedPageViews.get(cur);
+        if (page != null) {
+            if (page instanceof RecyclerView) {
+                ((RecyclerView) page).smoothScrollToPosition(0);
+            } else if (page instanceof ViewGroup) {
+                RecyclerView rv = findRecyclerView((ViewGroup) page);
+                if (rv != null) {
+                    rv.smoothScrollToPosition(0);
                 }
-                return false;
             }
-        });
+        }
     }
 
-    private boolean isGridAtTop(GridView gridView) {
-        if (gridView == null || gridView.getChildCount() == 0) return true;
-        return gridView.getFirstVisiblePosition() == 0 && gridView.getChildAt(0).getTop() >= gridView.getPaddingTop();
+    private RecyclerView findRecyclerView(ViewGroup group) {
+        for (int i = 0; i < group.getChildCount(); i++) {
+            View child = group.getChildAt(i);
+            if (child instanceof RecyclerView) {
+                return (RecyclerView) child;
+            } else if (child instanceof ViewGroup) {
+                RecyclerView r = findRecyclerView((ViewGroup) child);
+                if (r != null) return r;
+            }
+        }
+        return null;
     }
 
     public void toggleExpand() {
@@ -582,17 +814,6 @@ public class EmojiPanelLayout extends LinearLayout {
         animateToHeight(curH >= mid ? minHeightPx : maxH);
     }
 
-    private void checkEdgeSnap() {
-        int maxH = getMaxHeightPx();
-        int curH = getHeight();
-        int snapMargin = dp(24);
-        if (curH <= minHeightPx + snapMargin) {
-            animateToHeight(minHeightPx);
-        } else if (curH >= maxH - snapMargin) {
-            animateToHeight(maxH);
-        }
-    }
-
     private void animateToHeight(int targetH) {
         if (heightAnimator != null && heightAnimator.isRunning()) {
             heightAnimator.cancel();
@@ -600,8 +821,8 @@ public class EmojiPanelLayout extends LinearLayout {
         int curH = getHeight();
         if (curH == targetH) return;
         heightAnimator = ValueAnimator.ofInt(curH, targetH);
-        heightAnimator.setDuration(220);
-        heightAnimator.setInterpolator(new DecelerateInterpolator());
+        heightAnimator.setDuration(260);
+        heightAnimator.setInterpolator(new DecelerateInterpolator(2.0f));
         heightAnimator.addUpdateListener(animation -> {
             int val = (int) animation.getAnimatedValue();
             setPanelHeight(val);
@@ -629,7 +850,13 @@ public class EmojiPanelLayout extends LinearLayout {
         tv.setTextSize(16);
         tab.addView(tv);
 
-        tab.setOnClickListener(v -> viewPagerEmoji.setCurrentItem(targetPageIndex, true));
+        tab.setOnClickListener(v -> {
+            if (viewPagerEmoji.getCurrentItem() == targetPageIndex) {
+                smoothScrollCurrentPageToTop();
+            } else {
+                viewPagerEmoji.setCurrentItem(targetPageIndex, true);
+            }
+        });
         layoutTabsContainer.addView(tab);
         tabViews.add(tab);
     }
@@ -659,7 +886,13 @@ public class EmojiPanelLayout extends LinearLayout {
             tab.addView(tvName);
         }
 
-        tab.setOnClickListener(v -> viewPagerEmoji.setCurrentItem(targetPageIndex, true));
+        tab.setOnClickListener(v -> {
+            if (viewPagerEmoji.getCurrentItem() == targetPageIndex) {
+                smoothScrollCurrentPageToTop();
+            } else {
+                viewPagerEmoji.setCurrentItem(targetPageIndex, true);
+            }
+        });
         layoutTabsContainer.addView(tab);
         tabViews.add(tab);
     }
@@ -673,6 +906,14 @@ public class EmojiPanelLayout extends LinearLayout {
             } else {
                 tab.setBackgroundColor(Color.TRANSPARENT);
             }
+        }
+
+        if (selectedPosition >= 0 && selectedPosition < tabViews.size() && scrollTabs != null) {
+            View tab = tabViews.get(selectedPosition);
+            scrollTabs.post(() -> {
+                int scrollX = tab.getLeft() - (scrollTabs.getWidth() - tab.getWidth()) / 2;
+                scrollTabs.smoothScrollTo(Math.max(0, scrollX), 0);
+            });
         }
     }
 
@@ -696,16 +937,11 @@ public class EmojiPanelLayout extends LinearLayout {
         return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 
-    private static class EmojiPagerAdapter extends PagerAdapter {
-        private final List<View> views;
-
-        public EmojiPagerAdapter(List<View> views) {
-            this.views = views;
-        }
+    private class EmojiPagerAdapter extends PagerAdapter {
 
         @Override
         public int getCount() {
-            return views.size();
+            return 2 + stickerPacks.size();
         }
 
         @Override
@@ -716,8 +952,26 @@ public class EmojiPanelLayout extends LinearLayout {
         @NonNull
         @Override
         public Object instantiateItem(@NonNull ViewGroup container, int position) {
-            View view = views.get(position);
-            container.addView(view);
+            View view = cachedPageViews.get(position);
+            if (view == null) {
+                Context ctx = container.getContext();
+                if (position == 0) {
+                    view = createEmojiPageView(ctx);
+                } else if (position == 1) {
+                    view = createFavoriteExpressionsPageView(ctx);
+                } else {
+                    int packIndex = position - 2;
+                    if (packIndex >= 0 && packIndex < stickerPacks.size()) {
+                        view = createStickerPackPageView(ctx, stickerPacks.get(packIndex));
+                    } else {
+                        view = new View(ctx);
+                    }
+                }
+                cachedPageViews.put(position, view);
+            }
+            if (view.getParent() == null) {
+                container.addView(view);
+            }
             return view;
         }
 

@@ -19,8 +19,6 @@ import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.bumptech.glide.Glide;
-import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.nago8.chat.old.ImagePreviewActivity;
 import com.nago8.chat.old.PostDetailActivity;
 import com.nago8.chat.old.R;
@@ -158,6 +156,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
         TextView tvTime;
         TextView tvAdminTag;
         TextView tvOwnerTag;
+        TextView tvBotTag;
 
         ViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -171,6 +170,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             tvTime = itemView.findViewById(R.id.tvTime);
             tvAdminTag = itemView.findViewById(R.id.tvAdminTag);
             tvOwnerTag = itemView.findViewById(R.id.tvOwnerTag);
+            tvBotTag = itemView.findViewById(R.id.tvBotTag);
         }
 
         void bind(MessagesAdapter adapter, MessageGroup group, OnAvatarClickListener listener, OnMessageClickListener messageClickListener, OnEditHistoryClickListener editHistoryClickListener, Markwon markwon) {
@@ -191,6 +191,8 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             ImageUtils.loadAvatar(itemView.getContext(), group.avatarUrl, ivAvatar);
             tvAdminTag.setVisibility(group.isAdmin ? View.VISIBLE : View.GONE);
             tvOwnerTag.setVisibility(group.isOwner ? View.VISIBLE : View.GONE);
+            boolean isBot = group.isBot || (group.senderChatType == 3) || (!group.mine && adapter.chatType == 3);
+            tvBotTag.setVisibility(isBot ? View.VISIBLE : View.GONE);
 
             ivAvatar.setOnClickListener(v -> {
                 if (listener != null && !TextUtils.isEmpty(group.senderId) && group.senderChatType > 0) {
@@ -240,20 +242,24 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             headerRow.removeAllViews();
             if (mine) {
                 headerRow.addView(tvTime);
+                headerRow.addView(tvBotTag);
                 headerRow.addView(tvName);
                 headerRow.addView(tvAdminTag);
                 headerRow.addView(tvOwnerTag);
-                setHorizontalMargins(tvName, dp(6), dp(4));
+                setHorizontalMargins(tvTime, 0, dp(6));
+                setHorizontalMargins(tvBotTag, dp(4), dp(4));
+                setHorizontalMargins(tvName, dp(4), dp(4));
                 setHorizontalMargins(tvAdminTag, dp(4), dp(4));
                 setHorizontalMargins(tvOwnerTag, dp(4), dp(8));
-                setHorizontalMargins(tvTime, 0, dp(6));
             } else {
                 headerRow.addView(tvOwnerTag);
                 headerRow.addView(tvAdminTag);
+                headerRow.addView(tvBotTag);
                 headerRow.addView(tvName);
                 headerRow.addView(tvTime);
                 setHorizontalMargins(tvOwnerTag, 0, dp(4));
                 setHorizontalMargins(tvAdminTag, dp(4), dp(4));
+                setHorizontalMargins(tvBotTag, dp(4), dp(4));
                 setHorizontalMargins(tvName, dp(4), dp(6));
                 setHorizontalMargins(tvTime, 0, 0);
             }
@@ -430,15 +436,16 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             Calendar msgCal = Calendar.getInstance();
             msgCal.setTimeInMillis(tsMs);
 
+            Context ctx = itemView.getContext();
             String pattern;
             if (msgCal.get(Calendar.YEAR) < nowCal.get(Calendar.YEAR)) {
-                pattern = "yyyy年M月d日 HH:mm";
+                pattern = ctx.getString(R.string.time_format_year_datetime);
             } else {
-                pattern = "M月d日 HH:mm";
+                pattern = ctx.getString(R.string.time_format_month_datetime);
             }
 
             SimpleDateFormat sdf = new SimpleDateFormat(pattern, Locale.getDefault());
-            return "该消息已于 " + sdf.format(msgCal.getTime()) + " 撤回";
+            return ctx.getString(R.string.message_recalled_at_format, sdf.format(msgCal.getTime()));
         }
 
         private View createVideoBubble(MessageGroup group, Msg msg, int index, int count) {
@@ -743,17 +750,18 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
 
         private String getQuoteText(Msg msg) {
             if (msg == null || msg.content == null) return null;
+            Context ctx = itemView.getContext();
             if (!TextUtils.isEmpty(msg.content.quote_msg_text)) {
                 return msg.content.quote_msg_text;
             }
             if (!TextUtils.isEmpty(msg.content.quote_image_url)) {
                 if (!TextUtils.isEmpty(msg.content.quote_image_name)) {
-                    return "[图片] " + msg.content.quote_image_name;
+                    return ctx.getString(R.string.chat_preview_image_prefix) + " " + msg.content.quote_image_name;
                 }
-                return "[图片]";
+                return ctx.getString(R.string.chat_preview_image_prefix);
             }
             if (!TextUtils.isEmpty(msg.content.quote_video_url)) {
-                return "[视频]";
+                return ctx.getString(R.string.chat_preview_video);
             }
             return null;
         }

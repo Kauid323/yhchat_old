@@ -433,6 +433,30 @@ public class ThemeUtils {
     }
 
     /**
+     * 创建实心圆角背景 Drawable（用于主操作按钮如“加入/添加”）
+     */
+    public static Drawable createSolidRoundedDrawable(int color, float radiusPx) {
+        android.graphics.drawable.GradientDrawable gd = new android.graphics.drawable.GradientDrawable();
+        gd.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+        gd.setColor(color);
+        gd.setCornerRadius(radiusPx);
+        return gd;
+    }
+
+    /**
+     * 创建带描边的半透明浅色背景 Drawable（用于次级操作按钮如“进入聊天”）
+     */
+    public static Drawable createOutlinedRoundedDrawable(int strokeColor, float radiusPx, float strokeWidthPx) {
+        android.graphics.drawable.GradientDrawable gd = new android.graphics.drawable.GradientDrawable();
+        gd.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+        int alphaColor = Color.argb(30, Color.red(strokeColor), Color.green(strokeColor), Color.blue(strokeColor));
+        gd.setColor(alphaColor);
+        gd.setStroke((int) strokeWidthPx, strokeColor);
+        gd.setCornerRadius(radiusPx);
+        return gd;
+    }
+
+    /**
      * 为弹窗（AlertDialog / Dialog）内的按钮与 View 树动态注入主题色
      */
     public static void applyThemeToDialog(android.content.DialogInterface dialogInterface, Context context) {

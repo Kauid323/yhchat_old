@@ -85,15 +85,20 @@ public class AvatarCache {
         return size;
     }
 
+    private static final char[] HEX_ARRAY = "0123456789abcdef".toCharArray();
+
     private static String md5(String string) {
+        if (string == null || string.isEmpty()) return "";
         try {
             MessageDigest digest = MessageDigest.getInstance("MD5");
-            byte[] bytes = digest.digest(string.getBytes("UTF-8"));
-            StringBuilder sb = new StringBuilder();
-            for (byte b : bytes) {
-                sb.append(String.format("%02x", b & 0xff));
+            byte[] bytes = digest.digest(string.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            char[] hexChars = new char[bytes.length * 2];
+            for (int i = 0; i < bytes.length; i++) {
+                int v = bytes[i] & 0xFF;
+                hexChars[i * 2] = HEX_ARRAY[v >>> 4];
+                hexChars[i * 2 + 1] = HEX_ARRAY[v & 0x0F];
             }
-            return sb.toString();
+            return new String(hexChars);
         } catch (Exception e) {
             return String.valueOf(string.hashCode());
         }

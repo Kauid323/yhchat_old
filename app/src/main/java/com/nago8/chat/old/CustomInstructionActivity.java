@@ -27,6 +27,7 @@ import com.google.android.material.textfield.TextInputLayout;
 import com.nago8.chat.old.model.ChatInstruction;
 import com.nago8.chat.old.proto.send_message;
 import com.nago8.chat.old.repository.MessageRepository;
+import com.nago8.chat.old.utils.LocaleHelper;
 import com.nago8.chat.old.utils.PrefUtils;
 import com.nago8.chat.old.utils.ThemeUtils;
 
@@ -61,6 +62,11 @@ public class CustomInstructionActivity extends AppCompatActivity {
 
     // 存储表单输入控件引用
     private final Map<String, View> formFields = new HashMap<>();
+
+    @Override
+    protected void attachBaseContext(android.content.Context newBase) {
+        super.attachBaseContext(LocaleHelper.wrap(newBase));
+    }
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {

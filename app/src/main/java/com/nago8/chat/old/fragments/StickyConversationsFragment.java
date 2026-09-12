@@ -18,15 +18,13 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.nago8.chat.old.ChatActivity;
 import com.nago8.chat.old.HomeActivity;
 import com.nago8.chat.old.R;
+import com.nago8.chat.old.cache.ConversationCache;
 import com.nago8.chat.old.net.ApiClient;
-import com.nago8.chat.old.proto.chat_ws_go.WsMsg;
 import com.nago8.chat.old.proto.conversation.ConversationList;
 import com.nago8.chat.old.proto.conversation.ConversationListRequest;
 import com.nago8.chat.old.utils.PrefUtils;
-import com.nago8.chat.old.ws.WsClient;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 
 import okhttp3.Call;
@@ -45,7 +43,7 @@ public class StickyConversationsFragment extends Fragment {
     private ProgressBar progressBar;
     private SwipeRefreshLayout swipeRefreshLayout;
     private ConversationsAdapter adapter;
-    private WsClient.MessageListener wsListener;
+    private ConversationCache.OnConversationDataChangeListener dataChangeListener;
 
     @Nullable
     @Override
@@ -81,7 +79,7 @@ public class StickyConversationsFragment extends Fragment {
                 intent.putExtra(ChatActivity.EXTRA_CHAT_AVATAR, data.avatar_url);
                 startActivity(intent);
 
-                dismissNotification(data.chat_id);
+                ConversationCache.getInstance().markAsRead(getContext(), data.chat_id);
             }
 
             @Override
@@ -96,11 +94,8 @@ public class StickyConversationsFragment extends Fragment {
                 if (data == null || data.chat_id == null || data.chat_id.isEmpty() || getContext() == null) return;
                 com.nago8.chat.old.cache.ArchiveManager.getInstance().archiveConversation(getContext(), data);
                 Toast.makeText(getContext(), R.string.conversation_archived_toast, Toast.LENGTH_SHORT).show();
-                if (getActivity() instanceof HomeActivity) {
-                    HomeActivity home = (HomeActivity) getActivity();
-                    if (adapter != null) {
-                        adapter.setData(home.getStickyConversationDataList());
-                    }
+                if (adapter != null) {
+                    adapter.setData(ConversationCache.getInstance().getStickyConversationDataList());
                 }
             }
 
@@ -124,45 +119,35 @@ public class StickyConversationsFragment extends Fragment {
     public void onResume() {
         super.onResume();
         loadStickyData();
-        if (wsListener == null) {
-            wsListener = new WsClient.MessageListener() {
-                @Override
-                public void onPushMessage(WsMsg msg) {
-                    if (getActivity() != null) {
-                        getActivity().runOnUiThread(() -> {
-                            if (getActivity() instanceof HomeActivity) {
-                                HomeActivity home = (HomeActivity) getActivity();
-                                home.onPushMessageInMemory(msg, getContext());
-                                if (adapter != null) {
-                                    adapter.setData(home.getStickyConversationDataList());
-                                }
-                            }
-                        });
-                    }
+        if (dataChangeListener == null) {
+            dataChangeListener = () -> {
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        if (adapter != null) {
+                            adapter.setData(ConversationCache.getInstance().getStickyConversationDataList());
+                        }
+                    });
                 }
             };
-            WsClient.getInstance().addMessageListener(wsListener);
+            ConversationCache.getInstance().addOnConversationDataChangeListener(dataChangeListener);
         }
     }
 
     @Override
     public void onDestroyView() {
-        if (wsListener != null) {
-            WsClient.getInstance().removeMessageListener(wsListener);
-            wsListener = null;
+        if (dataChangeListener != null) {
+            ConversationCache.getInstance().removeOnConversationDataChangeListener(dataChangeListener);
+            dataChangeListener = null;
         }
         super.onDestroyView();
     }
 
     private void loadStickyData() {
-        if (getActivity() instanceof HomeActivity) {
-            HomeActivity home = (HomeActivity) getActivity();
-            List<ConversationList.ConversationData> stickyData = home.getStickyConversationDataList();
-            if (stickyData != null && !stickyData.isEmpty()) {
-                progressBar.setVisibility(View.GONE);
-                adapter.setData(stickyData);
-                return;
-            }
+        List<ConversationList.ConversationData> stickyData = ConversationCache.getInstance().getStickyConversationDataList();
+        if (stickyData != null && !stickyData.isEmpty()) {
+            progressBar.setVisibility(View.GONE);
+            adapter.setData(stickyData);
+            return;
         }
         // 若本地暂无置顶数据，则联网拉取
         fetchStickyList();
@@ -226,11 +211,10 @@ public class StickyConversationsFragment extends Fragment {
                 if (response.isSuccessful() && response.body() != null) {
                     try {
                         final ConversationList conversationList = ConversationList.ADAPTER.decode(response.body().source());
-                        if (conversationList.data != null && getActivity() instanceof HomeActivity) {
+                        if (conversationList.data != null) {
                             getActivity().runOnUiThread(() -> {
-                                HomeActivity home = (HomeActivity) getActivity();
-                                home.updateConversationDataList(conversationList.data);
-                                List<ConversationList.ConversationData> stickyData = home.getStickyConversationDataList();
+                                ConversationCache.getInstance().updateConversationList(conversationList.data);
+                                List<ConversationList.ConversationData> stickyData = ConversationCache.getInstance().getStickyConversationDataList();
                                 adapter.setData(stickyData);
                                 if (isManualRefresh) {
                                     Toast.makeText(getContext(), R.string.sticky_refreshed, Toast.LENGTH_SHORT).show();
@@ -244,42 +228,6 @@ public class StickyConversationsFragment extends Fragment {
                             response.body().close();
                         }
                     }
-                }
-            }
-        });
-    }
-
-    private void dismissNotification(String chatId) {
-        String token = PrefUtils.getToken(getContext());
-        if (token == null) return;
-
-        if (getActivity() instanceof HomeActivity) {
-            ((HomeActivity) getActivity()).markConversationReadInMemory(chatId);
-            loadStickyData();
-        }
-
-        String json = "{\"chatId\":\"" + chatId + "\"}";
-        RequestBody body = RequestBody.create(
-                MediaType.parse("application/json; charset=utf-8"),
-                json
-        );
-
-        Request request = new Request.Builder()
-                .url(ApiClient.BASE_URL + "/v1/conversation/dismiss-notification")
-                .header("token", token)
-                .post(body)
-                .build();
-
-        ApiClient.getClient().newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                Log.e(TAG, "dismissNotification failed", e);
-            }
-
-            @Override
-            public void onResponse(@NonNull Call call, @NonNull Response response) {
-                if (response.body() != null) {
-                    response.body().close();
                 }
             }
         });
@@ -306,7 +254,7 @@ public class StickyConversationsFragment extends Fragment {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 if (getActivity() != null) {
-                    getActivity().runOnUiThread(() -> Toast.makeText(getContext(), "操作失败", Toast.LENGTH_SHORT).show());
+                    getActivity().runOnUiThread(() -> Toast.makeText(getContext(), R.string.action_failed, Toast.LENGTH_SHORT).show());
                 }
             }
 
@@ -314,7 +262,7 @@ public class StickyConversationsFragment extends Fragment {
             public void onResponse(@NonNull Call call, @NonNull Response response) {
                 if (getActivity() != null) {
                     getActivity().runOnUiThread(() -> {
-                        Toast.makeText(getContext(), currentSticky ? "已取消置顶" : "已置顶", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(getContext(), currentSticky ? R.string.conversation_unpinned : R.string.conversation_pinned, Toast.LENGTH_SHORT).show();
                         if (getActivity() instanceof HomeActivity) {
                             ((HomeActivity) getActivity()).fetchStickyCount();
                         }
@@ -346,7 +294,7 @@ public class StickyConversationsFragment extends Fragment {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 if (getActivity() != null) {
-                    getActivity().runOnUiThread(() -> Toast.makeText(getContext(), "删除失败", Toast.LENGTH_SHORT).show());
+                    getActivity().runOnUiThread(() -> Toast.makeText(getContext(), R.string.delete_failed, Toast.LENGTH_SHORT).show());
                 }
             }
 
@@ -354,20 +302,9 @@ public class StickyConversationsFragment extends Fragment {
             public void onResponse(@NonNull Call call, @NonNull Response response) {
                 if (getActivity() != null) {
                     getActivity().runOnUiThread(() -> {
-                        Toast.makeText(getContext(), "已删除会话", Toast.LENGTH_SHORT).show();
-                        if (getActivity() instanceof HomeActivity) {
-                            HomeActivity home = (HomeActivity) getActivity();
-                            List<ConversationList.ConversationData> currentList = home.getCachedConversationList();
-                            List<ConversationList.ConversationData> updatedList = new ArrayList<>();
-                            if (currentList != null) {
-                                for (ConversationList.ConversationData cd : currentList) {
-                                    if (!chatId.equals(cd.chat_id)) {
-                                        updatedList.add(cd);
-                                    }
-                                }
-                            }
-                            home.updateConversationDataList(updatedList);
-                        }
+                        Toast.makeText(getContext(), R.string.conversation_deleted, Toast.LENGTH_SHORT).show();
+                        ConversationCache.getInstance().removeConversationFromMainList(chatId);
+                        ConversationCache.getInstance().removeStickyConversation(chatId);
                         loadStickyData();
                     });
                 }

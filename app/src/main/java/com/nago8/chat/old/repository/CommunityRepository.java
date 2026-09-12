@@ -343,4 +343,20 @@ public class CommunityRepository {
         }
         return null;
     }
+
+    /** 搜索社区分区与文章 (POST /v1/community/search) */
+    @SuppressWarnings("UnusedReturnValue")
+    public Call searchCommunity(String token, String keyword, int page, int size, StringCallback cb) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("typ", 3);
+            json.put("keyword", keyword != null ? keyword : "");
+            json.put("page", page > 0 ? page : 1);
+            json.put("size", size > 0 ? size : 50);
+            return post("/v1/community/search", token, json.toString(), cb);
+        } catch (Exception e) {
+            cb.onError(e.getMessage());
+            return null;
+        }
+    }
 }

@@ -45,4 +45,17 @@
     <style name="ShapeAppearance.Circle" parent="">
         <item name="cornerSize">50%</item>
     </style>
+
+    <style name="FloatingSearchDialogTheme" parent="Theme.MaterialComponents.DayNight.Dialog">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:windowAnimationStyle">@style/FloatingSearchAnimation</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+    </style>
+
+    <style name="FloatingSearchAnimation">
+        <item name="android:windowEnterAnimation">@anim/slide_down_in</item>
+        <item name="android:windowExitAnimation">@anim/slide_up_out</item>
+    </style>
 </resources>

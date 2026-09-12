@@ -15,24 +15,16 @@ import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import com.nago8.chat.old.ChatActivity;
 import com.nago8.chat.old.HomeActivity;
-import com.nago8.chat.old.listener.SearchHost;
 import com.nago8.chat.old.R;
+import com.nago8.chat.old.cache.ConversationCache;
 import com.nago8.chat.old.net.ApiClient;
-import com.nago8.chat.old.proto.chat_ws_go.WsMsg;
 import com.nago8.chat.old.proto.conversation.ConversationList;
 import com.nago8.chat.old.proto.conversation.ConversationListRequest;
 import com.nago8.chat.old.utils.PrefUtils;
-import com.nago8.chat.old.ws.WsClient;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 
 import okhttp3.Call;
@@ -44,13 +36,12 @@ import okhttp3.Response;
 
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
-public class ConversationsFragment extends Fragment implements SearchHost {
+public class ConversationsFragment extends Fragment {
 
     private ProgressBar progressBar;
     private SwipeRefreshLayout swipeRefreshLayout;
     private ConversationsAdapter adapter;
-    private WsClient.MessageListener wsListener;
-    private boolean searchMode = false;
+    private ConversationCache.OnConversationDataChangeListener dataChangeListener;
 
     @Nullable
     @Override
@@ -77,13 +68,8 @@ public class ConversationsFragment extends Fragment implements SearchHost {
         adapter.setOnConversationActionListener(new ConversationsAdapter.OnConversationActionListener() {
             @Override
             public void onConversationClick(ConversationList.ConversationData data, int position) {
-                if (data.chat_id == null || data.chat_id.isEmpty()) return;
-
-                if (searchMode) {
-                    openChatFromSearch(data);
-                } else {
-                    openChat(data, position);
-                }
+                if (data == null || data.chat_id == null || data.chat_id.isEmpty()) return;
+                openChat(data, position);
             }
 
             @Override
@@ -126,44 +112,35 @@ public class ConversationsFragment extends Fragment implements SearchHost {
     public void onResume() {
         super.onResume();
         loadConversationsData();
-        // 如果 listener 还没注册（首次 onResume），则注册
-        if (wsListener == null) {
-            wsListener = msg -> {
+        if (dataChangeListener == null) {
+            dataChangeListener = () -> {
                 if (getActivity() != null) {
                     getActivity().runOnUiThread(() -> {
-                        if (getActivity() instanceof HomeActivity) {
-                            HomeActivity home = (HomeActivity) getActivity();
-                            home.onPushMessageInMemory(msg, getContext());
-                            if (adapter != null) {
-                                adapter.setData(home.getCachedConversationList());
-                            }
+                        if (adapter != null) {
+                            adapter.setData(ConversationCache.getInstance().getConversationList());
                         }
                     });
                 }
             };
-            WsClient.getInstance().addMessageListener(wsListener);
+            ConversationCache.getInstance().addOnConversationDataChangeListener(dataChangeListener);
         }
     }
 
     private void loadConversationsData() {
-        if (getActivity() instanceof HomeActivity) {
-            HomeActivity home = (HomeActivity) getActivity();
-            List<ConversationList.ConversationData> cached = home.getCachedConversationList();
-            if (cached != null && !cached.isEmpty()) {
-                progressBar.setVisibility(View.GONE);
-                adapter.setData(cached);
-                return;
-            }
+        List<ConversationList.ConversationData> cached = ConversationCache.getInstance().getConversationList();
+        if (cached != null && !cached.isEmpty()) {
+            progressBar.setVisibility(View.GONE);
+            adapter.setData(cached);
+            return;
         }
         fetchConversations();
     }
 
     @Override
     public void onDestroyView() {
-        // Fragment 销毁时才注销，后台时保持监听以实时更新会话列表
-        if (wsListener != null) {
-            WsClient.getInstance().removeMessageListener(wsListener);
-            wsListener = null;
+        if (dataChangeListener != null) {
+            ConversationCache.getInstance().removeOnConversationDataChangeListener(dataChangeListener);
+            dataChangeListener = null;
         }
         super.onDestroyView();
     }
@@ -227,9 +204,9 @@ public class ConversationsFragment extends Fragment implements SearchHost {
                         if (getActivity() != null) {
                             getActivity().runOnUiThread(() -> {
                                 if (conversationList.data != null) {
+                                    ConversationCache.getInstance().updateConversationList(conversationList.data);
                                     if (getActivity() instanceof HomeActivity) {
                                         HomeActivity home = (HomeActivity) getActivity();
-                                        home.updateConversationDataList(conversationList.data);
                                         java.util.List<String> dndIds = new java.util.ArrayList<>();
                                         for (ConversationList.ConversationData cd : conversationList.data) {
                                             if (cd.do_not_disturb != 0) {
@@ -238,10 +215,8 @@ public class ConversationsFragment extends Fragment implements SearchHost {
                                         }
                                         home.updateDoNotDisturbSet(dndIds);
                                         home.updateConvInfoCache(conversationList.data);
-                                        adapter.setData(home.getCachedConversationList());
-                                    } else {
-                                        adapter.setData(conversationList.data);
                                     }
+                                    adapter.setData(ConversationCache.getInstance().getConversationList());
                                 }
                                 if (isManualRefresh) {
                                     Toast.makeText(getContext(), R.string.conversations_refreshed, Toast.LENGTH_SHORT).show();
@@ -256,167 +231,6 @@ public class ConversationsFragment extends Fragment implements SearchHost {
         });
     }
 
-    // ==================== 搜索（SearchHost 接口实现）====================
-
-    /**
-     * HomeActivity 顶栏搜索框输入后回调，执行搜索请求。
-     */
-    @Override
-    public void onSearch(String word) {
-        if (word.isEmpty()) return;
-        searchMode = true;
-
-        String token = PrefUtils.getToken(getContext());
-        if (token == null) return;
-
-        progressBar.setVisibility(View.VISIBLE);
-
-        HashMap<String, String> params = new HashMap<>();
-        params.put("word", word);
-        String json = ApiClient.getGson().toJson(params);
-
-        RequestBody body = RequestBody.create(
-                MediaType.parse("application/json; charset=utf-8"), json);
-
-        Request request = new Request.Builder()
-                .url(ApiClient.BASE_URL + "/v1/search/home-search")
-                .header("token", token)
-                .post(body)
-                .build();
-
-        ApiClient.getClient().newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                if (getActivity() != null) {
-                    Log.e("ConvSearch", "onFailure", e);
-                    getActivity().runOnUiThread(() -> {
-                        progressBar.setVisibility(View.GONE);
-                        Toast.makeText(getContext(), R.string.search_failed, Toast.LENGTH_SHORT).show();
-                    });
-                }
-            }
-
-            @Override
-            public void onResponse(@NonNull Call call, @NonNull Response response) {
-                if (getActivity() == null) return;
-                if (response.isSuccessful() && response.body() != null) {
-                    try {
-                        String respStr = response.body().string();
-                        Log.d("ConvSearch", "response: " + respStr);
-                        final List<ConversationList.ConversationData> results = parseSearchResults(respStr);
-                        getActivity().runOnUiThread(() -> {
-                            progressBar.setVisibility(View.GONE);
-                            adapter.setData(results);
-                            Log.d("ConvSearch", "results size=" + results.size());
-                            if (results.isEmpty()) {
-                                Toast.makeText(getContext(), R.string.search_no_result, Toast.LENGTH_SHORT).show();
-                            }
-                        });
-                    } catch (Exception e) {
-                        Log.e("ConvSearch", "parse error", e);
-                        getActivity().runOnUiThread(() -> {
-                            progressBar.setVisibility(View.GONE);
-                            Toast.makeText(getContext(), R.string.search_failed, Toast.LENGTH_SHORT).show();
-                        });
-                    }
-                } else {
-                    Log.d("ConvSearch", "http code=" + response.code());
-                    getActivity().runOnUiThread(() -> {
-                        progressBar.setVisibility(View.GONE);
-                        Toast.makeText(getContext(), R.string.search_failed, Toast.LENGTH_SHORT).show();
-                    });
-                }
-            }
-        });
-    }
-
-    /**
-     * HomeActivity 顶栏搜索框关闭后回调，退出搜索模式并重新加载会话列表。
-     */
-    @Override
-    public void onSearchClosed() {
-        searchMode = false;
-        fetchConversations();
-    }
-
-    /**
-     * 解析搜索结果 JSON，转成 ConversationData 列表以复用 adapter。
-     * 响应结构: { code:1, data:{ list:[ { title:"用户", list:[...] }, ... ] } }
-     * 每项: { friendId, friendType, nickname, name, avatarUrl, hit }
-     */
-    private List<ConversationList.ConversationData> parseSearchResults(String json) {
-        List<ConversationList.ConversationData> results = new ArrayList<>();
-        JsonObject root = JsonParser.parseString(json).getAsJsonObject();
-        if (!root.has("data")) return results;
-        JsonObject data = root.getAsJsonObject("data");
-        if (!data.has("list")) return results;
-        JsonArray categories = data.getAsJsonArray("list");
-
-        for (JsonElement catElem : categories) {
-            JsonObject cat = catElem.getAsJsonObject();
-            if (!cat.has("list") || cat.get("list").isJsonNull()) continue;
-            JsonArray items = cat.getAsJsonArray("list");
-            if (items.isEmpty()) continue;
-
-            // 插入分组标题项（chat_id 为空标记为标题）
-            String title = getJsonString(cat, "title");
-            ConversationList.ConversationData header = new ConversationList.ConversationData.Builder()
-                    .chat_id("")
-                    .name(title)
-                    .build();
-            results.add(header);
-
-            for (JsonElement itemElem : items) {
-                JsonObject item = itemElem.getAsJsonObject();
-                String friendId = getJsonString(item, "friendId");
-                int friendType = getJsonInt(item, "friendType", 1);
-                String nickname = getJsonString(item, "nickname");
-                String name = getJsonString(item, "name");
-                String avatarUrl = getJsonString(item, "avatarUrl");
-
-                // 显示名优先 nickname，其次 name
-                String displayName = !nickname.isEmpty() ? nickname : name;
-
-                ConversationList.ConversationData cd = new ConversationList.ConversationData.Builder()
-                        .chat_id(friendId)
-                        .chat_type(friendType)
-                        .name(displayName)
-                        .avatar_url(avatarUrl)
-                        .chat_content("")
-                        .unread_message(0)
-                        .timestamp_ms(0)
-                        .build();
-                results.add(cd);
-            }
-        }
-        return results;
-    }
-
-    private String getJsonString(JsonObject obj, String key) {
-        if (obj.has(key) && !obj.get(key).isJsonNull()) {
-            return obj.get(key).getAsString();
-        }
-        return "";
-    }
-
-    @SuppressWarnings("SameParameterValue")
-    private int getJsonInt(JsonObject obj, String key, int def) {
-        if (obj.has(key) && !obj.get(key).isJsonNull()) {
-            return obj.get(key).getAsInt();
-        }
-        return def;
-    }
-
-    private void openChatFromSearch(ConversationList.ConversationData data) {
-        if (getContext() == null || data == null) return;
-        Intent intent = new Intent(getContext(), ChatActivity.class);
-        intent.putExtra(ChatActivity.EXTRA_CHAT_ID, data.chat_id);
-        intent.putExtra(ChatActivity.EXTRA_CHAT_TYPE, data.chat_type);
-        intent.putExtra(ChatActivity.EXTRA_CHAT_NAME, data.name);
-        intent.putExtra(ChatActivity.EXTRA_CHAT_AVATAR, data.avatar_url);
-        startActivity(intent);
-    }
-
     private void openChat(ConversationList.ConversationData data, int position) {
         if (getContext() == null || data == null) return;
 
@@ -427,45 +241,8 @@ public class ConversationsFragment extends Fragment implements SearchHost {
         intent.putExtra(ChatActivity.EXTRA_CHAT_AVATAR, data.avatar_url);
         startActivity(intent);
 
-        dismissNotification(data.chat_id, position);
-    }
-
-    private void dismissNotification(String chatId, int position) {
-        String token = PrefUtils.getToken(getContext());
-        if (token == null) return;
-
-        String json = "{\"chatId\":\"" + chatId + "\"}";
-        RequestBody body = RequestBody.create(
-                MediaType.parse("application/json; charset=utf-8"),
-                json
-        );
-
-        Request request = new Request.Builder()
-                .url(ApiClient.BASE_URL + "/v1/conversation/dismiss-notification")
-                .header("token", token)
-                .post(body)
-                .build();
-
-        ApiClient.getClient().newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                if (getActivity() != null) {
-                    getActivity().runOnUiThread(() -> Toast.makeText(getContext(), R.string.conv_request_failed, Toast.LENGTH_SHORT).show());
-                }
-            }
-
-            @Override
-            public void onResponse(@NonNull Call call, @NonNull Response response) {
-                if (getActivity() != null) {
-                    getActivity().runOnUiThread(() -> {
-                        if (getActivity() instanceof HomeActivity) {
-                            ((HomeActivity) getActivity()).markConversationReadInMemory(chatId);
-                        }
-                        adapter.markAsRead(position);
-                    });
-                }
-            }
-        });
+        ConversationCache.getInstance().markAsRead(getContext(), data.chat_id);
+        adapter.markAsRead(position);
     }
 
     private void toggleStickyConversation(String chatId, int chatType, boolean currentSticky) {

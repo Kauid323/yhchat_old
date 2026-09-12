@@ -14,6 +14,7 @@ public class MessageGroup {
     public final int senderChatType;
     public boolean isAdmin;
     public boolean isOwner;
+    public boolean isBot;
     public final String avatarUrl;
     public final long firstSendTime;
     public final List<Msg> messages = new ArrayList<>();
@@ -22,6 +23,7 @@ public class MessageGroup {
         this.mine = isMine(msg);
         this.senderId = msg.sender == null ? "" : msg.sender.chat_id;
         this.senderChatType = msg.sender == null ? 0 : msg.sender.chat_type;
+        this.isBot = (this.senderChatType == 3);
         this.senderName = msg.sender == null ? "" : msg.sender.name;
         this.avatarUrl = msg.sender == null ? "" : msg.sender.avatar_url;
         this.firstSendTime = msg.send_time;

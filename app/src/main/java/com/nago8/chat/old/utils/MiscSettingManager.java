@@ -8,6 +8,7 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 
+import com.nago8.chat.old.R;
 import com.nago8.chat.old.net.ApiClient;
 
 import org.json.JSONObject;
@@ -126,8 +127,10 @@ public class MiscSettingManager {
 
         if (limitMb > 0 && fileSizeBytes > 0 && fileSizeMb > limitMb) {
             result.isAllowed = false;
-            String typeName = type == MediaType.IMAGE ? "图片" : (type == MediaType.VIDEO ? "视频" : "文件");
-            result.errorMessage = String.format(java.util.Locale.getDefault(), "%s大小超过云端限制 (最大%dMB，当前%.2fMB)", typeName, limitMb, fileSizeMb);
+            String typeName = context != null ? (type == MediaType.IMAGE ? context.getString(R.string.action_photo) : (type == MediaType.VIDEO ? context.getString(R.string.action_video) : context.getString(R.string.action_file))) : (type == MediaType.IMAGE ? "Image" : (type == MediaType.VIDEO ? "Video" : "File"));
+            result.errorMessage = context != null
+                    ? context.getString(R.string.media_size_exceed_format, typeName, limitMb, fileSizeMb)
+                    : String.format(java.util.Locale.getDefault(), "%s: Max %dMB, current %.2fMB", typeName, limitMb, fileSizeMb);
         } else {
             result.isAllowed = true;
             result.errorMessage = null;

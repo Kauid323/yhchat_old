@@ -94,18 +94,38 @@ public class AddressBookCache {
     }
 
     public static boolean containsUserId(Context context, String userId) {
-        if (context == null || userId == null || userId.isEmpty()) return false;
+        return containsChatId(context, userId);
+    }
+
+    public static boolean containsChatId(Context context, String chatId) {
+        if (context == null || chatId == null || chatId.isEmpty()) return false;
         List<address_book_list.Data> dataList = loadCache(context);
         if (dataList == null) return false;
         for (address_book_list.Data category : dataList) {
             if (category == null || category.data == null) continue;
             for (address_book_list.Data.Data_list item : category.data) {
-                if (item != null && userId.equals(item.chat_id)) {
+                if (item != null && chatId.equals(item.chat_id)) {
                     return true;
                 }
             }
         }
         return false;
+    }
+
+    public static java.util.Set<String> getAllChatIds(Context context) {
+        java.util.Set<String> set = new java.util.HashSet<>();
+        if (context == null) return set;
+        List<address_book_list.Data> dataList = loadCache(context);
+        if (dataList == null) return set;
+        for (address_book_list.Data category : dataList) {
+            if (category == null || category.data == null) continue;
+            for (address_book_list.Data.Data_list item : category.data) {
+                if (item != null && item.chat_id != null && !item.chat_id.isEmpty()) {
+                    set.add(item.chat_id);
+                }
+            }
+        }
+        return set;
     }
 
     private static class SimpleCategory {

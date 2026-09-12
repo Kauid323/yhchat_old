@@ -5,9 +5,11 @@ import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.BaseAdapter;
 import android.widget.ImageView;
 import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.nago8.chat.old.R;
 import com.nago8.chat.old.model.StickerItem;
@@ -16,7 +18,7 @@ import com.nago8.chat.old.utils.ImageUtils;
 import java.util.ArrayList;
 import java.util.List;
 
-public class StickerGridAdapter extends BaseAdapter {
+public class StickerGridAdapter extends RecyclerView.Adapter<StickerGridAdapter.ViewHolder> {
 
     public interface OnStickerClickListener {
         void onStickerClick(StickerItem item);
@@ -24,53 +26,35 @@ public class StickerGridAdapter extends BaseAdapter {
     }
 
     private final Context context;
-    private List<StickerItem> items;
-    private OnStickerClickListener listener;
+    private final List<StickerItem> items = new ArrayList<>();
+    private final OnStickerClickListener listener;
 
     public StickerGridAdapter(Context context, List<StickerItem> itemList, OnStickerClickListener listener) {
         this.context = context;
-        this.items = itemList != null ? itemList : new ArrayList<>();
+        if (itemList != null) {
+            this.items.addAll(itemList);
+        }
         this.listener = listener;
     }
 
     public void setItems(List<StickerItem> newItems) {
+        items.clear();
         if (newItems != null) {
-            this.items = newItems;
-        } else {
-            this.items = new ArrayList<>();
+            items.addAll(newItems);
         }
         notifyDataSetChanged();
     }
 
+    @NonNull
     @Override
-    public int getCount() {
-        return items != null ? items.size() : 0;
+    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        View view = LayoutInflater.from(context).inflate(R.layout.item_sticker_grid, parent, false);
+        return new ViewHolder(view);
     }
 
     @Override
-    public StickerItem getItem(int position) {
-        return (items != null && position >= 0 && position < items.size()) ? items.get(position) : null;
-    }
-
-    @Override
-    public long getItemId(int position) {
-        return position;
-    }
-
-    @Override
-    public View getView(int position, View convertView, ViewGroup parent) {
-        ViewHolder holder;
-        if (convertView == null) {
-            convertView = LayoutInflater.from(context).inflate(R.layout.item_sticker_grid, parent, false);
-            holder = new ViewHolder();
-            holder.ivSticker = convertView.findViewById(R.id.ivSticker);
-            holder.tvName = convertView.findViewById(R.id.tvStickerName);
-            convertView.setTag(holder);
-        } else {
-            holder = (ViewHolder) convertView.getTag();
-        }
-
-        StickerItem item = getItem(position);
+    public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+        StickerItem item = items.get(position);
         if (item != null) {
             String fullUrl = item.getFullUrl();
             if (!TextUtils.isEmpty(fullUrl)) {
@@ -88,25 +72,34 @@ public class StickerGridAdapter extends BaseAdapter {
                 }
             }
 
-            convertView.setOnClickListener(v -> {
+            holder.itemView.setOnClickListener(v -> {
                 if (listener != null) {
                     listener.onStickerClick(item);
                 }
             });
 
-            convertView.setOnLongClickListener(v -> {
+            holder.itemView.setOnLongClickListener(v -> {
                 if (listener != null) {
                     listener.onStickerLongClick(item);
                 }
                 return true;
             });
         }
-
-        return convertView;
     }
 
-    private static class ViewHolder {
-        ImageView ivSticker;
-        TextView tvName;
+    @Override
+    public int getItemCount() {
+        return items.size();
+    }
+
+    public static class ViewHolder extends RecyclerView.ViewHolder {
+        public final ImageView ivSticker;
+        public final TextView tvName;
+
+        public ViewHolder(@NonNull View itemView) {
+            super(itemView);
+            this.ivSticker = itemView.findViewById(R.id.ivSticker);
+            this.tvName = itemView.findViewById(R.id.tvStickerName);
+        }
     }
 }

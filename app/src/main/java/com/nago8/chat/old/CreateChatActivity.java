@@ -1,5 +1,6 @@
 package com.nago8.chat.old;
 
+import android.content.Context;
 import android.os.Bundle;
 
 import androidx.annotation.NonNull;
@@ -14,8 +15,14 @@ import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.tabs.TabLayoutMediator;
 import com.nago8.chat.old.fragments.CreateBotFragment;
 import com.nago8.chat.old.fragments.CreateGroupFragment;
+import com.nago8.chat.old.utils.LocaleHelper;
 
 public class CreateChatActivity extends AppCompatActivity {
+
+    @Override
+    protected void attachBaseContext(Context newBase) {
+        super.attachBaseContext(LocaleHelper.wrap(newBase));
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

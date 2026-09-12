@@ -17,16 +17,16 @@ import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.bumptech.glide.load.engine.GlideException;
 import com.bumptech.glide.load.model.GlideUrl;
 import com.bumptech.glide.load.model.LazyHeaders;
-import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions;
 import com.bumptech.glide.request.RequestListener;
 import com.bumptech.glide.request.target.Target;
+
 import com.nago8.chat.old.R;
 import com.nago8.chat.old.cache.AvatarCache;
 import com.nago8.chat.old.cache.StickerCache;
 import com.nago8.chat.old.net.ApiClient;
 
 import java.io.File;
-import java.util.Objects;
+
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -113,6 +113,13 @@ public class ImageUtils {
             return trimmed;
         }
 
+        // 避开不支持七牛图片缩放处理的后缀格式（如 .tmp、.gif、.svg、.webp 等，避免七牛 CDN 触发 404 或破坏动图帧）
+        String lower = trimmed.toLowerCase();
+        String pathPart = lower.contains("?") ? lower.substring(0, lower.indexOf('?')) : lower;
+        if (pathPart.endsWith(".tmp") || pathPart.endsWith(".gif") || pathPart.endsWith(".svg") || pathPart.endsWith(".webp")) {
+            return trimmed;
+        }
+
         StringBuilder param = new StringBuilder("imageView2/2");
         if (width > 0) param.append("/w/").append(width);
         if (height > 0) param.append("/h/").append(height);
@@ -189,16 +196,39 @@ public class ImageUtils {
 
         // 优先同步快速检查本地文件缓存（毫秒级判断）
         File cachedFile = AvatarCache.getAvatarFile(context, cacheKeyUrl);
-        if (cachedFile != null && cachedFile.exists() && cachedFile.length() > 0) {
-            Glide.with(context)
-                    .asBitmap()
-                    .load(cachedFile)
-                    .override(120, 120)
-                    .placeholder(android.R.drawable.ic_menu_gallery)
-                    .error(android.R.drawable.ic_menu_report_image)
-                    .circleCrop()
-                    .into(imageView);
-            return;
+        if (cachedFile != null && cachedFile.exists()) {
+            if (cachedFile.length() > 64) {
+                Glide.with(context)
+                        .asBitmap()
+                        .load(cachedFile)
+                        .override(120, 120)
+                        .placeholder(android.R.drawable.ic_menu_gallery)
+                        .error(android.R.drawable.ic_menu_report_image)
+                        .circleCrop()
+                        .listener(new RequestListener<Bitmap>() {
+                            @Override
+                            public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Bitmap> target, boolean isFirstResource) {
+                                try {
+                                    if (cachedFile.exists()) {
+                                        cachedFile.delete();
+                                    }
+                                } catch (Exception ignored) {}
+                                fetchAvatarWithOkHttp(context, cacheKeyUrl, rawUrl, imageView);
+                                return false;
+                            }
+
+                            @Override
+                            public boolean onResourceReady(Bitmap resource, Object model, Target<Bitmap> target, DataSource dataSource, boolean isFirstResource) {
+                                return false;
+                            }
+                        })
+                        .into(imageView);
+                return;
+            } else {
+                try {
+                    cachedFile.delete();
+                } catch (Exception ignored) {}
+            }
         }
 
         // 未命中本地缓存时提交给专用线程池异步加载
@@ -290,12 +320,6 @@ public class ImageUtils {
         }
 
         String trimmedUrl = url.trim();
-        Object currentTag = imageView.getTag(R.id.ivSticker);
-        if ((currentTag == trimmedUrl || (currentTag != null && currentTag.equals(trimmedUrl))) && imageView.getDrawable() != null) {
-            return;
-        }
-        imageView.setTag(R.id.ivSticker, trimmedUrl);
-
         if (!trimmedUrl.startsWith("http://") && !trimmedUrl.startsWith("https://")) {
             if (trimmedUrl.startsWith("/")) {
                 trimmedUrl = "https://chat-img.jwznb.com" + trimmedUrl;
@@ -314,82 +338,88 @@ public class ImageUtils {
         final String cacheKeyUrl = finalUrl;
         final String rawUrl = trimmedUrl;
 
-        // 重用 View 时重置当前 Drawable，防止之前的 GifDrawable 在被 Glide 回收后继续被 Canvas 绘制导致 isRecycled() 空指针崩溃
-        imageView.setImageResource(R.drawable.ic_image);
+        Object currentTag = imageView.getTag(R.id.ivSticker);
+        if (rawUrl.equals(currentTag) && imageView.getDrawable() != null) {
+            return;
+        }
+        imageView.setTag(R.id.ivSticker, rawUrl);
 
-        // 统一通过设置中配置的专用线程池按需、逐个异步排队渲染，避免主线程一次性批量解码造成卡顿
-        getAvatarExecutor(context.getApplicationContext()).execute(() -> {
-            // 1. 检查本地磁盘缓存
-            File cachedFile = StickerCache.getStickerFile(context, cacheKeyUrl);
-            if (cachedFile != null && cachedFile.exists() && cachedFile.length() > 0) {
-                new Handler(Looper.getMainLooper()).post(() -> {
-                    try {
-                        Object checkTag = imageView.getTag(R.id.ivSticker);
-                        if (checkTag != null && checkTag.equals(rawUrl)) {
-                            Glide.with(context)
-                                    .load(cachedFile)
-                                    .override(targetWidth, targetHeight)
-                                    .placeholder(R.drawable.ic_image)
-                                    .error(R.drawable.ic_image)
-                                    .diskCacheStrategy(DiskCacheStrategy.ALL)
-                                    .into(imageView);
+        // 直接使用 Glide 异步磁盘与内存缓存调度（命中内存缓存时 0 延时瞬时渲染，无需主线程磁盘I/O）
+        try {
+            GlideUrl glideUrl = new GlideUrl(cacheKeyUrl, new LazyHeaders.Builder()
+                    .addHeader("Referer", "https://myapp.jwznb.com")
+                    .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36")
+                    .build());
+
+            Glide.with(context)
+                    .load(glideUrl)
+                    .override(targetWidth, targetHeight)
+                    .placeholder(R.drawable.ic_image)
+                    .error(R.drawable.ic_image)
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                    .dontAnimate()
+                    .listener(new RequestListener<Drawable>() {
+                        @Override
+                        public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Drawable> target, boolean isFirstResource) {
+                            fetchStickerWithOkHttp(context, cacheKeyUrl, rawUrl, imageView, targetWidth, targetHeight);
+                            return false;
                         }
-                    } catch (Exception ignored) {}
-                });
-                return;
-            }
 
-            // 2. 未命中缓存，通过支持 TLS 1.2 的 OkHttp 后台拉取并回填
+                        @Override
+                        public boolean onResourceReady(Drawable resource, Object model, Target<Drawable> target, DataSource dataSource, boolean isFirstResource) {
+                            return false;
+                        }
+                    })
+                    .into(imageView);
+        } catch (Exception e) {
+            fetchStickerWithOkHttp(context, cacheKeyUrl, rawUrl, imageView, targetWidth, targetHeight);
+        }
+    }
+
+    private static void fetchStickerWithOkHttp(Context context, String cacheKeyUrl, String targetUrl, ImageView imageView, int targetWidth, int targetHeight) {
+        if (context == null || imageView == null || targetUrl == null || targetUrl.trim().isEmpty()) return;
+        getAvatarExecutor(context.getApplicationContext()).execute(() -> {
             try {
+                String primaryUrl = (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")) ? targetUrl : cacheKeyUrl;
                 Request request = new Request.Builder()
-                        .url(cacheKeyUrl)
+                        .url(primaryUrl)
                         .header("Referer", "https://myapp.jwznb.com")
                         .header("User-Agent", "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36")
                         .build();
                 Response response = ApiClient.getClient().newCall(request).execute();
+                if (!response.isSuccessful() && !primaryUrl.equals(cacheKeyUrl)) {
+                    request = new Request.Builder()
+                            .url(cacheKeyUrl)
+                            .header("Referer", "https://myapp.jwznb.com")
+                            .header("User-Agent", "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36")
+                            .build();
+                    response = ApiClient.getClient().newCall(request).execute();
+                }
                 if (response.isSuccessful() && response.body() != null) {
                     byte[] bytes = response.body().bytes();
-                    if (bytes != null && bytes.length > 0) {
+                    if (bytes != null && bytes.length > 64) {
+                        String head = new String(bytes, 0, Math.min(bytes.length, 64)).toLowerCase();
+                        if (head.contains("html") || head.contains("xml") || head.contains("error") || head.contains("denied")) {
+                            return;
+                        }
                         StickerCache.saveStickerBytes(context, cacheKeyUrl, bytes);
-                        File freshlySaved = StickerCache.getStickerFile(context, cacheKeyUrl);
                         new Handler(Looper.getMainLooper()).post(() -> {
                             try {
                                 Object checkTag = imageView.getTag(R.id.ivSticker);
-                                if (checkTag != null && checkTag.equals(rawUrl)) {
+                                if (checkTag != null && checkTag.equals(targetUrl)) {
                                     Glide.with(context)
-                                            .load(freshlySaved != null && freshlySaved.exists() ? freshlySaved : bytes)
+                                            .load(bytes)
                                             .override(targetWidth, targetHeight)
                                             .placeholder(R.drawable.ic_image)
                                             .error(R.drawable.ic_image)
-                                            .diskCacheStrategy(DiskCacheStrategy.ALL)
+                                            .diskCacheStrategy(DiskCacheStrategy.NONE)
                                             .into(imageView);
                                 }
                             } catch (Exception ignored) {}
                         });
-                        return;
                     }
                 }
             } catch (Exception ignored) {}
-
-            // 3. OkHttp 异常兜底（如 404 等）：通过带 Header 的 Glide 后台加载，失败时安全显示 error 图标
-            new Handler(Looper.getMainLooper()).post(() -> {
-                try {
-                    Object checkTag = imageView.getTag(R.id.ivSticker);
-                    if (checkTag != null && checkTag.equals(rawUrl)) {
-                        GlideUrl glideUrl = new GlideUrl(cacheKeyUrl, new LazyHeaders.Builder()
-                                .addHeader("Referer", "https://myapp.jwznb.com")
-                                .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36")
-                                .build());
-                        Glide.with(context)
-                                .load(glideUrl)
-                                .override(targetWidth, targetHeight)
-                                .placeholder(R.drawable.ic_image)
-                                .error(R.drawable.ic_image)
-                                .diskCacheStrategy(DiskCacheStrategy.ALL)
-                                .into(imageView);
-                    }
-                } catch (Exception ignored) {}
-            });
         });
     }
 }

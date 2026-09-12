@@ -141,7 +141,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
         }
 
         if (videoUrl == null || videoUrl.isEmpty()) {
-            Toast.makeText(this, "无效的视频播放地址", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.video_invalid_url, Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
@@ -164,7 +164,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
 
         videoView.setOnErrorListener((mp, what, extra) -> {
             progressBar.setVisibility(View.GONE);
-            Toast.makeText(VideoPlayerActivity.this, "视频播放失败", Toast.LENGTH_SHORT).show();
+            Toast.makeText(VideoPlayerActivity.this, R.string.video_play_failed, Toast.LENGTH_SHORT).show();
             return true;
         });
 
@@ -192,7 +192,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
                 mediaPlayer.setVolume(isMuted ? 0f : 1f, isMuted ? 0f : 1f);
             }
             btnMute.setImageResource(isMuted ? R.drawable.ic_volume_off : R.drawable.ic_volume_up);
-            Toast.makeText(this, isMuted ? "已静音" : "已开启音量", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, isMuted ? R.string.video_muted : R.string.video_unmuted, Toast.LENGTH_SHORT).show();
         });
 
         // 2. 循环播放
@@ -202,7 +202,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
                 mediaPlayer.setLooping(isLooping);
             }
             btnLoop.setColorFilter(isLooping ? Color.WHITE : Color.parseColor("#80FFFFFF"));
-            Toast.makeText(this, isLooping ? "开启循环播放" : "关闭循环播放", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, isLooping ? R.string.video_loop_on : R.string.video_loop_off, Toast.LENGTH_SHORT).show();
         });
 
         // 3. 旋转按钮（横屏 / 竖屏）
@@ -320,7 +320,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
 
     private void downloadVideo() {
         if (videoUrl == null || videoUrl.isEmpty()) return;
-        Toast.makeText(this, "开始下载视频...", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, R.string.video_download_started, Toast.LENGTH_SHORT).show();
         String name = videoTitle != null && !videoTitle.isEmpty() ? videoTitle : "video_" + System.currentTimeMillis() + ".mp4";
         FileDownloadManager.getInstance().download(this, videoUrl, name, new FileDownloadManager.DownloadCallback() {
             @Override
@@ -328,12 +328,12 @@ public class VideoPlayerActivity extends AppCompatActivity {
 
             @Override
             public void onComplete(File file) {
-                runOnUiThread(() -> Toast.makeText(VideoPlayerActivity.this, "视频已保存至: " + file.getAbsolutePath(), Toast.LENGTH_LONG).show());
+                runOnUiThread(() -> Toast.makeText(VideoPlayerActivity.this, getString(R.string.video_saved_to_format, file.getAbsolutePath()), Toast.LENGTH_LONG).show());
             }
 
             @Override
             public void onError(Exception error) {
-                runOnUiThread(() -> Toast.makeText(VideoPlayerActivity.this, "下载失败: " + error.getMessage(), Toast.LENGTH_SHORT).show());
+                runOnUiThread(() -> Toast.makeText(VideoPlayerActivity.this, getString(R.string.video_download_failed, error.getMessage()), Toast.LENGTH_SHORT).show());
             }
 
             @Override
@@ -344,20 +344,20 @@ public class VideoPlayerActivity extends AppCompatActivity {
     @SuppressWarnings("SpellCheckingInspection")
     private void showVideoInfoDialog() {
         if (loadedFile == null || !loadedFile.exists()) {
-            Toast.makeText(this, "正在获取视频数据，请稍后...", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.video_fetching_metadata, Toast.LENGTH_SHORT).show();
             return;
         }
 
         StringBuilder sb = new StringBuilder();
 
         String videoCodec = "H.264 / AVC";
-        String widthStr = "未知";
+        String widthStr = getString(R.string.unknown);
         String frameRateStr = "30 fps";
-        String bitrateStr = "未知";
+        String bitrateStr = getString(R.string.unknown);
         String fileSizeStr = Formatter.formatFileSize(this, loadedFile.length());
 
         String audioCodec = "AAC";
-        String channelsStr = "2 (双声道)";
+        String channelsStr = getString(R.string.video_channel_stereo);
         String sampleRateStr = "44100 Hz";
         String audioBitrateStr = "128 kbps";
         String decoderStr = "Android Native MediaCodec";
@@ -412,7 +412,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
                     }
                     if (format.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
                         int channels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT);
-                        channelsStr = channels == 1 ? "1 (单声道)" : (channels == 2 ? "2 (双声道/立体声)" : channels + " 声道");
+                        channelsStr = channels == 1 ? getString(R.string.video_channel_mono) : (channels == 2 ? getString(R.string.video_channel_stereo) : getString(R.string.video_channels_format, channels));
                     }
                     if (format.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
                         sampleRateStr = format.getInteger(MediaFormat.KEY_SAMPLE_RATE) + " Hz";
@@ -432,26 +432,26 @@ public class VideoPlayerActivity extends AppCompatActivity {
             }
         }
 
-        sb.append("📹 视频信息\n");
-        sb.append(" • 视频编码：").append(videoCodec).append("\n");
-        sb.append(" • 分辨率：").append(widthStr).append("\n");
-        sb.append(" • 帧率：").append(frameRateStr).append("\n");
-        sb.append(" • 比特率：").append(bitrateStr).append("\n");
-        sb.append(" • 文件大小：").append(fileSizeStr).append("\n\n");
+        sb.append(getString(R.string.video_info_header));
+        sb.append(getString(R.string.video_codec_label)).append(videoCodec).append("\n");
+        sb.append(getString(R.string.video_resolution_label)).append(widthStr).append("\n");
+        sb.append(getString(R.string.video_framerate_label)).append(frameRateStr).append("\n");
+        sb.append(getString(R.string.video_bitrate_label)).append(bitrateStr).append("\n");
+        sb.append(getString(R.string.video_filesize_label)).append(fileSizeStr).append("\n\n");
 
-        sb.append("🎵 音频信息\n");
-        sb.append(" • 音频编码：").append(audioCodec).append("\n");
-        sb.append(" • 声道数：").append(channelsStr).append("\n");
-        sb.append(" • 采样率：").append(sampleRateStr).append("\n");
-        sb.append(" • 音频比特率：").append(audioBitrateStr).append("\n\n");
+        sb.append(getString(R.string.video_audio_header));
+        sb.append(getString(R.string.video_audio_codec_label)).append(audioCodec).append("\n");
+        sb.append(getString(R.string.video_channels_label)).append(channelsStr).append("\n");
+        sb.append(getString(R.string.video_samplerate_label)).append(sampleRateStr).append("\n");
+        sb.append(getString(R.string.video_audio_bitrate_label)).append(audioBitrateStr).append("\n\n");
 
-        sb.append("⚙️ 解码器\n");
-        sb.append(" • 解码组件：").append(decoderStr);
+        sb.append(getString(R.string.video_decoder_header));
+        sb.append(getString(R.string.video_decoder_label)).append(decoderStr);
 
         new AlertDialog.Builder(this)
-                .setTitle("视频详细信息")
+                .setTitle(R.string.video_details_title)
                 .setMessage(sb.toString())
-                .setPositiveButton("确定", null)
+                .setPositiveButton(R.string.action_ok, null)
                 .show();
     }
 

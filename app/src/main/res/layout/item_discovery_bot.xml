@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="260dp"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="6dp"
+    android:layout_marginEnd="6dp"
+    android:layout_marginTop="4dp"
+    android:layout_marginBottom="8dp"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="1.5dp"
+    app:strokeColor="#14000000"
+    app:strokeWidth="0.8dp"
+    app:cardBackgroundColor="@color/card_background">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <!-- 顶部：头像 + 名称 + 标签 + 动作按钮 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <FrameLayout
+                android:layout_width="44dp"
+                android:layout_height="44dp">
+
+                <com.google.android.material.imageview.ShapeableImageView
+                    android:id="@+id/ivBotAvatar"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:scaleType="centerCrop"
+                    app:shapeAppearanceOverlay="@style/ShapeAppearance.Circle"
+                    tools:src="@drawable/ic_bot" />
+
+                <!-- 机器人角标 -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="bottom|end"
+                    android:background="@drawable/bg_bot_tag"
+                    android:paddingStart="3dp"
+                    android:paddingEnd="3dp"
+                    android:paddingTop="1dp"
+                    android:paddingBottom="1dp"
+                    android:text="BOT"
+                    android:textColor="#FFFFFFFF"
+                    android:textSize="8sp"
+                    android:textStyle="bold" />
+            </FrameLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="10dp"
+                android:layout_marginEnd="6dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tvBotName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/text_primary"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    tools:text="ChatGPT 智能助手" />
+
+                <TextView
+                    android:id="@+id/tvBotHeadcount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:background="@drawable/bg_discovery_badge"
+                    android:paddingStart="6dp"
+                    android:paddingEnd="6dp"
+                    android:paddingTop="1dp"
+                    android:paddingBottom="1dp"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="10sp"
+                    tools:text="🔥 1.5w 人在用" />
+            </LinearLayout>
+
+            <!-- 动作按钮 (添加 / 进入聊天) -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnBotAction"
+                style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="28dp"
+                android:minWidth="60dp"
+                android:minHeight="28dp"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:paddingTop="0dp"
+                android:paddingBottom="0dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                app:cornerRadius="14dp"
+                android:textSize="11.5sp"
+                android:textStyle="bold"
+                tools:text="添加" />
+        </LinearLayout>
+
+        <!-- 简介说明 -->
+        <TextView
+            android:id="@+id/tvBotDesc"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:lineSpacingExtra="2dp"
+            tools:text="我是全能 AI 机器人助手，支持多语言翻译、编程解答、智能对话等丰富功能！" />
+
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>

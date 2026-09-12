@@ -42,7 +42,7 @@
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Back"
+            android:contentDescription="@string/action_back"
             app:srcCompat="@drawable/ic_back"
             app:tint="#FFFFFF" />
 
@@ -55,7 +55,7 @@
             android:layout_weight="1"
             android:ellipsize="end"
             android:singleLine="true"
-            android:text="视频播放"
+            android:text="@string/video_player_title"
             android:textColor="#FFFFFF"
             android:textSize="16sp"
             android:textStyle="bold" />
@@ -65,7 +65,7 @@
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Info"
+            android:contentDescription="@string/video_action_info"
             app:srcCompat="@drawable/ic_info"
             app:tint="#FFFFFF" />
 
@@ -74,7 +74,7 @@
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Download"
+            android:contentDescription="@string/video_action_download"
             app:srcCompat="@drawable/ic_download"
             app:tint="#FFFFFF" />
     </LinearLayout>
@@ -95,7 +95,7 @@
             android:layout_width="36dp"
             android:layout_height="36dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Play/Pause"
+            android:contentDescription="@string/video_action_play_pause"
             app:srcCompat="@drawable/ic_play"
             app:tint="#FFFFFF" />
 
@@ -104,7 +104,7 @@
             android:layout_width="36dp"
             android:layout_height="36dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Mute"
+            android:contentDescription="@string/video_action_mute"
             app:srcCompat="@drawable/ic_volume_up"
             app:tint="#FFFFFF" />
 
@@ -140,7 +140,7 @@
             android:layout_width="36dp"
             android:layout_height="36dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Loop"
+            android:contentDescription="@string/video_action_loop"
             app:srcCompat="@drawable/ic_loop"
             app:tint="#80FFFFFF" />
 
@@ -149,7 +149,7 @@
             android:layout_width="36dp"
             android:layout_height="36dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Rotate"
+            android:contentDescription="@string/video_action_rotate"
             app:srcCompat="@drawable/ic_screen_rotation"
             app:tint="#FFFFFF" />
 
@@ -158,7 +158,7 @@
             android:layout_width="36dp"
             android:layout_height="36dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Fullscreen"
+            android:contentDescription="@string/video_action_fullscreen"
             app:srcCompat="@drawable/ic_fullscreen"
             app:tint="#FFFFFF" />
     </LinearLayout>

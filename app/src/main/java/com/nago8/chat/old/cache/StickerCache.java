@@ -30,7 +30,15 @@ public class StickerCache {
     }
 
     public static void saveStickerBytes(Context context, String url, byte[] data) {
-        if (context == null || url == null || data == null || data.length == 0) return;
+        if (context == null || url == null || data == null || data.length < 64) return;
+        
+        // 过滤非图片错误响应内容 (如 403 Forbidden / 404 Not Found / HTML / XML 报错)
+        String head = new String(data, 0, Math.min(data.length, 64)).toLowerCase();
+        if (head.contains("html") || head.contains("xml") || head.contains("error") || head.contains("denied")) {
+            Log.w(TAG, "saveStickerBytes: skipped invalid non-image content for URL: " + url + ", head=" + head);
+            return;
+        }
+
         File file = getStickerFile(context, url);
         if (file == null) return;
 
@@ -43,6 +51,11 @@ public class StickerCache {
                 Log.d(TAG, "Sticker bytes cached to disk: " + file.getAbsolutePath());
             } catch (Exception e) {
                 Log.e(TAG, "saveStickerBytes failed", e);
+                try {
+                    if (file.exists()) {
+                        file.delete();
+                    }
+                } catch (Exception ignored) {}
             } finally {
                 if (fos != null) {
                     try {
@@ -109,15 +122,20 @@ public class StickerCache {
         return size;
     }
 
+    private static final char[] HEX_ARRAY = "0123456789abcdef".toCharArray();
+
     private static String md5(String string) {
+        if (string == null || string.isEmpty()) return "";
         try {
             MessageDigest digest = MessageDigest.getInstance("MD5");
-            byte[] bytes = digest.digest(string.getBytes("UTF-8"));
-            StringBuilder sb = new StringBuilder();
-            for (byte b : bytes) {
-                sb.append(String.format("%02x", b & 0xff));
+            byte[] bytes = digest.digest(string.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            char[] hexChars = new char[bytes.length * 2];
+            for (int i = 0; i < bytes.length; i++) {
+                int v = bytes[i] & 0xFF;
+                hexChars[i * 2] = HEX_ARRAY[v >>> 4];
+                hexChars[i * 2 + 1] = HEX_ARRAY[v & 0x0F];
             }
-            return sb.toString();
+            return new String(hexChars);
         } catch (Exception e) {
             return String.valueOf(string.hashCode());
         }

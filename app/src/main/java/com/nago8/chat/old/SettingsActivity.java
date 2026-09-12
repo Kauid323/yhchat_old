@@ -272,7 +272,7 @@ public class SettingsActivity extends AppCompatActivity {
                 "4 " + getString(R.string.settings_avatar_threads_format, 4).replace("4 ", ""),
                 "8 " + getString(R.string.settings_avatar_threads_format, 8).replace("8 ", ""),
                 "16 " + getString(R.string.settings_avatar_threads_format, 16).replace("16 ", ""),
-                "自定义线程数..."
+                getString(R.string.settings_custom_threads)
         };
         final int[] threadValues = new int[]{1, 2, 4, 8, 16, -1};
 
@@ -345,7 +345,7 @@ public class SettingsActivity extends AppCompatActivity {
     private void confirmClearCache() {
         new AlertDialog.Builder(this)
                 .setTitle(R.string.settings_clear_all_cache)
-                .setMessage("确定要清除通讯录、会话、表情包和所有本地头像缓存吗？")
+                .setMessage(R.string.settings_clear_cache_confirm)
                 .setPositiveButton(android.R.string.ok, (dialog, which) -> clearAllCache())
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();

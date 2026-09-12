@@ -13,6 +13,7 @@ import android.text.style.ImageSpan;
 import android.util.LruCache;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.caverock.androidsvg.SVG;
 
@@ -30,14 +31,70 @@ public final class FengEmojiRenderer {
     private static final Pattern EMOJI_PATTERN = Pattern.compile("\\[\\.[^\\[\\]\\r\\n]+\\]");
     private static final Object LOCK = new Object();
     private static volatile Set<String> emojiNames;
-    private static final LruCache<String, Drawable.ConstantState> DRAWABLE_CACHE = new LruCache<>(96);
+    private static final LruCache<String, Bitmap> BITMAP_CACHE = new LruCache<>(512);
 
     private FengEmojiRenderer() {
     }
 
+    /**
+     * 预热 Twemoji 渲染缓存（在后台线程预加载常用 Twemoji SVG）
+     */
+    public static void prewarmCache(@NonNull Context context, int sizePx) {
+        new Thread(() -> {
+            try {
+                ensureEmojiNamesLoaded(context);
+                if (emojiNames != null) {
+                    for (String token : emojiNames) {
+                        getBitmap(context, token, sizePx);
+                    }
+                }
+            } catch (Exception ignored) {}
+        }, "TwemojiPrewarmer").start();
+    }
+
+    @Nullable
+    public static Bitmap getBitmap(@NonNull Context context, @NonNull String token, int sizePx) {
+        String cacheKey = token + "_" + sizePx;
+        Bitmap cached = BITMAP_CACHE.get(cacheKey);
+        if (cached != null && !cached.isRecycled()) {
+            return cached;
+        }
+
+        InputStream inputStream = null;
+        try {
+            inputStream = context.getAssets().open(ASSET_DIR + "/" + token + ".svg");
+            SVG svg = SVG.getFromInputStream(inputStream);
+            Picture picture = svg.renderToPicture(sizePx, sizePx);
+            Bitmap bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888);
+            Canvas canvas = new Canvas(bitmap);
+            picture.draw(canvas);
+            BITMAP_CACHE.put(cacheKey, bitmap);
+            return bitmap;
+        } catch (Exception ignored) {
+            return null;
+        } finally {
+            if (inputStream != null) {
+                try {
+                    inputStream.close();
+                } catch (IOException ignored) {}
+            }
+        }
+    }
+
+    @Nullable
+    public static Drawable getDrawable(@NonNull Context context, @NonNull String token, int sizePx) {
+        Bitmap bitmap = getBitmap(context, token, sizePx);
+        if (bitmap != null) {
+            BitmapDrawable drawable = new BitmapDrawable(context.getResources(), bitmap);
+            drawable.setBounds(0, 0, sizePx, sizePx);
+            return drawable;
+        }
+        return null;
+    }
+
     @NonNull
     public static CharSequence apply(@NonNull Context context, CharSequence source, int sizePx) {
-        if (source.length() == 0) {
+        if (source == null || source.length() == 0) {
             return source;
         }
         ensureEmojiNamesLoaded(context);
@@ -52,7 +109,7 @@ public final class FengEmojiRenderer {
             if (token == null || !emojiNames.contains(token)) {
                 continue;
             }
-            Drawable drawable = loadDrawable(context, token, sizePx);
+            Drawable drawable = getDrawable(context, token, sizePx);
             if (drawable == null) {
                 continue;
             }
@@ -90,40 +147,6 @@ public final class FengEmojiRenderer {
             }
             emojiNames = Collections.unmodifiableSet(names);
         }
-    }
-
-    private static Drawable loadDrawable(@NonNull Context context, @NonNull String token, int sizePx) {
-        Drawable.ConstantState state = DRAWABLE_CACHE.get(token);
-        Drawable drawable = state != null ? state.newDrawable(context.getResources()) : null;
-        if (drawable == null) {
-            InputStream inputStream = null;
-            try {
-                inputStream = context.getAssets().open(ASSET_DIR + "/" + token + ".svg");
-                SVG svg = SVG.getFromInputStream(inputStream);
-                Picture picture = svg.renderToPicture(sizePx, sizePx);
-                Bitmap bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888);
-                Canvas canvas = new Canvas(bitmap);
-                picture.draw(canvas);
-                drawable = new BitmapDrawable(context.getResources(), bitmap);
-                if (drawable.getConstantState() != null) {
-                    DRAWABLE_CACHE.put(token, drawable.getConstantState());
-                }
-            } catch (Exception ignored) {
-                drawable = null;
-            } finally {
-                if (inputStream != null) {
-                    try {
-                        inputStream.close();
-                    } catch (IOException ignored) {
-                    }
-                }
-            }
-        }
-        if (drawable != null) {
-            drawable = drawable.mutate();
-            drawable.setBounds(0, 0, sizePx, sizePx);
-        }
-        return drawable;
     }
 
     private static class CenteredImageSpan extends ImageSpan {

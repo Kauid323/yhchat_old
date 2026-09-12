@@ -24,8 +24,6 @@ import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.bumptech.glide.Glide;
-import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
@@ -35,12 +33,10 @@ import com.nago8.chat.old.model.StickerPack;
 import com.nago8.chat.old.repository.StickerRepository;
 import com.nago8.chat.old.utils.ImageUploadUtils;
 import com.nago8.chat.old.utils.ImageUtils;
+import com.nago8.chat.old.utils.LocaleHelper;
 import com.nago8.chat.old.utils.PrefUtils;
 import com.nago8.chat.old.utils.ThemeUtils;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -71,6 +67,11 @@ public class StickerPackDetailActivity extends AppCompatActivity {
     private DetailStickerAdapter adapter;
     private final List<StickerItem> stickerItems = new ArrayList<>();
     private boolean isOwner = false;
+
+    @Override
+    protected void attachBaseContext(android.content.Context newBase) {
+        super.attachBaseContext(LocaleHelper.wrap(newBase));
+    }
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -272,6 +273,7 @@ public class StickerPackDetailActivity extends AppCompatActivity {
         stickerItems.clear();
         if (pack.stickerItems != null) {
             stickerItems.addAll(pack.stickerItems);
+            com.nago8.chat.old.cache.StickerMemoryCache.putPackItems(pack.id, pack.stickerItems);
         }
         adapter.setItems(stickerItems);
         tvEmpty.setVisibility(stickerItems.isEmpty() ? View.VISIBLE : View.GONE);
@@ -434,22 +436,20 @@ public class StickerPackDetailActivity extends AppCompatActivity {
         new MaterialAlertDialogBuilder(this)
                 .setTitle(R.string.sticker_delete_item)
                 .setMessage(R.string.sticker_delete_item_confirm)
-                .setPositiveButton(R.string.action_delete, (dialog, which) -> {
-                    repository.removeStickerItem(token, item.id, new StickerRepository.SimpleCallback() {
-                        @Override
-                        public void onSuccess() {
-                            runOnUiThread(() -> {
-                                Toast.makeText(StickerPackDetailActivity.this, R.string.sticker_delete_success, Toast.LENGTH_SHORT).show();
-                                loadDetail();
-                            });
-                        }
+                .setPositiveButton(R.string.action_delete, (dialog, which) -> repository.removeStickerItem(token, item.id, new StickerRepository.SimpleCallback() {
+                    @Override
+                    public void onSuccess() {
+                        runOnUiThread(() -> {
+                            Toast.makeText(StickerPackDetailActivity.this, R.string.sticker_delete_success, Toast.LENGTH_SHORT).show();
+                            loadDetail();
+                        });
+                    }
 
-                        @Override
-                        public void onError(Exception error) {
-                            runOnUiThread(() -> Toast.makeText(StickerPackDetailActivity.this, error.getMessage(), Toast.LENGTH_SHORT).show());
-                        }
-                    });
-                })
+                    @Override
+                    public void onError(Exception error) {
+                        runOnUiThread(() -> Toast.makeText(StickerPackDetailActivity.this, error.getMessage(), Toast.LENGTH_SHORT).show());
+                    }
+                }))
                 .setNegativeButton(R.string.dialog_cancel, null)
                 .show();
     }
@@ -511,22 +511,20 @@ public class StickerPackDetailActivity extends AppCompatActivity {
         new MaterialAlertDialogBuilder(this)
                 .setTitle(R.string.sticker_delete_pack)
                 .setMessage(getString(R.string.sticker_delete_pack_confirm_format, currentPack.name))
-                .setPositiveButton(R.string.action_delete, (dialog, which) -> {
-                    repository.deleteStickerPack(token, currentPack.id, new StickerRepository.SimpleCallback() {
-                        @Override
-                        public void onSuccess() {
-                            runOnUiThread(() -> {
-                                Toast.makeText(StickerPackDetailActivity.this, R.string.sticker_delete_pack_success, Toast.LENGTH_SHORT).show();
-                                finish();
-                            });
-                        }
+                .setPositiveButton(R.string.action_delete, (dialog, which) -> repository.deleteStickerPack(token, currentPack.id, new StickerRepository.SimpleCallback() {
+                    @Override
+                    public void onSuccess() {
+                        runOnUiThread(() -> {
+                            Toast.makeText(StickerPackDetailActivity.this, R.string.sticker_delete_pack_success, Toast.LENGTH_SHORT).show();
+                            finish();
+                        });
+                    }
 
-                        @Override
-                        public void onError(Exception error) {
-                            runOnUiThread(() -> Toast.makeText(StickerPackDetailActivity.this, error.getMessage(), Toast.LENGTH_SHORT).show());
-                        }
-                    });
-                })
+                    @Override
+                    public void onError(Exception error) {
+                        runOnUiThread(() -> Toast.makeText(StickerPackDetailActivity.this, error.getMessage(), Toast.LENGTH_SHORT).show());
+                    }
+                }))
                 .setNegativeButton(R.string.dialog_cancel, null)
                 .show();
     }

@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/searchOverlayRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#59000000"
+    android:fitsSystemWindows="true">
+
+    <!-- 顶部悬浮 Material 搜索卡片 -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/cardSearchContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="24dp"
+        app:cardBackgroundColor="@color/card_background"
+        app:cardCornerRadius="18dp"
+        app:cardElevation="10dp"
+        app:strokeColor="#1F000000"
+        app:strokeWidth="0.8dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- 搜索条 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="4dp"
+                android:paddingEnd="8dp">
+
+                <ImageView
+                    android:id="@+id/btnBackSearch"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="关闭"
+                    android:padding="10dp"
+                    android:src="@drawable/ic_back"
+                    app:tint="@color/text_primary" />
+
+                <EditText
+                    android:id="@+id/etSearchInput"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginStart="4dp"
+                    android:layout_marginEnd="4dp"
+                    android:layout_weight="1"
+                    android:background="@null"
+                    android:hint="@string/search_hint"
+                    android:imeOptions="actionSearch"
+                    android:inputType="text"
+                    android:singleLine="true"
+                    android:textColor="@color/text_primary"
+                    android:textColorHint="@color/text_hint"
+                    android:textSize="14.5sp" />
+
+                <ProgressBar
+                    android:id="@+id/pbSearchLoading"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="6dp"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+
+                <ImageView
+                    android:id="@+id/ivClearSearchText"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="清空"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_close"
+                    android:visibility="gone"
+                    app:tint="@color/text_hint"
+                    tools:visibility="visible" />
+            </LinearLayout>
+
+            <!-- 分割线 -->
+            <View
+                android:id="@+id/viewSearchDivider"
+                android:layout_width="match_parent"
+                android:layout_height="0.6dp"
+                android:background="@color/divider_color"
+                android:visibility="gone"
+                tools:visibility="visible" />
+
+            <!-- 搜索结果列表（最大高度限制） -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvSearchResults"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clipToPadding="false"
+                android:overScrollMode="never"
+                android:paddingTop="2dp"
+                android:paddingBottom="6dp"
+                android:scrollbars="vertical"
+                android:visibility="gone"
+                tools:itemCount="3"
+                tools:listitem="@layout/item_floating_search_result"
+                tools:visibility="visible" />
+
+            <!-- 空结果提示 -->
+            <LinearLayout
+                android:id="@+id/layoutSearchEmpty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="28dp"
+                android:visibility="gone"
+                tools:visibility="visible">
+
+                <ImageView
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_search"
+                    app:tint="@color/text_hint" />
+
+                <TextView
+                    android:id="@+id/tvSearchEmptyHint"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/search_no_result"
+                    android:textColor="@color/text_hint"
+                    android:textSize="13.5sp" />
+            </LinearLayout>
+
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+</FrameLayout>

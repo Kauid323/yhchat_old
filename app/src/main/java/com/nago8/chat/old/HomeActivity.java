@@ -47,7 +47,6 @@ import com.nago8.chat.old.fragments.AddressBookFragment;
 import com.nago8.chat.old.fragments.CommunityFragment;
 import com.nago8.chat.old.fragments.DiscoveryFragment;
 import com.nago8.chat.old.fragments.HomeConversationsFragment;
-import com.nago8.chat.old.listener.SearchHost;
 import com.nago8.chat.old.model.UserModels;
 import com.nago8.chat.old.net.ApiClient;
 import com.nago8.chat.old.proto.chat_ws_go.WsMsg;
@@ -91,15 +90,13 @@ public class HomeActivity extends AppCompatActivity {
 
     private TabLayout tabLayoutHome;
     private TabLayoutMediator tabLayoutMediator;
-    private View searchContainer;
-    private EditText etSearch;
 
-    private boolean searchMode = false;
     private int conversationCount = 0;
     private int stickyCount = 0;
 
     private final Set<String> doNotDisturbChatIds = new HashSet<>();
     private final Map<String, String[]> convInfoCache = new HashMap<>();
+    private WsClient.MessageListener wsMessageListener;
 
     @Override
     protected void attachBaseContext(@NonNull Context newBase) {
@@ -174,6 +171,11 @@ public class HomeActivity extends AppCompatActivity {
             this.stickyCount = stickyUnread;
             updateTabTexts();
         }));
+
+        wsMessageListener = msg -> {
+            ConversationCache.getInstance().onPushMessage(msg, HomeActivity.this);
+        };
+        WsClient.getInstance().addMessageListener(wsMessageListener);
 
         setupMenuClickListeners();
         setupVoicePlaybackCard();
@@ -282,7 +284,7 @@ public class HomeActivity extends AppCompatActivity {
         invalidateOptionsMenu();
 
         boolean isConversationTab = (fragment instanceof HomeConversationsFragment);
-        if (tabLayoutHome != null && !searchMode) {
+        if (tabLayoutHome != null) {
             tabLayoutHome.setVisibility(isConversationTab ? View.VISIBLE : View.GONE);
         }
 
@@ -314,23 +316,6 @@ public class HomeActivity extends AppCompatActivity {
 
     private void initConversationTabs() {
         tabLayoutHome = findViewById(R.id.tabLayoutHome);
-        searchContainer = findViewById(R.id.searchContainer);
-        etSearch = findViewById(R.id.etSearch);
-        AppCompatImageView btnSearch = findViewById(R.id.btnSearch);
-        AppCompatImageView btnSearchBack = findViewById(R.id.btnSearchBack);
-
-        if (btnSearch != null) btnSearch.setOnClickListener(v -> doSearch());
-        if (btnSearchBack != null) btnSearchBack.setOnClickListener(v -> hideSearch());
-        if (etSearch != null) {
-            etSearch.setOnEditorActionListener((v, actionId, event) -> {
-                if (actionId == EditorInfo.IME_ACTION_SEARCH) {
-                    doSearch();
-                    return true;
-                }
-                return false;
-            });
-        }
-
         updateTabTexts();
     }
 
@@ -346,9 +331,7 @@ public class HomeActivity extends AppCompatActivity {
             }
 
             boolean isConversationTab = (currentFragment instanceof HomeConversationsFragment);
-            if (!searchMode) {
-                tabLayoutHome.setVisibility(isConversationTab ? View.VISIBLE : View.GONE);
-            }
+            tabLayoutHome.setVisibility(isConversationTab ? View.VISIBLE : View.GONE);
         }
     }
 
@@ -356,64 +339,6 @@ public class HomeActivity extends AppCompatActivity {
     public void updateConversationCount(int count) {
         conversationCount = count;
         updateTabTexts();
-    }
-
-    // ==================== Top Toolbar Search ====================
-
-    public void showSearch() {
-        if (searchMode) return;
-        if (currentFragment instanceof HomeConversationsFragment) {
-            HomeConversationsFragment hcf = (HomeConversationsFragment) currentFragment;
-            if (hcf.getViewPager() != null) {
-                hcf.getViewPager().setCurrentItem(0, true);
-            }
-        }
-        searchMode = true;
-        if (tabLayoutHome != null) tabLayoutHome.setVisibility(View.GONE);
-        if (searchContainer != null) searchContainer.setVisibility(View.VISIBLE);
-        if (etSearch != null) etSearch.requestFocus();
-        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-        if (imm != null && etSearch != null) imm.showSoftInput(etSearch, InputMethodManager.SHOW_IMPLICIT);
-    }
-
-    public void hideSearch() {
-        if (!searchMode) return;
-        searchMode = false;
-        if (searchContainer != null) searchContainer.setVisibility(View.GONE);
-        if (etSearch != null) etSearch.setText("");
-        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-        if (imm != null && etSearch != null) imm.hideSoftInputFromWindow(etSearch.getWindowToken(), 0);
-
-        boolean isConversationTab = (currentFragment instanceof HomeConversationsFragment);
-        if (tabLayoutHome != null) {
-            tabLayoutHome.setVisibility(isConversationTab ? View.VISIBLE : View.GONE);
-        }
-        if (currentFragment instanceof SearchHost) {
-            ((SearchHost) currentFragment).onSearchClosed();
-        } else if (currentFragment instanceof HomeConversationsFragment) {
-            HomeConversationsFragment hcf = (HomeConversationsFragment) currentFragment;
-            if (hcf.getConversationsFragment() != null) {
-                hcf.getConversationsFragment().onSearchClosed();
-            }
-        }
-    }
-
-    private void doSearch() {
-        if (etSearch == null) return;
-        String word = etSearch.getText().toString().trim();
-        if (word.isEmpty()) return;
-
-        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-        if (imm != null) imm.hideSoftInputFromWindow(etSearch.getWindowToken(), 0);
-
-        if (currentFragment instanceof SearchHost) {
-            ((SearchHost) currentFragment).onSearch(word);
-        } else if (currentFragment instanceof HomeConversationsFragment) {
-            HomeConversationsFragment hcf = (HomeConversationsFragment) currentFragment;
-            if (hcf.getConversationsFragment() != null) {
-                hcf.getConversationsFragment().onSearch(word);
-            }
-        }
     }
 
     public void fetchStickyCount() {
@@ -537,12 +462,20 @@ public class HomeActivity extends AppCompatActivity {
     public boolean onPrepareOptionsMenu(Menu menu) {
         MenuItem actionItem = menu.findItem(R.id.action_search);
         if (actionItem != null) {
-            if (currentFragment instanceof AddressBookFragment) {
+            if (currentFragment instanceof HomeConversationsFragment) {
+                actionItem.setVisible(true);
+                actionItem.setIcon(R.drawable.ic_search);
+                actionItem.setTitle(R.string.action_search);
+            } else if (currentFragment instanceof CommunityFragment) {
+                actionItem.setVisible(true);
+                actionItem.setIcon(R.drawable.ic_search);
+                actionItem.setTitle(R.string.menu_community);
+            } else if (currentFragment instanceof AddressBookFragment) {
+                actionItem.setVisible(true);
                 actionItem.setIcon(R.drawable.ic_refresh);
                 actionItem.setTitle(R.string.action_refresh);
             } else {
-                actionItem.setIcon(R.drawable.ic_search);
-                actionItem.setTitle(R.string.action_search);
+                actionItem.setVisible(false);
             }
         }
         return super.onPrepareOptionsMenu(menu);
@@ -551,10 +484,12 @@ public class HomeActivity extends AppCompatActivity {
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
         if (item.getItemId() == R.id.action_search) {
-            if (currentFragment instanceof AddressBookFragment) {
+            if (currentFragment instanceof HomeConversationsFragment) {
+                new com.nago8.chat.old.dialog.ConversationSearchDialog(this).show();
+            } else if (currentFragment instanceof AddressBookFragment) {
                 ((AddressBookFragment) currentFragment).refreshData();
-            } else {
-                showSearch();
+            } else if (currentFragment instanceof CommunityFragment) {
+                startActivity(new Intent(this, CommunitySearchActivity.class));
             }
             return true;
         }
@@ -936,6 +871,10 @@ public class HomeActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        if (wsMessageListener != null) {
+            WsClient.getInstance().removeMessageListener(wsMessageListener);
+            wsMessageListener = null;
+        }
         if (globalAudioPlayListener != null) {
             AudioPlayerManager.getInstance().removeGlobalListener(globalAudioPlayListener);
         }

@@ -97,7 +97,7 @@ public class PostDetailActivity extends AppCompatActivity {
     private boolean interactionTabLoaded = false;
     // replyTarget: 0 = top-level comment, >0 = reply to this commentId
     private long replyTargetCommentId = 0;
-    private String replyHint = "写评论...";
+    private String replyHint = "";
 
     private SwipeRefreshLayout swipeRefreshLayout;
     private CommunityRepository communityRepo;
@@ -114,6 +114,7 @@ public class PostDetailActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_post_detail);
 
+        replyHint = getString(R.string.post_hint_comment);
         communityRepo = new CommunityRepository();
 
         int primaryColor = com.nago8.chat.old.utils.ThemeUtils.getThemeColor(this);
@@ -384,7 +385,7 @@ public class PostDetailActivity extends AppCompatActivity {
         updateLikeUI();
         updateCollectUI();
         updateRewardUI();
-        tvCommentTitle.setText("评论 " + commentNum);
+        tvCommentTitle.setText(getString(R.string.post_comments_count_format, commentNum));
     }
 
     // ==================== Interaction Actions ====================
@@ -630,7 +631,7 @@ public class PostDetailActivity extends AppCompatActivity {
                         if (!rootGson.has("data") || rootGson.get("data").isJsonNull()) return;
                         com.google.gson.JsonObject data = rootGson.getAsJsonObject("data");
                         commentTotal = data.has("total") ? data.get("total").getAsInt() : 0;
-                        tvCommentTitle.setText("评论 " + commentTotal);
+                        tvCommentTitle.setText(getString(R.string.post_comments_count_format, commentTotal));
                         if (commentTotal == 0) {
                             tvNoComment.setVisibility(View.VISIBLE);
                             return;
@@ -984,7 +985,7 @@ public class PostDetailActivity extends AppCompatActivity {
     private void submitComment() {
         String text = etComment.getText().toString().trim();
         if (TextUtils.isEmpty(text)) {
-            Toast.makeText(this, "请输入评论内容", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.post_input_comment_hint, Toast.LENGTH_SHORT).show();
             return;
         }
         String token = PrefUtils.getToken(this);
@@ -1000,10 +1001,10 @@ public class PostDetailActivity extends AppCompatActivity {
                     btnSendComment.setEnabled(true);
                     etComment.setText("");
                     replyTargetCommentId = 0;
-                    etComment.setHint("写评论...");
+                    etComment.setHint(R.string.post_hint_comment);
                     InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
                     if (imm != null) imm.hideSoftInputFromWindow(etComment.getWindowToken(), 0);
-                    Toast.makeText(PostDetailActivity.this, "评论成功！", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(PostDetailActivity.this, R.string.post_comment_success, Toast.LENGTH_SHORT).show();
                     // Reload comments
                     loadComments(true);
                 });
@@ -1012,7 +1013,7 @@ public class PostDetailActivity extends AppCompatActivity {
             public void onError(String msg) {
                 runOnUiThread(() -> {
                     btnSendComment.setEnabled(true);
-                    Toast.makeText(PostDetailActivity.this, "评论失败: " + msg, Toast.LENGTH_SHORT).show();
+                    Toast.makeText(PostDetailActivity.this, getString(R.string.post_comment_failed_format, msg), Toast.LENGTH_SHORT).show();
                 });
             }
         });

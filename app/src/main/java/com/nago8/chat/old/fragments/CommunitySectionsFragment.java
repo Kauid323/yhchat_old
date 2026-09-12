@@ -62,10 +62,10 @@ public class CommunitySectionsFragment extends Fragment {
 
         // 1. 初始化左侧短侧边栏
         List<CommunitySidebarAdapter.SidebarItem> sidebarItems = new ArrayList<>();
-        sidebarItems.add(new CommunitySidebarAdapter.SidebarItem(2, "热门"));
-        sidebarItems.add(new CommunitySidebarAdapter.SidebarItem(1, "关注"));
-        sidebarItems.add(new CommunitySidebarAdapter.SidebarItem(3, "我的"));
-        sidebarItems.add(new CommunitySidebarAdapter.SidebarItem(4, "全部"));
+        sidebarItems.add(new CommunitySidebarAdapter.SidebarItem(2, getString(R.string.community_tab_hot)));
+        sidebarItems.add(new CommunitySidebarAdapter.SidebarItem(1, getString(R.string.community_tab_following)));
+        sidebarItems.add(new CommunitySidebarAdapter.SidebarItem(3, getString(R.string.community_tab_mine)));
+        sidebarItems.add(new CommunitySidebarAdapter.SidebarItem(4, getString(R.string.community_tab_all)));
 
         sidebarAdapter = new CommunitySidebarAdapter(requireContext(), sidebarItems);
         LinearLayoutManager sidebarLayoutManager = new LinearLayoutManager(getContext());

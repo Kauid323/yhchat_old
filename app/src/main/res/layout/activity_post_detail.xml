@@ -245,7 +245,7 @@
             android:textSize="14sp"
             android:textStyle="bold"
             android:textColor="@color/text_primary"
-            android:text="评论" />
+            android:text="@string/post_comment_title" />
 
         <!-- 下拉刷新包裹评论区 -->
         <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
@@ -283,7 +283,7 @@
                         android:layout_height="wrap_content"
                         android:padding="24dp"
                         android:gravity="center"
-                        android:text="暂无评论，快来抢沙发~"
+                        android:text="@string/post_no_comments"
                         android:textSize="14sp"
                         android:textColor="@color/text_secondary"
                         android:visibility="gone" />
@@ -295,7 +295,7 @@
                         android:layout_height="wrap_content"
                         android:padding="12dp"
                         android:gravity="center"
-                        android:text="加载更多评论"
+                        android:text="@string/post_load_more_comments"
                         android:textSize="13sp"
                         android:textColor="@color/app_primary"
                         android:clickable="true"
@@ -329,7 +329,7 @@
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_weight="1"
-                android:hint="写评论..."
+                android:hint="@string/post_hint_comment"
                 android:textSize="14sp"
                 android:background="@drawable/bg_input_flat"
                 android:paddingStart="10dp"
@@ -343,7 +343,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="match_parent"
                 android:layout_marginStart="8dp"
-                android:text="发送"
+                android:text="@string/btn_send"
                 android:textSize="13sp"
                 android:textColor="@color/text_white"
                 android:background="@drawable/bg_button_flat"

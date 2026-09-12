@@ -32,14 +32,23 @@
 
             <TextView
                 android:id="@+id/tvUnreadCount"
-                android:layout_width="16dp"
-                android:layout_height="16dp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="18dp"
+                android:minHeight="18dp"
                 android:layout_gravity="top|end"
                 android:background="@drawable/bg_unread_badge"
                 android:gravity="center"
+                android:paddingStart="5dp"
+                android:paddingEnd="5dp"
+                android:paddingTop="1dp"
+                android:paddingBottom="1dp"
                 android:text="1"
                 android:textColor="@color/text_white"
                 android:textSize="10sp"
+                android:textStyle="bold"
+                android:includeFontPadding="false"
+                android:singleLine="true"
                 android:visibility="gone"
                 tools:visibility="visible" />
         </FrameLayout>
@@ -70,38 +79,47 @@
                     android:textStyle="bold"
                     tools:text="Conversation Name" />
 
+                <TextView
+                    android:id="@+id/tvTime"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginLeft="8dp"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:textSize="12sp"
+                    tools:text="12:30" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvContent"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:singleLine="true"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:textSize="14sp"
+                    tools:text="Last chat message content goes here..." />
+
                 <androidx.appcompat.widget.AppCompatImageView
                     android:id="@+id/ivDnd"
                     android:layout_width="14dp"
                     android:layout_height="14dp"
-                    android:layout_marginStart="4dp"
-                    android:layout_marginLeft="4dp"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginLeft="8dp"
                     android:visibility="gone"
                     app:srcCompat="@drawable/ic_do_not_disturb"
-                    app:tint="?android:attr/textColorSecondary" />
+                    app:tint="?android:attr/textColorSecondary"
+                    tools:visibility="visible" />
             </LinearLayout>
-
-            <TextView
-                android:id="@+id/tvContent"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:ellipsize="end"
-                android:singleLine="true"
-                android:textColor="?android:attr/textColorSecondary"
-                android:textSize="14sp"
-                tools:text="Last chat message content goes here..." />
         </LinearLayout>
-
-        <TextView
-            android:id="@+id/tvTime"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:layout_marginLeft="8dp"
-            android:textColor="?android:attr/textColorSecondary"
-            android:textSize="12sp"
-            tools:text="12:30" />
 
     </LinearLayout>
 
@@ -120,7 +138,7 @@
             android:clickable="true"
             android:focusable="true"
             android:gravity="center"
-            android:text="置顶"
+            android:text="@string/conversation_action_pin"
             android:textColor="@color/text_white"
             android:textSize="14sp"
             android:textStyle="bold" />
@@ -146,7 +164,7 @@
             android:clickable="true"
             android:focusable="true"
             android:gravity="center"
-            android:text="删除"
+            android:text="@string/action_delete"
             android:textColor="@color/text_white"
             android:textSize="14sp"
             android:textStyle="bold" />

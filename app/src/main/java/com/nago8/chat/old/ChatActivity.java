@@ -1,6 +1,7 @@
 package com.nago8.chat.old;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
@@ -28,8 +29,6 @@ import androidx.appcompat.widget.AppCompatImageButton;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -188,8 +187,8 @@ public class ChatActivity extends AppCompatActivity {
             }
         });
 
-        adapter.setOnMessageClickListener((anchorView, msg, group) -> showMessageDropMenu(anchorView, msg, group));
-        adapter.setOnEditHistoryClickListener(msg -> showEditHistory(msg));
+        adapter.setOnMessageClickListener(this::showMessageDropMenu);
+        adapter.setOnEditHistoryClickListener(this::showEditHistory);
         setupComposeInput();
 
         // 监听系统 Insets（状态栏、导航栏与软键盘）
@@ -255,7 +254,7 @@ public class ChatActivity extends AppCompatActivity {
                         if (imeInsets.bottom > navInsets.bottom) {
                             imeHeight = imeInsets.bottom - navInsets.bottom + extraGap;
                         } else if (imeInsets.bottom > 0) {
-                            float progress = (float) imeInsets.bottom / Math.max(1, navInsets.bottom);
+                            float progress = (float) imeInsets.bottom / navInsets.bottom;
                             imeHeight = (int) (extraGap * progress);
                         }
                         if (chatInputBar != null) {
@@ -270,15 +269,13 @@ public class ChatActivity extends AppCompatActivity {
                     @Override
                     public void onEnd(@NonNull android.view.WindowInsetsAnimation animation) {
                         super.onEnd(animation);
-                        if (rootContainer != null) {
-                            android.view.WindowInsets insets = rootContainer.getRootWindowInsets();
-                            if (insets != null) {
-                                android.graphics.Insets ime = insets.getInsets(WindowInsets.Type.ime());
-                                android.graphics.Insets nb = insets.getInsets(WindowInsets.Type.navigationBars());
-                                if (ime.bottom <= nb.bottom) {
-                                    if (chatInputBar != null) chatInputBar.setTranslationY(0);
-                                    if (recyclerView != null) recyclerView.setTranslationY(0);
-                                }
+                        WindowInsets insets = rootContainer.getRootWindowInsets();
+                        if (insets != null) {
+                            android.graphics.Insets ime = insets.getInsets(WindowInsets.Type.ime());
+                            android.graphics.Insets nb = insets.getInsets(WindowInsets.Type.navigationBars());
+                            if (ime.bottom <= nb.bottom) {
+                                if (chatInputBar != null) chatInputBar.setTranslationY(0);
+                                if (recyclerView != null) recyclerView.setTranslationY(0);
                             }
                         }
                     }
@@ -309,8 +306,9 @@ public class ChatActivity extends AppCompatActivity {
         super.onResume();
         // 设置当前聊天会话，WsClient 据此跳过通知
         com.nago8.chat.old.ws.WsClient.getInstance().setActiveChatId(chatId);
-        // 取消当前会话的通知
+        // 取消当前会话的系统通知并清空未读数与服务端同步
         com.nago8.chat.old.utils.NotificationHelper.cancelNotification(this, chatId);
+        com.nago8.chat.old.cache.ConversationCache.getInstance().markAsRead(this, chatId);
         wsListener = wsMsg -> runOnUiThread(() -> handlePushMessage(wsMsg));
         WsClient.getInstance().addMessageListener(wsListener);
 
@@ -328,6 +326,7 @@ public class ChatActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         com.nago8.chat.old.ws.WsClient.getInstance().setActiveChatId(null);
+        com.nago8.chat.old.cache.ConversationCache.getInstance().markAsRead(this, chatId);
         if (wsListener != null) {
             WsClient.getInstance().removeMessageListener(wsListener);
             wsListener = null;
@@ -341,7 +340,7 @@ public class ChatActivity extends AppCompatActivity {
         android.util.Log.d("ChatActivity_WS", "handlePushMessage: targetChatId=" + targetChatId + ", currentChatId=" + chatId + ", wsMsg.msg_id=" + wsMsg.msg_id + ", cmd=" + (wsMsg.cmd != null ? wsMsg.cmd.name : "null"));
 
         // 只处理当前聊天界面的消息 (兼容 targetChatId 或 msg.chat_id 匹配)
-        boolean isMatch = chatId.equals(targetChatId) || (wsMsg.chat_id != null && chatId.equals(wsMsg.chat_id));
+        boolean isMatch = chatId.equals(targetChatId) || (chatId.equals(wsMsg.chat_id));
         if (!isMatch) {
             android.util.Log.d("ChatActivity_WS", "handlePushMessage: ChatId mismatch, ignore");
             return;
@@ -641,7 +640,7 @@ public class ChatActivity extends AppCompatActivity {
 
         if (validUris.isEmpty()) return;
 
-        Toast.makeText(this, "正在准备发送 " + validUris.size() + " 个视频...", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, getString(R.string.chat_preparing_send_videos, validUris.size()), Toast.LENGTH_SHORT).show();
 
         repository.uploadAndSendVideos(this, token, chatId, chatType, validUris, new MessageRepository.VideoUploadListener() {
             @Override
@@ -651,7 +650,7 @@ public class ChatActivity extends AppCompatActivity {
             @Override
             public void onVideoSuccess(int index, int total, String fileName) {
                 runOnUiThread(() -> {
-                    Toast.makeText(ChatActivity.this, "视频发送成功", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(ChatActivity.this, R.string.chat_video_send_success, Toast.LENGTH_SHORT).show();
                     fetchLatestMessage();
                 });
             }
@@ -1337,17 +1336,18 @@ public class ChatActivity extends AppCompatActivity {
 
         // 展示加载中状态
         android.app.ProgressDialog progress = new android.app.ProgressDialog(this);
-        progress.setMessage("正在加载编辑历史…");
+        progress.setMessage(getString(R.string.chat_loading_edit_history));
         progress.setCancelable(false);
         progress.show();
 
         repository.listMessageEditRecord(token, msg.msg_id, new MessageRepository.EditRecordCallback() {
+            @SuppressLint("SetTextI18n")
             @Override
             public void onSuccess(java.util.List<MessageRepository.EditRecord> records) {
                 runOnUiThread(() -> {
                     progress.dismiss();
                     if (records == null || records.isEmpty()) {
-                        Toast.makeText(ChatActivity.this, "暂无编辑历史", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(ChatActivity.this, R.string.chat_no_edit_history, Toast.LENGTH_SHORT).show();
                         return;
                     }
 
@@ -1365,7 +1365,7 @@ public class ChatActivity extends AppCompatActivity {
                         // 时间标头
                         android.widget.TextView tvTime = new android.widget.TextView(ChatActivity.this);
                         String timeStr = sdf.format(new java.util.Date(rec.msgTime > 0 ? rec.msgTime : rec.createTime));
-                        tvTime.setText("第 " + (i + 1) + " 次编辑·" + timeStr);
+                        tvTime.setText(getString(R.string.chat_edit_history_item_title, (i + 1), timeStr));
                         tvTime.setTextSize(12);
                         tvTime.setTextColor(0xFF9E9E9E);
                         android.widget.LinearLayout.LayoutParams timeParams = new android.widget.LinearLayout.LayoutParams(
@@ -1406,9 +1406,9 @@ public class ChatActivity extends AppCompatActivity {
                     scrollView.addView(listLayout);
 
                     new com.google.android.material.dialog.MaterialAlertDialogBuilder(ChatActivity.this)
-                            .setTitle("编辑历史")
+                            .setTitle(R.string.chat_edit_history_title)
                             .setView(scrollView)
-                            .setPositiveButton("关闭", null)
+                            .setPositiveButton(R.string.action_close, null)
                             .show();
                 });
             }
@@ -1417,7 +1417,7 @@ public class ChatActivity extends AppCompatActivity {
             public void onError(String error) {
                 runOnUiThread(() -> {
                     progress.dismiss();
-                    Toast.makeText(ChatActivity.this, "加载失败: " + error, Toast.LENGTH_SHORT).show();
+                    Toast.makeText(ChatActivity.this, getString(R.string.chat_edit_history_load_failed, error), Toast.LENGTH_SHORT).show();
                 });
             }
         });

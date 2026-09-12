@@ -100,14 +100,14 @@ public class ArticlePickerBottomSheetDialogFragment extends BottomSheetDialogFra
             return;
         }
 
-        Toast.makeText(getContext(), "正在发送文章...", Toast.LENGTH_SHORT).show();
+        Toast.makeText(getContext(), R.string.post_sending, Toast.LENGTH_SHORT).show();
 
         communityRepository.forwardPost(token, post.getId(), chatId, chatType, new CommunityRepository.StringCallback() {
             @Override
             public void onSuccess(String responseBody) {
                 if (getActivity() != null) {
                     getActivity().runOnUiThread(() -> {
-                        Toast.makeText(getContext(), "文章发送成功", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(getContext(), R.string.post_send_success, Toast.LENGTH_SHORT).show();
                         dismissAllowingStateLoss();
                         if (getActivity() instanceof ChatActivity) {
                             ((ChatActivity) getActivity()).fetchLatestMessage();
@@ -120,7 +120,7 @@ public class ArticlePickerBottomSheetDialogFragment extends BottomSheetDialogFra
             public void onError(String msg) {
                 if (getActivity() != null) {
                     getActivity().runOnUiThread(() -> {
-                        Toast.makeText(getContext(), "发送文章失败: " + msg, Toast.LENGTH_SHORT).show();
+                        Toast.makeText(getContext(), getString(R.string.post_send_failed, msg), Toast.LENGTH_SHORT).show();
                     });
                 }
             }

@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="5dp"
+    android:layout_marginEnd="5dp"
+    android:layout_marginTop="5dp"
+    android:layout_marginBottom="5dp"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="1.5dp"
+    app:strokeColor="#14000000"
+    app:strokeWidth="0.8dp"
+    app:cardBackgroundColor="@color/card_background">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <!-- 顶部：头像 + 人数角标 -->
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/ivGroupAvatar"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_alignParentStart="true"
+                android:layout_centerVertical="true"
+                android:scaleType="centerCrop"
+                app:shapeAppearanceOverlay="@style/ShapeAppearance.Circle"
+                tools:src="@android:drawable/sym_def_app_icon" />
+
+            <TextView
+                android:id="@+id/tvGroupHeadcount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentEnd="true"
+                android:layout_alignParentTop="true"
+                android:background="@drawable/bg_discovery_badge"
+                android:paddingStart="7dp"
+                android:paddingEnd="7dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
+                android:textColor="@color/text_secondary"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                tools:text="👥 248 人" />
+        </RelativeLayout>
+
+        <!-- 群名称 -->
+        <TextView
+            android:id="@+id/tvGroupName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:textColor="@color/text_primary"
+            android:textSize="14.5sp"
+            android:textStyle="bold"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:lineSpacingExtra="2dp"
+            tools:text="Android 技术探索与架构设计官方交流圈" />
+
+        <!-- 分类标签 -->
+        <TextView
+            android:id="@+id/tvGroupCategory"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:background="@drawable/bg_category_chip_normal"
+            android:paddingStart="7dp"
+            android:paddingEnd="7dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            android:textColor="@color/app_primary"
+            android:textSize="10.5sp"
+            android:textStyle="bold"
+            tools:text="技术开发" />
+
+        <!-- 群简介 (自然高度差制造错位瀑布流) -->
+        <TextView
+            android:id="@+id/tvGroupDesc"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:maxLines="4"
+            android:ellipsize="end"
+            android:lineSpacingExtra="2dp"
+            tools:text="欢迎各位开发者交流 Android、Kotlin、Compose 与鸿蒙开发技巧，分享日常技术干货！" />
+
+        <!-- 动作按钮 (加入 / 进入聊天) -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnGroupAction"
+            style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
+            android:layout_width="match_parent"
+            android:layout_height="32dp"
+            android:layout_marginTop="12dp"
+            android:minHeight="32dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:padding="0dp"
+            app:cornerRadius="16dp"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            tools:text="加入" />
+
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>

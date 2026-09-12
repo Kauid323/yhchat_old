@@ -278,10 +278,10 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
 
         if (h.btnPin != null) {
             if (isSticky) {
-                h.btnPin.setText("取消置顶");
+                h.btnPin.setText(R.string.conversation_action_unpin);
                 h.btnPin.setBackgroundColor(0xFF6B7280);
             } else {
-                h.btnPin.setText("置顶");
+                h.btnPin.setText(R.string.conversation_action_pin);
                 h.btnPin.setBackgroundColor(0xFF3B82F6);
             }
 
@@ -320,7 +320,7 @@ public class ConversationsAdapter extends RecyclerView.Adapter<RecyclerView.View
             }
 
             if (clickCount >= 5) {
-                Toast.makeText(v.getContext(), "别戳了___*( ￣皿￣)/#____", Toast.LENGTH_SHORT).show();
+                Toast.makeText(v.getContext(), R.string.avatar_easter_egg, Toast.LENGTH_SHORT).show();
                 clickCount = 0;
             } else {
                 if (actionListener != null) {

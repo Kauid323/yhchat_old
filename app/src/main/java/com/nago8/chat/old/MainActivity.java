@@ -117,7 +117,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 Log.e(TAG, "fetchCaptcha failed", e);
-                runOnUiThread(() -> Toast.makeText(MainActivity.this, "获取验证码失败: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, getString(R.string.login_fetch_captcha_failed_format, e.getMessage()), Toast.LENGTH_LONG).show());
             }
 
             @Override
@@ -149,7 +149,7 @@ public class MainActivity extends AppCompatActivity {
         String phone = etPhone.getText().toString().trim();
         String code = etImageCode.getText().toString().trim();
         if (phone.isEmpty() || code.isEmpty() || captchaId.isEmpty()) {
-            Toast.makeText(this, "请输入手机号和图形验证码", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.login_input_phone_and_captcha, Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -164,7 +164,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 Log.e(TAG, "sendSmsCode failed", e);
-                runOnUiThread(() -> Toast.makeText(MainActivity.this, "发送失败", Toast.LENGTH_SHORT).show());
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, R.string.login_send_sms_failed, Toast.LENGTH_SHORT).show());
             }
 
             @Override
@@ -173,7 +173,7 @@ public class MainActivity extends AppCompatActivity {
                     try {
                         String responseData = response.body().string();
                         UserModels.CommonResponse res = ApiClient.getGson().fromJson(responseData, UserModels.CommonResponse.class);
-                        runOnUiThread(() -> Toast.makeText(MainActivity.this, res != null && res.msg != null ? res.msg : "发送完成", Toast.LENGTH_SHORT).show());
+                        runOnUiThread(() -> Toast.makeText(MainActivity.this, res != null && res.msg != null ? res.msg : getString(R.string.login_send_sms_done), Toast.LENGTH_SHORT).show());
                     } catch (Exception e) {
                         Log.e(TAG, "parse sms response error", e);
                     } finally {
@@ -189,7 +189,7 @@ public class MainActivity extends AppCompatActivity {
         String email = etEmail.getText().toString().trim();
         String password = etPassword.getText().toString().trim();
         if (email.isEmpty() || password.isEmpty()) {
-            Toast.makeText(this, "请输入账号密码", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.login_input_account_and_password, Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -202,7 +202,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 Log.e(TAG, "email login failed", e);
-                runOnUiThread(() -> Toast.makeText(MainActivity.this, "网络错误: " + e.getClass().getSimpleName() + " " + e.getMessage(), Toast.LENGTH_LONG).show());
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, getString(R.string.login_network_error_format, e.getClass().getSimpleName(), e.getMessage()), Toast.LENGTH_LONG).show());
             }
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) {
@@ -216,7 +216,7 @@ public class MainActivity extends AppCompatActivity {
         String phone = etPhone.getText().toString().trim();
         String code = etSmsCode.getText().toString().trim();
         if (phone.isEmpty() || code.isEmpty()) {
-            Toast.makeText(this, "请输入手机号和验证码", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.login_input_phone_and_code, Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -229,7 +229,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 Log.e(TAG, "phone login failed", e);
-                runOnUiThread(() -> Toast.makeText(MainActivity.this, "网络错误: " + e.getClass().getSimpleName() + " " + e.getMessage(), Toast.LENGTH_LONG).show());
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, getString(R.string.login_network_error_format, e.getClass().getSimpleName(), e.getMessage()), Toast.LENGTH_LONG).show());
             }
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) {
@@ -248,7 +248,7 @@ public class MainActivity extends AppCompatActivity {
                     runOnUiThread(this::goToHome);
                 } else {
                     String msg = loginResponse != null ? loginResponse.msg : "";
-                    runOnUiThread(() -> Toast.makeText(MainActivity.this, "登录失败: " + msg, Toast.LENGTH_SHORT).show());
+                    runOnUiThread(() -> Toast.makeText(MainActivity.this, getString(R.string.login_failed_format, msg), Toast.LENGTH_SHORT).show());
                 }
             } catch (Exception e) {
                 Log.e(TAG, "handleLoginResponse error", e);
@@ -257,7 +257,7 @@ public class MainActivity extends AppCompatActivity {
             }
         } else {
             int code = response != null ? response.code() : 0;
-            runOnUiThread(() -> Toast.makeText(MainActivity.this, "服务器错误: " + code, Toast.LENGTH_SHORT).show());
+            runOnUiThread(() -> Toast.makeText(MainActivity.this, getString(R.string.login_server_error_format, code), Toast.LENGTH_SHORT).show());
         }
     }
 

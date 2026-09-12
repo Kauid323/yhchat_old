@@ -55,7 +55,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
             android:layout_marginLeft="6dp"
-            android:text="实况"
+            android:text="@string/image_live_badge"
             android:textColor="#FFFFFFFF"
             android:textSize="12sp"
             android:textStyle="bold" />

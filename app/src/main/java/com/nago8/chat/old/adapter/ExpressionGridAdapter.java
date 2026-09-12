@@ -5,8 +5,10 @@ import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.BaseAdapter;
 import android.widget.ImageView;
+
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.nago8.chat.old.R;
 import com.nago8.chat.old.model.Expression;
@@ -15,7 +17,7 @@ import com.nago8.chat.old.utils.ImageUtils;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ExpressionGridAdapter extends BaseAdapter {
+public class ExpressionGridAdapter extends RecyclerView.Adapter<ExpressionGridAdapter.ViewHolder> {
 
     public interface OnExpressionClickListener {
         void onExpressionClick(Expression expression);
@@ -24,7 +26,7 @@ public class ExpressionGridAdapter extends BaseAdapter {
 
     private final Context context;
     private final List<Expression> items = new ArrayList<>();
-    private OnExpressionClickListener listener;
+    private final OnExpressionClickListener listener;
 
     public ExpressionGridAdapter(Context context, List<Expression> itemList, OnExpressionClickListener listener) {
         this.context = context;
@@ -42,34 +44,16 @@ public class ExpressionGridAdapter extends BaseAdapter {
         notifyDataSetChanged();
     }
 
+    @NonNull
     @Override
-    public int getCount() {
-        return items.size();
+    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        View view = LayoutInflater.from(context).inflate(R.layout.item_sticker_grid, parent, false);
+        return new ViewHolder(view);
     }
 
     @Override
-    public Expression getItem(int position) {
-        return items.get(position);
-    }
-
-    @Override
-    public long getItemId(int position) {
-        return position;
-    }
-
-    @Override
-    public View getView(int position, View convertView, ViewGroup parent) {
-        ViewHolder holder;
-        if (convertView == null) {
-            convertView = LayoutInflater.from(context).inflate(R.layout.item_sticker_grid, parent, false);
-            holder = new ViewHolder();
-            holder.ivSticker = convertView.findViewById(R.id.ivSticker);
-            convertView.setTag(holder);
-        } else {
-            holder = (ViewHolder) convertView.getTag();
-        }
-
-        Expression item = getItem(position);
+    public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+        Expression item = items.get(position);
         if (item != null) {
             String fullUrl = item.getFullUrl();
             if (!TextUtils.isEmpty(fullUrl)) {
@@ -78,24 +62,32 @@ public class ExpressionGridAdapter extends BaseAdapter {
                 holder.ivSticker.setImageResource(R.drawable.ic_image);
             }
 
-            convertView.setOnClickListener(v -> {
+            holder.itemView.setOnClickListener(v -> {
                 if (listener != null) {
                     listener.onExpressionClick(item);
                 }
             });
 
-            convertView.setOnLongClickListener(v -> {
+            holder.itemView.setOnLongClickListener(v -> {
                 if (listener != null) {
                     listener.onExpressionLongClick(item);
                 }
                 return true;
             });
         }
-
-        return convertView;
     }
 
-    private static class ViewHolder {
-        ImageView ivSticker;
+    @Override
+    public int getItemCount() {
+        return items.size();
+    }
+
+    public static class ViewHolder extends RecyclerView.ViewHolder {
+        public final ImageView ivSticker;
+
+        public ViewHolder(@NonNull View itemView) {
+            super(itemView);
+            this.ivSticker = itemView.findViewById(R.id.ivSticker);
+        }
     }
 }

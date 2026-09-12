@@ -12,6 +12,8 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.core.content.FileProvider;
 
+import com.nago8.chat.old.R;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -198,7 +200,7 @@ public class FileDownloadManager {
             context.startActivity(intent);
         } catch (Exception e) {
             // 没有能打开此文件的应用
-            Toast.makeText(context, "无法打开此文件", Toast.LENGTH_SHORT).show();
+            Toast.makeText(context, R.string.toast_cannot_open_file, Toast.LENGTH_SHORT).show();
         }
     }
 

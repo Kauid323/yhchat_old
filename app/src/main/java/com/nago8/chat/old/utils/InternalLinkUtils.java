@@ -21,6 +21,7 @@ import androidx.annotation.NonNull;
 import com.nago8.chat.old.BotProfileActivity;
 import com.nago8.chat.old.GroupProfileActivity;
 import com.nago8.chat.old.PostDetailActivity;
+import com.nago8.chat.old.R;
 import com.nago8.chat.old.UserProfileActivity;
 import com.nago8.chat.old.net.ApiClient;
 
@@ -161,7 +162,7 @@ public class InternalLinkUtils {
             return;
         }
 
-        Toast.makeText(context, "正在获取分享信息...", Toast.LENGTH_SHORT).show();
+        Toast.makeText(context, R.string.link_fetching_share_info, Toast.LENGTH_SHORT).show();
 
         JSONObject json = new JSONObject();
         try {
@@ -241,7 +242,7 @@ public class InternalLinkUtils {
             }
             context.startActivity(intent);
         } catch (Exception e) {
-            Toast.makeText(context, "打开详情失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            Toast.makeText(context, context.getString(R.string.link_open_detail_failed_format, e.getMessage()), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -257,7 +258,7 @@ public class InternalLinkUtils {
             }
             context.startActivity(intent);
         } catch (Exception e) {
-            Toast.makeText(context, "无法打开链接: " + url, Toast.LENGTH_SHORT).show();
+            Toast.makeText(context, context.getString(R.string.link_cannot_open_format, url), Toast.LENGTH_SHORT).show();
         }
     }
 

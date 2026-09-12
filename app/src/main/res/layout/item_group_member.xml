@@ -49,7 +49,7 @@
         android:layout_width="40dp"
         android:layout_height="40dp"
         android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="More options"
+        android:contentDescription="@string/action_more"
         android:padding="8dp"
         app:srcCompat="@drawable/ic_more"
         app:tint="@color/text_secondary"

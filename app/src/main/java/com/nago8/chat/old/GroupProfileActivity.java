@@ -681,12 +681,12 @@ public class GroupProfileActivity extends AppCompatActivity {
     private void showAutoDeleteDialog() {
         if (currentGroup == null) return;
         final String[] options = new String[]{
-                getString(R.string.group_profile_off) + " (0 天)",
-                "1 天",
-                "3 天",
-                "7 天",
-                "30 天",
-                "90 天",
+                getString(R.string.group_profile_off) + " (" + getString(R.string.group_profile_days_format, 0) + ")",
+                getString(R.string.group_profile_days_format, 1),
+                getString(R.string.group_profile_days_format, 3),
+                getString(R.string.group_profile_days_format, 7),
+                getString(R.string.group_profile_days_format, 30),
+                getString(R.string.group_profile_days_format, 90),
                 getString(R.string.auto_delete_custom)
         };
         final long[] secondsMap = new long[]{

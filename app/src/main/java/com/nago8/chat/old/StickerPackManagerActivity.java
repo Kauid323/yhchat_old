@@ -8,7 +8,6 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
@@ -23,14 +22,13 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
-import com.bumptech.glide.Glide;
-import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 import com.nago8.chat.old.model.StickerPack;
 import com.nago8.chat.old.repository.StickerRepository;
 import com.nago8.chat.old.utils.ImageUtils;
+import com.nago8.chat.old.utils.LocaleHelper;
 import com.nago8.chat.old.utils.PrefUtils;
 import com.nago8.chat.old.utils.ThemeUtils;
 
@@ -49,6 +47,11 @@ public class StickerPackManagerActivity extends AppCompatActivity {
     private final List<StickerPack> packList = new ArrayList<>();
     private PackAdapter adapter;
     private final StickerRepository repository = new StickerRepository();
+
+    @Override
+    protected void attachBaseContext(android.content.Context newBase) {
+        super.attachBaseContext(LocaleHelper.wrap(newBase));
+    }
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -127,6 +130,7 @@ public class StickerPackManagerActivity extends AppCompatActivity {
                     if (packs != null) {
                         packList.addAll(packs);
                     }
+                    com.nago8.chat.old.cache.StickerMemoryCache.setStickerPacks(packList);
                     adapter.notifyDataSetChanged();
                     layoutEmpty.setVisibility(packList.isEmpty() ? View.VISIBLE : View.GONE);
                 });

@@ -1,7 +1,13 @@
 package com.nago8.chat.old.cache;
 
 import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
+import android.text.TextUtils;
 
+import androidx.annotation.NonNull;
+
+import com.nago8.chat.old.net.ApiClient;
 import com.nago8.chat.old.proto.Msg;
 import com.nago8.chat.old.proto.chat_ws_go.WsMsg;
 import com.nago8.chat.old.proto.conversation.ConversationList;
@@ -9,22 +15,34 @@ import com.nago8.chat.old.utils.PrefUtils;
 import com.nago8.chat.old.utils.WsMsgConverter;
 import com.nago8.chat.old.ws.WsClient;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.MediaType;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 
 /**
  * 全局会话数据与未读消息计数缓存单例。
- * 负责统一管理会话列表、置顶状态、免打扰状态以及未读消息总数的计算与通知。
+ * 彻底重构未读计算逻辑：解决 WebSocket 多重监听重复累加、消息去重、已读状态与服务端实时同步。
  */
 public class ConversationCache {
 
     private static final ConversationCache instance = new ConversationCache();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     public static ConversationCache getInstance() {
         return instance;
@@ -42,32 +60,69 @@ public class ConversationCache {
         void onUnreadCountChanged(int totalUnread, int stickyUnread);
     }
 
-    // 内存数据存储：LinkedHashMap 保持顺序并强行按 chatId 去重
+    public interface OnConversationDataChangeListener {
+        void onConversationDataChanged();
+    }
+
+    // 内存数据存储：LinkedHashMap 保持会话顺序并强行按 chatId 去重
     private final LinkedHashMap<String, ConversationList.ConversationData> conversationMap = new LinkedHashMap<>();
     private final LinkedHashMap<String, ConversationList.ConversationData> stickyMap = new LinkedHashMap<>();
     private final Set<String> stickySet = new HashSet<>();
     private final Set<String> dndSet = new HashSet<>();
 
-    // 消息列表增量缓存：按 chatId 映射 List<Msg>
+    // 消息列表缓存：按 chatId 映射 List<Msg>
     private final Map<String, List<Msg>> messageCacheMap = new HashMap<>();
 
-    private OnUnreadCountChangeListener unreadChangeListener;
+    // 已处理 WS 消息 ID 去重缓存（容量 1000 的 LRU），彻底杜绝同一消息多次 WS 推送累加未读数
+    private final Set<String> processedMsgIds = Collections.synchronizedSet(new LinkedHashSet<>());
+
+    private final List<OnUnreadCountChangeListener> unreadListeners = new CopyOnWriteArrayList<>();
+    private final List<OnConversationDataChangeListener> dataChangeListeners = new CopyOnWriteArrayList<>();
 
     private int totalUnreadCount = 0;
     private int stickyUnreadCount = 0;
 
-    /**
-     * 获取特定会话已缓存的消息列表（副本）
-     */
+    private ConversationCache() {}
+
+    public void addOnUnreadCountChangeListener(OnUnreadCountChangeListener listener) {
+        if (listener != null && !unreadListeners.contains(listener)) {
+            unreadListeners.add(listener);
+            listener.onUnreadCountChanged(totalUnreadCount, stickyUnreadCount);
+        }
+    }
+
+    public void removeOnUnreadCountChangeListener(OnUnreadCountChangeListener listener) {
+        if (listener != null) {
+            unreadListeners.remove(listener);
+        }
+    }
+
+    public void setOnUnreadCountChangeListener(OnUnreadCountChangeListener listener) {
+        unreadListeners.clear();
+        if (listener != null) {
+            unreadListeners.add(listener);
+            listener.onUnreadCountChanged(totalUnreadCount, stickyUnreadCount);
+        }
+    }
+
+    public void addOnConversationDataChangeListener(OnConversationDataChangeListener listener) {
+        if (listener != null && !dataChangeListeners.contains(listener)) {
+            dataChangeListeners.add(listener);
+        }
+    }
+
+    public void removeOnConversationDataChangeListener(OnConversationDataChangeListener listener) {
+        if (listener != null) {
+            dataChangeListeners.remove(listener);
+        }
+    }
+
     public synchronized List<Msg> getCachedMessages(String chatId) {
         if (chatId == null || chatId.isEmpty()) return new ArrayList<>();
         List<Msg> cached = messageCacheMap.get(chatId);
         return cached != null ? new ArrayList<>(cached) : new ArrayList<>();
     }
 
-    /**
-     * 更新特定会话的消息缓存列表
-     */
     public synchronized void updateCachedMessages(String chatId, List<Msg> messages) {
         if (chatId == null || chatId.isEmpty()) return;
         if (messages == null) {
@@ -77,9 +132,6 @@ public class ConversationCache {
         }
     }
 
-    /**
-     * 当在任意界面接收到 WS 消息时，增量提前保存到该会话的消息缓存中
-     */
     public synchronized void saveSinglePushMessage(WsMsg wsMsg, String myUserId) {
         if (wsMsg == null) return;
         String chatId = WsClient.getTargetChatId(wsMsg, myUserId);
@@ -97,7 +149,6 @@ public class ConversationCache {
             messageCacheMap.put(chatId, list);
         }
 
-        // 如果找到已有对应的消息id，直接覆盖原内容；否则增量追加
         if (msg.msg_id != null && !msg.msg_id.isEmpty()) {
             int foundIndex = -1;
             for (int i = 0; i < list.size(); i++) {
@@ -108,13 +159,12 @@ public class ConversationCache {
                 }
             }
             if (foundIndex != -1) {
-                Msg merged = com.nago8.chat.old.utils.WsMsgConverter.mergeMsg(list.get(foundIndex), msg);
+                Msg merged = WsMsgConverter.mergeMsg(list.get(foundIndex), msg);
                 list.set(foundIndex, merged);
                 return;
             }
         }
 
-        // 如果未找到对应 msg_id 且是撤回消息，则不存入缓存
         if (isRecallMsg) {
             return;
         }
@@ -122,30 +172,31 @@ public class ConversationCache {
         list.add(msg);
     }
 
-    private ConversationCache() {}
-
-    public synchronized void setOnUnreadCountChangeListener(OnUnreadCountChangeListener listener) {
-        this.unreadChangeListener = listener;
-    }
-
     /**
-     * 更新全量会话列表（来自服务器网络接口 /v1/conversation/list 或本地缓存）
+     * 更新全量会话列表（来自网络接口 /v1/conversation/list）
      */
     public synchronized void updateConversationList(List<ConversationList.ConversationData> list) {
         if (list != null) {
+            String activeChatId = WsClient.getInstance().getActiveChatId();
             conversationMap.clear();
             for (ConversationList.ConversationData cd : list) {
                 if (cd != null && cd.chat_id != null && !cd.chat_id.isEmpty()) {
                     if (ArchiveManager.getInstance().isArchived(cd.chat_id)) {
                         continue;
                     }
-                    conversationMap.put(cd.chat_id, cd);
+                    ConversationList.ConversationData finalData = cd;
+                    // 如果当前该会话正在聊天界面打开，强制置未读数为 0
+                    if (activeChatId != null && activeChatId.equals(cd.chat_id) && cd.unread_message > 0) {
+                        finalData = cd.newBuilder().unread_message(0).build();
+                    }
+                    conversationMap.put(cd.chat_id, finalData);
                     if (cd.do_not_disturb != 0) {
                         dndSet.add(cd.chat_id);
                     }
                 }
             }
             recalculateUnreadCounts();
+            notifyDataChanged();
         }
     }
 
@@ -173,6 +224,7 @@ public class ConversationCache {
                                 .name(s.chatName != null ? s.chatName : "")
                                 .avatar_url(s.avatarUrl != null ? s.avatarUrl : "")
                                 .chat_content("")
+                                .unread_message(0)
                                 .build();
                         stickyMap.put(s.chatId, convData);
                     }
@@ -180,34 +232,28 @@ public class ConversationCache {
             }
         }
         recalculateUnreadCounts();
+        notifyDataChanged();
     }
 
     public synchronized boolean isSticky(String chatId) {
         return chatId != null && stickySet.contains(chatId);
     }
 
-    /**
-     * 从普通主会话列表中移除指定会话（保留置顶缓存不变）
-     */
     public synchronized void removeConversationFromMainList(String chatId) {
         if (chatId == null || chatId.isEmpty()) return;
         conversationMap.remove(chatId);
         recalculateUnreadCounts();
+        notifyDataChanged();
     }
 
-    /**
-     * 从置顶列表中移除指定会话
-     */
     public synchronized void removeStickyConversation(String chatId) {
         if (chatId == null || chatId.isEmpty()) return;
         stickySet.remove(chatId);
         stickyMap.remove(chatId);
         recalculateUnreadCounts();
+        notifyDataChanged();
     }
 
-    /**
-     * 更新免打扰会话集合
-     */
     public synchronized void updateDoNotDisturbSet(Collection<String> dndIds) {
         dndSet.clear();
         if (dndIds != null) {
@@ -216,16 +262,10 @@ public class ConversationCache {
         recalculateUnreadCounts();
     }
 
-    /**
-     * 获取全量会话列表
-     */
     public synchronized List<ConversationList.ConversationData> getConversationList() {
         return new ArrayList<>(conversationMap.values());
     }
 
-    /**
-     * 获取置顶会话列表（独立保持，不受主列表删除影响）
-     */
     public synchronized List<ConversationList.ConversationData> getStickyConversationDataList() {
         List<ConversationList.ConversationData> result = new ArrayList<>();
         for (String chatId : stickySet) {
@@ -243,22 +283,62 @@ public class ConversationCache {
     }
 
     /**
-     * 将指定会话标记为已读（未读数重置为 0）
+     * 将指定会话标记为已读（本地清零未读数并向服务端发送 dismiss-notification 同步）
      */
-    public synchronized void markAsRead(String chatId) {
+    public void markAsRead(Context ctx, String chatId) {
         if (chatId == null || chatId.isEmpty()) return;
-        ConversationList.ConversationData old = conversationMap.get(chatId);
-        if (old != null) {
-            ConversationList.ConversationData updated = old.newBuilder()
-                    .unread_message(0)
-                    .build();
-            conversationMap.put(chatId, updated);
+
+        synchronized (this) {
+            ConversationList.ConversationData old = conversationMap.get(chatId);
+            if (old != null && old.unread_message > 0) {
+                ConversationList.ConversationData updated = old.newBuilder()
+                        .unread_message(0)
+                        .build();
+                conversationMap.put(chatId, updated);
+            }
+            ConversationList.ConversationData stickyOld = stickyMap.get(chatId);
+            if (stickyOld != null && stickyOld.unread_message > 0) {
+                ConversationList.ConversationData stickyUpdated = stickyOld.newBuilder()
+                        .unread_message(0)
+                        .build();
+                stickyMap.put(chatId, stickyUpdated);
+            }
             recalculateUnreadCounts();
+            notifyDataChanged();
+        }
+
+        // 向服务器异步发送已读同步通知
+        if (ctx != null) {
+            String token = PrefUtils.getToken(ctx);
+            if (!TextUtils.isEmpty(token)) {
+                String json = "{\"chatId\":\"" + chatId + "\"}";
+                RequestBody body = RequestBody.create(
+                        MediaType.parse("application/json; charset=utf-8"),
+                        json
+                );
+                Request request = new Request.Builder()
+                        .url(ApiClient.BASE_URL + "/v1/conversation/dismiss-notification")
+                        .header("token", token)
+                        .post(body)
+                        .build();
+                ApiClient.getClient().newCall(request).enqueue(new Callback() {
+                    @Override
+                    public void onFailure(@NonNull Call call, @NonNull IOException e) {}
+                    @Override
+                    public void onResponse(@NonNull Call call, @NonNull Response response) {
+                        response.close();
+                    }
+                });
+            }
         }
     }
 
+    public synchronized void markAsRead(String chatId) {
+        markAsRead(null, chatId);
+    }
+
     /**
-     * 收到 WebSocket 实时推送消息处理
+     * 收到 WebSocket 实时推送消息处理（核心未读计数与防膨胀处理）
      */
     public synchronized void onPushMessage(WsMsg wsMsg, Context ctx) {
         if (wsMsg == null) return;
@@ -268,10 +348,10 @@ public class ConversationCache {
         String chatId = WsClient.getTargetChatId(wsMsg, myUserId);
         if (chatId == null || chatId.isEmpty()) return;
 
-        // 在其他界面时收到 WS 消息，提前增量添加到全局消息缓存中
+        // 提前缓存单条消息实体
         saveSinglePushMessage(wsMsg, myUserId);
 
-        // 如果该会话已归档，彻底不放入主会话列表，不增加未读数，不刷新列表
+        // 如果已归档，不增加未读数，不刷进会话主列表
         if (ArchiveManager.getInstance().isArchived(ctx, chatId)) {
             return;
         }
@@ -289,12 +369,31 @@ public class ConversationCache {
             chatContent = !senderName.isEmpty() ? senderName + ":" + preview : preview;
         }
 
+        // 消息去重防护：若该消息 ID 已经处理过，仅更新消息内容和时间戳，绝不重复 +1 未读数！
+        boolean alreadyProcessed = false;
+        if (wsMsg.msg_id != null && !wsMsg.msg_id.isEmpty()) {
+            if (processedMsgIds.contains(wsMsg.msg_id)) {
+                alreadyProcessed = true;
+            } else {
+                if (processedMsgIds.size() > 1000) {
+                    processedMsgIds.clear();
+                }
+                processedMsgIds.add(wsMsg.msg_id);
+            }
+        }
+
+        // 判断是否为撤回消息或编辑消息
+        boolean isRecallOrEdit = (wsMsg.delete_time > 0) || (wsMsg.edit_time > 0);
+
         ConversationList.ConversationData oldData = conversationMap.get(chatId);
+        int currentUnread = (oldData != null) ? Math.max(0, oldData.unread_message) : 0;
         int newUnread;
+
         if (isFromMe || isActiveChat) {
             newUnread = 0;
+        } else if (alreadyProcessed || isRecallOrEdit) {
+            newUnread = currentUnread;
         } else {
-            int currentUnread = (oldData != null) ? oldData.unread_message : 0;
             newUnread = currentUnread + 1;
         }
 
@@ -327,10 +426,11 @@ public class ConversationCache {
         conversationMap.putAll(newMap);
 
         recalculateUnreadCounts();
+        notifyDataChanged();
     }
 
     /**
-     * 重新计算未读消息总数（剔除免打扰与屏蔽项、归档项）
+     * 重新计算未读消息总数（剔除免打扰与归档项）
      */
     public synchronized void recalculateUnreadCounts() {
         int total = 0;
@@ -342,7 +442,7 @@ public class ConversationCache {
             if (ArchiveManager.getInstance().isArchived(cd.chat_id)) continue;
             if (cd.do_not_disturb != 0 || dndSet.contains(cd.chat_id)) continue;
 
-            int unread = cd.unread_message;
+            int unread = Math.max(0, cd.unread_message);
             if (unread > 0) {
                 total += unread;
                 if (stickySet.contains(cd.chat_id)) {
@@ -354,9 +454,25 @@ public class ConversationCache {
         this.totalUnreadCount = total;
         this.stickyUnreadCount = sticky;
 
-        if (unreadChangeListener != null) {
-            unreadChangeListener.onUnreadCountChanged(totalUnreadCount, stickyUnreadCount);
-        }
+        notifyUnreadChanged();
+    }
+
+    private void notifyUnreadChanged() {
+        final int total = totalUnreadCount;
+        final int sticky = stickyUnreadCount;
+        mainHandler.post(() -> {
+            for (OnUnreadCountChangeListener listener : unreadListeners) {
+                listener.onUnreadCountChanged(total, sticky);
+            }
+        });
+    }
+
+    private void notifyDataChanged() {
+        mainHandler.post(() -> {
+            for (OnConversationDataChangeListener listener : dataChangeListeners) {
+                listener.onConversationDataChanged();
+            }
+        });
     }
 
     public synchronized int getTotalUnreadCount() {
@@ -372,10 +488,11 @@ public class ConversationCache {
         stickyMap.clear();
         stickySet.clear();
         dndSet.clear();
+        messageCacheMap.clear();
+        processedMsgIds.clear();
         totalUnreadCount = 0;
         stickyUnreadCount = 0;
-        if (unreadChangeListener != null) {
-            unreadChangeListener.onUnreadCountChanged(0, 0);
-        }
+        notifyUnreadChanged();
+        notifyDataChanged();
     }
 }
