@@ -57,13 +57,25 @@
             android:textColorHint="?android:attr/textColorSecondary"
             android:textSize="15sp" />
 
+        <!-- Emoji Toggle Button -->
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/btnEmoji"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="4dp"
+            android:layout_marginLeft="4dp"
+            android:background="?attr/selectableItemBackground"
+            android:contentDescription="@string/chat_emoji_title"
+            app:srcCompat="@drawable/ic_emoji"
+            app:tint="?android:attr/textColorSecondary" />
+
         <!-- Send Button -->
         <androidx.appcompat.widget.AppCompatImageButton
             android:id="@+id/btnSend"
             android:layout_width="40dp"
             android:layout_height="40dp"
-            android:layout_marginStart="8dp"
-            android:layout_marginLeft="8dp"
+            android:layout_marginStart="4dp"
+            android:layout_marginLeft="4dp"
             android:background="?attr/selectableItemBackground"
             android:contentDescription="@string/btn_send"
             app:srcCompat="@drawable/ic_send"
@@ -307,7 +319,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
-                    android:text="文章"
+                    android:text="@string/post_tab_article"
                     android:textColor="?android:attr/textColorPrimary"
                     android:textSize="12sp" />
             </LinearLayout>
@@ -320,5 +332,13 @@
 
         </LinearLayout>
     </LinearLayout>
+
+    <!-- Bottom Emoji / Sticker Panel -->
+    <com.nago8.chat.old.widget.EmojiPanelLayout
+        android:id="@+id/panelEmoji"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        tools:visibility="visible" />
 
 </LinearLayout>

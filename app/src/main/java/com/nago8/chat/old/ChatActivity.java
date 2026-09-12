@@ -14,6 +14,8 @@ import android.os.Environment;
 import android.provider.MediaStore;
 import android.text.TextUtils;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.WindowInsets;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -26,6 +28,8 @@ import androidx.appcompat.widget.AppCompatImageButton;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -106,6 +110,16 @@ public class ChatActivity extends AppCompatActivity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         AppCompatDelegate.setCompatVectorFromResourcesEnabled(true);
         installCrashLogger();
+        if (Build.VERSION.SDK_INT >= 30) {
+            getWindow().setDecorFitsSystemWindows(false);
+        } else {
+            // Android 4.x ~ Android 10 (API < 30) 自动平稳降级为原生 adjustResize 窗口自适应
+            getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+            if (Build.VERSION.SDK_INT >= 21) {
+                getWindow().getDecorView().setSystemUiVisibility(
+                        View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+            }
+        }
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_chat);
 
@@ -176,8 +190,102 @@ public class ChatActivity extends AppCompatActivity {
 
         adapter.setOnMessageClickListener((anchorView, msg, group) -> showMessageDropMenu(anchorView, msg, group));
         adapter.setOnEditHistoryClickListener(msg -> showEditHistory(msg));
-
         setupComposeInput();
+
+        // 监听系统 Insets（状态栏、导航栏与软键盘）
+        View topBar = findViewById(R.id.topBar);
+        View rootContainer = findViewById(android.R.id.content);
+        if (rootContainer != null) {
+            final int[] navBarHeightHolder = new int[]{0};
+
+            rootContainer.setOnApplyWindowInsetsListener((v, insets) -> {
+                int statusBarTop = 0;
+                int navBarBottom = 0;
+                int imeBottom = 0;
+                if (Build.VERSION.SDK_INT >= 30) {
+                    android.graphics.Insets sb = insets.getInsets(WindowInsets.Type.statusBars());
+                    android.graphics.Insets nb = insets.getInsets(WindowInsets.Type.navigationBars());
+                    android.graphics.Insets im = insets.getInsets(WindowInsets.Type.ime());
+                    statusBarTop = sb.top;
+                    navBarBottom = nb.bottom;
+                    imeBottom = im.bottom;
+                } else if (Build.VERSION.SDK_INT >= 20) {
+                    statusBarTop = insets.getSystemWindowInsetTop();
+                    navBarBottom = insets.getSystemWindowInsetBottom();
+                }
+
+                navBarHeightHolder[0] = navBarBottom;
+
+                if (topBar != null && statusBarTop > 0) {
+                    topBar.setPadding(0, statusBarTop, 0, 0);
+                    ViewGroup.LayoutParams lp = topBar.getLayoutParams();
+                    if (lp != null) {
+                        lp.height = dp(56) + statusBarTop;
+                        topBar.setLayoutParams(lp);
+                    }
+                }
+
+                // 为输入栏保留系统全面屏手势导航栏的安全边距
+                if (chatInputBar != null) {
+                    if (Build.VERSION.SDK_INT < 30) {
+                        int bottomInset = Math.max(navBarBottom, imeBottom);
+                        chatInputBar.setPadding(0, 0, 0, bottomInset);
+                    } else {
+                        // Android 30+ 由 translationY 处理软键盘平移，静态时为底部导航栏留出内边距
+                        chatInputBar.setPadding(0, 0, 0, navBarBottom);
+                    }
+                }
+                return insets;
+            });
+
+            // 监听 Android 11+ / Android 14 软键盘实时弹出/收起动画（与 Telegram 完全相同的 WindowInsetsAnimationCallback 机制）
+            if (Build.VERSION.SDK_INT >= 30) {
+                rootContainer.setWindowInsetsAnimationCallback(new android.view.WindowInsetsAnimation.Callback(
+                        android.view.WindowInsetsAnimation.Callback.DISPATCH_MODE_STOP) {
+                    @NonNull
+                    @Override
+                    public android.view.WindowInsets onProgress(
+                            @NonNull android.view.WindowInsets insets,
+                            @NonNull java.util.List<android.view.WindowInsetsAnimation> runningAnimations) {
+                        android.graphics.Insets imeInsets = insets.getInsets(WindowInsets.Type.ime());
+                        android.graphics.Insets navInsets = insets.getInsets(WindowInsets.Type.navigationBars());
+                        // 软键盘弹起时增加 12dp 的舒适视距空隙，确保光标与键盘上沿不紧贴
+                        int extraGap = dp(12);
+                        int imeHeight = 0;
+                        if (imeInsets.bottom > navInsets.bottom) {
+                            imeHeight = imeInsets.bottom - navInsets.bottom + extraGap;
+                        } else if (imeInsets.bottom > 0) {
+                            float progress = (float) imeInsets.bottom / Math.max(1, navInsets.bottom);
+                            imeHeight = (int) (extraGap * progress);
+                        }
+                        if (chatInputBar != null) {
+                            chatInputBar.setTranslationY(-imeHeight);
+                        }
+                        if (recyclerView != null) {
+                            recyclerView.setTranslationY(-imeHeight);
+                        }
+                        return insets;
+                    }
+
+                    @Override
+                    public void onEnd(@NonNull android.view.WindowInsetsAnimation animation) {
+                        super.onEnd(animation);
+                        if (rootContainer != null) {
+                            android.view.WindowInsets insets = rootContainer.getRootWindowInsets();
+                            if (insets != null) {
+                                android.graphics.Insets ime = insets.getInsets(WindowInsets.Type.ime());
+                                android.graphics.Insets nb = insets.getInsets(WindowInsets.Type.navigationBars());
+                                if (ime.bottom <= nb.bottom) {
+                                    if (chatInputBar != null) chatInputBar.setTranslationY(0);
+                                    if (recyclerView != null) recyclerView.setTranslationY(0);
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
         // 优先读取在其他界面提前增量保存的消息缓存
         List<Msg> cached = com.nago8.chat.old.cache.ConversationCache.getInstance().getCachedMessages(chatId);
         if (cached != null && !cached.isEmpty()) {
@@ -577,6 +685,7 @@ public class ChatActivity extends AppCompatActivity {
 
             chatInputBar.setOnInstructionButtonClickListener(this::openInstructionSheet);
             chatInputBar.setOnSendClickListener(this::performSend);
+            chatInputBar.setOnStickerSendListener(this::performSendSticker);
             chatInputBar.setOnQuoteDismissListener(() -> { /* quote cleared by user tapping ✕ */ });
             chatInputBar.setOnPanelActionClickListener(actionType -> {
                 if ("image".equals(actionType)) {
@@ -730,6 +839,49 @@ public class ChatActivity extends AppCompatActivity {
                 });
             }
         });
+    }
+
+    private void performSendSticker(com.nago8.chat.old.model.StickerItem stickerItem) {
+        if (stickerItem == null) return;
+        String token = PrefUtils.getToken(this);
+        if (TextUtils.isEmpty(token)) {
+            Toast.makeText(this, R.string.user_profile_not_logged_in, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // Collect quote data from the preview bar
+        com.nago8.chat.old.proto.Msg quoteMsg = chatInputBar != null ? chatInputBar.getPendingQuoteMsg() : null;
+        String quoteId = null;
+        String quoteText = null;
+        if (quoteMsg != null) {
+            quoteId = (quoteMsg.msg_id != null && !quoteMsg.msg_id.isEmpty()) ? quoteMsg.msg_id : quoteMsg.quote_msg_id;
+            String senderName = (quoteMsg.sender != null && quoteMsg.sender.name != null && !quoteMsg.sender.name.isEmpty())
+                    ? quoteMsg.sender.name : getString(R.string.chat_msg_default);
+            quoteText = senderName + "：" + getString(R.string.message_sticker);
+        }
+
+        final String finalQuoteId = quoteId;
+        final String finalQuoteText = quoteText;
+
+        repository.sendStickerMessage(token, chatId, chatType,
+                stickerItem.url, stickerItem.id, stickerItem.stickerPackId,
+                finalQuoteId, finalQuoteText,
+                new MessageRepository.SendMessageCallback() {
+                    @Override
+                    public void onSuccess(send_message response) {
+                        runOnUiThread(() -> {
+                            if (chatInputBar != null) {
+                                chatInputBar.clearQuote();
+                            }
+                            fetchLatestMessage();
+                        });
+                    }
+
+                    @Override
+                    public void onError(Exception error) {
+                        runOnUiThread(() -> Toast.makeText(ChatActivity.this, R.string.send_failed, Toast.LENGTH_SHORT).show());
+                    }
+                });
     }
 
     private String extractFileName(String url, String defaultName) {
@@ -987,6 +1139,13 @@ public class ChatActivity extends AppCompatActivity {
             actions.add(6);
         }
 
+        // 图片或表情支持添加到表情包
+        boolean isImgOrSticker = msg.content != null && (!android.text.TextUtils.isEmpty(msg.content.image_url) || !android.text.TextUtils.isEmpty(msg.content.sticker_url));
+        if (isImgOrSticker) {
+            options.add(getString(R.string.menu_add_to_stickers));
+            actions.add(7);
+        }
+
         // 回复
         options.add(getString(R.string.menu_reply));
         actions.add(2);
@@ -1031,6 +1190,9 @@ public class ChatActivity extends AppCompatActivity {
                             case 6:
                                 addToVoicePlaylist(msg, senderName);
                                 break;
+                            case 7:
+                                saveImageAsSticker(msg);
+                                break;
                             case 2:
                                 replyToMessage(msg);
                                 break;
@@ -1070,6 +1232,36 @@ public class ChatActivity extends AppCompatActivity {
         } else {
             Toast.makeText(this, R.string.toast_already_in_playlist, Toast.LENGTH_SHORT).show();
         }
+    }
+
+    private void saveImageAsSticker(Msg msg) {
+        if (msg == null || msg.content == null) return;
+        String rawUrl = !TextUtils.isEmpty(msg.content.sticker_url) ? msg.content.sticker_url : msg.content.image_url;
+        if (TextUtils.isEmpty(rawUrl)) return;
+
+        String token = PrefUtils.getToken(this);
+        if (TextUtils.isEmpty(token)) {
+            Toast.makeText(this, R.string.user_profile_not_logged_in, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        com.nago8.chat.old.repository.ExpressionRepository exprRepo = new com.nago8.chat.old.repository.ExpressionRepository();
+        exprRepo.addExpression(token, rawUrl, new com.nago8.chat.old.repository.ExpressionRepository.SimpleCallback() {
+            @Override
+            public void onSuccess() {
+                runOnUiThread(() -> {
+                    Toast.makeText(ChatActivity.this, R.string.sticker_add_success, Toast.LENGTH_SHORT).show();
+                    if (chatInputBar != null) {
+                        chatInputBar.reloadStickers();
+                    }
+                });
+            }
+
+            @Override
+            public void onError(Exception error) {
+                runOnUiThread(() -> Toast.makeText(ChatActivity.this, error.getMessage(), Toast.LENGTH_SHORT).show());
+            }
+        });
     }
 
     private String getCopyableContent(Msg msg) {
@@ -1238,8 +1430,8 @@ public class ChatActivity extends AppCompatActivity {
 
     @Override
     public void onBackPressed() {
-        if (chatInputBar != null && chatInputBar.isPanelExpanded()) {
-            chatInputBar.collapsePanel();
+        if (chatInputBar != null && chatInputBar.isAnyPanelExpanded()) {
+            chatInputBar.collapseAllPanels();
             return;
         }
         super.onBackPressed();

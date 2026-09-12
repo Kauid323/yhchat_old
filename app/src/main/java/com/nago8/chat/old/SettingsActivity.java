@@ -19,6 +19,7 @@ import com.bumptech.glide.Glide;
 import com.nago8.chat.old.cache.AddressBookCache;
 import com.nago8.chat.old.cache.AvatarCache;
 import com.nago8.chat.old.cache.ConversationCache;
+import com.nago8.chat.old.cache.StickerCache;
 import com.nago8.chat.old.utils.ImageUtils;
 import com.nago8.chat.old.utils.LocaleHelper;
 
@@ -332,8 +333,9 @@ public class SettingsActivity extends AppCompatActivity {
 
     private void updateCacheSize() {
         long avatarSize = AvatarCache.getCacheSize(this);
+        long stickerSize = StickerCache.getCacheSize(this);
         long glideCacheSize = getFolderSize(Glide.getPhotoCacheDir(this));
-        long totalBytes = avatarSize + glideCacheSize;
+        long totalBytes = avatarSize + stickerSize + glideCacheSize;
 
         if (tvCacheSize != null) {
             tvCacheSize.setText(getString(R.string.settings_cache_size_format, formatSize(totalBytes)));
@@ -343,7 +345,7 @@ public class SettingsActivity extends AppCompatActivity {
     private void confirmClearCache() {
         new AlertDialog.Builder(this)
                 .setTitle(R.string.settings_clear_all_cache)
-                .setMessage("确定要清除通讯录、会话和所有本地头像缓存吗？")
+                .setMessage("确定要清除通讯录、会话、表情包和所有本地头像缓存吗？")
                 .setPositiveButton(android.R.string.ok, (dialog, which) -> clearAllCache())
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
@@ -358,6 +360,9 @@ public class SettingsActivity extends AppCompatActivity {
 
         // 清除本地头像磁盘缓存
         AvatarCache.clearCache(this);
+
+        // 清除本地表情磁盘缓存
+        StickerCache.clearCache(this);
 
         // 清除 Glide 缓存
         try {

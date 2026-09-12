@@ -292,6 +292,87 @@ public class MessageRepository {
     }
 
     @SuppressWarnings("UnusedReturnValue")
+    public Call sendStickerMessage(String token, String chatId, int chatType,
+                                  String stickerUrl, long stickerItemId, long stickerPackId,
+                                  String quoteId, String quoteText,
+                                  SendMessageCallback callback) {
+        if (token == null || token.isEmpty()) {
+            callback.onError(new IllegalArgumentException("token is empty"));
+            return null;
+        }
+        if (chatId == null || chatId.isEmpty()) {
+            callback.onError(new IllegalArgumentException("chatId is empty"));
+            return null;
+        }
+        if (stickerUrl == null || stickerUrl.isEmpty()) {
+            callback.onError(new IllegalArgumentException("stickerUrl is empty"));
+            return null;
+        }
+
+        String msgId = UUID.randomUUID().toString().replace("-", "");
+
+        send_message_send.Content.Builder contentBuilder = new send_message_send.Content.Builder()
+                .image(stickerUrl);
+        if (stickerItemId > 0) {
+            contentBuilder.sticker_item_id(stickerItemId);
+        }
+        if (stickerPackId > 0) {
+            contentBuilder.sticker_pack_id(stickerPackId);
+        }
+        if (quoteText != null && !quoteText.isEmpty()) {
+            contentBuilder.quote_msg_text(quoteText);
+        }
+
+        send_message_send.Builder msgBuilder = new send_message_send.Builder()
+                .msg_id(msgId)
+                .chat_id(chatId)
+                .chat_type(chatType)
+                .content(contentBuilder.build())
+                .content_type(7);
+        if (quoteId != null && !quoteId.isEmpty()) {
+            msgBuilder.quote_msg_id(quoteId);
+        }
+        send_message_send requestProto = msgBuilder.build();
+
+        RequestBody body = RequestBody.create(
+                MediaType.parse("application/x-protobuf"),
+                requestProto.encode()
+        );
+
+        Request request = new Request.Builder()
+                .url(ApiClient.BASE_URL + "/v1/msg/send-message")
+                .header("token", token)
+                .post(body)
+                .build();
+
+        Call call = ApiClient.getClient().newCall(request);
+        call.enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                callback.onError(e);
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
+                try {
+                    if (!response.isSuccessful() || response.body() == null) {
+                        callback.onError(new IOException("HTTP " + response.code()));
+                        return;
+                    }
+                    callback.onSuccess(send_message.ADAPTER.decode(response.body().source()));
+                } catch (Exception e) {
+                    callback.onError(e);
+                } finally {
+                    if (response.body() != null) {
+                        response.body().close();
+                    }
+                }
+            }
+        });
+        return call;
+    }
+
+    @SuppressWarnings("UnusedReturnValue")
     public Call sendImageMessage(String token, String chatId, int chatType,
                                  String fileKey, String hash, long fsize,
                                  int width, int height, String extension,

@@ -192,6 +192,13 @@ public class HomeActivity extends AppCompatActivity {
 
         if (savedInstanceState == null) {
             switchFragment(new HomeConversationsFragment(), R.string.menu_conversations);
+        } else {
+            Fragment restored = getSupportFragmentManager().findFragmentById(R.id.content_frame);
+            if (restored != null) {
+                bindFragmentState(restored, restored instanceof HomeConversationsFragment ? R.string.menu_conversations : 0);
+            } else {
+                switchFragment(new HomeConversationsFragment(), R.string.menu_conversations);
+            }
         }
     }
 
@@ -262,8 +269,14 @@ public class HomeActivity extends AppCompatActivity {
 
         FragmentManager fragmentManager = getSupportFragmentManager();
         fragmentManager.beginTransaction().replace(R.id.content_frame, fragment).commit();
+        bindFragmentState(fragment, titleRes);
+    }
+
+    private void bindFragmentState(Fragment fragment, int titleRes) {
         currentFragment = fragment;
-        if (getSupportActionBar() != null) getSupportActionBar().setTitle(titleRes);
+        if (titleRes != 0 && getSupportActionBar() != null) {
+            getSupportActionBar().setTitle(titleRes);
+        }
         if (drawerLayout != null) drawerLayout.closeDrawer(GravityCompat.START);
 
         invalidateOptionsMenu();

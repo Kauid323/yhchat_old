@@ -1,14 +1,19 @@
 package com.nago8.chat.old.components;
 
+import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.text.Editable;
+import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.util.AttributeSet;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
@@ -18,11 +23,14 @@ import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
 import com.nago8.chat.old.R;
+import com.nago8.chat.old.StickerPackManagerActivity;
+import com.nago8.chat.old.model.StickerItem;
 import com.nago8.chat.old.proto.Msg;
+import com.nago8.chat.old.widget.EmojiPanelLayout;
 
 /**
  * 独立的消息输入框组件（位于 /components/ 文件夹）
- * 支持左侧加号旋转展开/收起下方扩展面板，输入框位于面板上方。
+ * 支持左侧加号展开扩展面板、表情按钮展开 Emoji/Sticker 面板、指令按钮与引用预览。
  */
 public class ChatInputBar extends LinearLayout {
 
@@ -38,23 +46,29 @@ public class ChatInputBar extends LinearLayout {
         void onInstructionButtonClick();
     }
 
-    private EditText etMessage;
-    private ImageButton btnSend;
-    private ImageButton btnTogglePanel;
-    private ImageButton btnInstruction;
-    private View panelMore;
+    public interface OnStickerSendListener {
+        void onStickerSend(StickerItem stickerItem);
+    }
 
-    private boolean isPanelExpanded = false;
-
-    private OnSendClickListener sendClickListener;
-    private OnPanelActionClickListener panelActionClickListener;
-    private OnInstructionButtonClickListener instructionButtonClickListener;
-
-    /** Callback invoked when the user dismisses the quote preview bar. */
     public interface OnQuoteDismissListener {
         void onQuoteDismissed();
     }
 
+    private EditText etMessage;
+    private ImageButton btnSend;
+    private ImageButton btnTogglePanel;
+    private ImageButton btnInstruction;
+    private ImageButton btnEmoji;
+    private View panelMore;
+    private EmojiPanelLayout panelEmoji;
+
+    private boolean isPanelExpanded = false;
+    private boolean isEmojiPanelExpanded = false;
+
+    private OnSendClickListener sendClickListener;
+    private OnPanelActionClickListener panelActionClickListener;
+    private OnInstructionButtonClickListener instructionButtonClickListener;
+    private OnStickerSendListener stickerSendListener;
     private OnQuoteDismissListener quoteDismissListener;
 
     // Quote preview bar (shown above the input row when replying)
@@ -91,10 +105,16 @@ public class ChatInputBar extends LinearLayout {
         btnSend = findViewById(R.id.btnSend);
         btnTogglePanel = findViewById(R.id.btnTogglePanel);
         btnInstruction = findViewById(R.id.btnInstruction);
+        btnEmoji = findViewById(R.id.btnEmoji);
         panelMore = findViewById(R.id.panelMore);
+        panelEmoji = findViewById(R.id.panelEmoji);
 
         if (btnTogglePanel != null) {
             btnTogglePanel.setOnClickListener(v -> togglePanel());
+        }
+
+        if (btnEmoji != null) {
+            btnEmoji.setOnClickListener(v -> toggleEmojiPanel());
         }
 
         if (btnInstruction != null) {
@@ -109,7 +129,7 @@ public class ChatInputBar extends LinearLayout {
             btnSend.setOnClickListener(v -> {
                 String text = getInputText();
                 if (text.length() > 0 && sendClickListener != null) {
-                    collapsePanel();
+                    collapseAllPanels();
                     sendClickListener.onSendClick(text);
                 }
             });
@@ -118,6 +138,16 @@ public class ChatInputBar extends LinearLayout {
         }
 
         if (etMessage != null) {
+            etMessage.setOnClickListener(v -> {
+                if (isPanelExpanded || isEmojiPanelExpanded) {
+                    collapseAllPanelsImmediately();
+                }
+            });
+            etMessage.setOnFocusChangeListener((v, hasFocus) -> {
+                if (hasFocus && (isPanelExpanded || isEmojiPanelExpanded)) {
+                    collapseAllPanelsImmediately();
+                }
+            });
             etMessage.addTextChangedListener(new TextWatcher() {
                 @Override
                 public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
@@ -136,7 +166,40 @@ public class ChatInputBar extends LinearLayout {
             });
         }
 
+        setupEmojiPanel();
         setupPanelActions();
+    }
+
+    private void setupEmojiPanel() {
+        if (panelEmoji == null) return;
+
+        panelEmoji.setOnEmojiSelectedListener(emojiText -> {
+            if (etMessage == null || TextUtils.isEmpty(emojiText)) return;
+            int start = Math.max(etMessage.getSelectionStart(), 0);
+            int end = Math.max(etMessage.getSelectionEnd(), 0);
+            etMessage.getText().replace(Math.min(start, end), Math.max(start, end),
+                    emojiText, 0, emojiText.length());
+        });
+
+        panelEmoji.setOnStickerSelectedListener(stickerItem -> {
+            if (stickerSendListener != null && stickerItem != null) {
+                stickerSendListener.onStickerSend(stickerItem);
+            }
+        });
+
+        panelEmoji.setOnBackspaceClickListener(() -> {
+            if (etMessage == null) return;
+            KeyEvent event = new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL);
+            etMessage.dispatchKeyEvent(event);
+        });
+
+        panelEmoji.setOnManageClickListener(() -> {
+            Context ctx = getContext();
+            if (ctx != null) {
+                Intent intent = new Intent(ctx, StickerPackManagerActivity.class);
+                ctx.startActivity(intent);
+            }
+        });
     }
 
     // ---- Quote preview bar construction ----
@@ -200,16 +263,44 @@ public class ChatInputBar extends LinearLayout {
             senderName = "";
         }
         String text;
-        if (msg.content != null && msg.content.text != null && !msg.content.text.isEmpty()) {
-            text = msg.content.text;
-        } else if (msg.content != null && msg.content.image_url != null && !msg.content.image_url.isEmpty()) {
-            text = getContext().getString(R.string.preview_image);
-        } else if (msg.content != null && msg.content.video_url != null && !msg.content.video_url.isEmpty()) {
-            text = getContext().getString(R.string.preview_video);
-        } else if (msg.content != null && msg.content.file_name != null && !msg.content.file_name.isEmpty()) {
-            text = msg.content.file_name;
-        } else {
-            text = getContext().getString(R.string.preview_unknown);
+        switch (msg.content_type) {
+            case 1:
+            case 3:
+                text = (msg.content != null && !TextUtils.isEmpty(msg.content.text)) ? msg.content.text : "";
+                break;
+            case 2:
+                text = getContext().getString(R.string.preview_image);
+                break;
+            case 4:
+                text = (msg.content != null && !TextUtils.isEmpty(msg.content.file_name)) ? msg.content.file_name : getContext().getString(R.string.preview_file_generic);
+                break;
+            case 6:
+                text = (msg.content != null && !TextUtils.isEmpty(msg.content.post_title)) ? msg.content.post_title : getContext().getString(R.string.preview_article);
+                break;
+            case 7:
+                text = getContext().getString(R.string.preview_sticker);
+                break;
+            case 10:
+                text = getContext().getString(R.string.preview_video);
+                break;
+            case 11:
+                text = getContext().getString(R.string.preview_voice);
+                break;
+            default:
+                if (msg.content != null && msg.content.text != null && !msg.content.text.isEmpty()) {
+                    text = msg.content.text;
+                } else if (msg.content != null && msg.content.image_url != null && !msg.content.image_url.isEmpty()) {
+                    text = getContext().getString(R.string.preview_image);
+                } else if (msg.content != null && msg.content.video_url != null && !msg.content.video_url.isEmpty()) {
+                    text = getContext().getString(R.string.preview_video);
+                } else if (msg.content != null && msg.content.file_name != null && !msg.content.file_name.isEmpty()) {
+                    text = msg.content.file_name;
+                } else if (msg.content != null && !TextUtils.isEmpty(msg.content.sticker_url)) {
+                    text = getContext().getString(R.string.preview_sticker);
+                } else {
+                    text = getContext().getString(R.string.preview_unknown);
+                }
+                break;
         }
         if (tvQuotePreviewText != null) {
             tvQuotePreviewText.setText(senderName.isEmpty() ? text : senderName + "：" + text);
@@ -241,6 +332,10 @@ public class ChatInputBar extends LinearLayout {
 
     public void setOnInstructionButtonClickListener(OnInstructionButtonClickListener listener) {
         this.instructionButtonClickListener = listener;
+    }
+
+    public void setOnStickerSendListener(OnStickerSendListener listener) {
+        this.stickerSendListener = listener;
     }
 
     public void setInstructionButtonVisibility(int visibility) {
@@ -282,7 +377,7 @@ public class ChatInputBar extends LinearLayout {
     }
 
     private void handleActionClick(String actionType) {
-        collapsePanel();
+        collapseAllPanels();
         if (panelActionClickListener != null) {
             panelActionClickListener.onActionClick(actionType);
         }
@@ -291,8 +386,22 @@ public class ChatInputBar extends LinearLayout {
     public void togglePanel() {
         if (isPanelExpanded) {
             collapsePanel();
+            showKeyboard();
         } else {
-            expandPanel();
+            hideKeyboard();
+            collapseEmojiPanel();
+            postDelayed(this::expandPanel, 100);
+        }
+    }
+
+    public void toggleEmojiPanel() {
+        if (isEmojiPanelExpanded) {
+            collapseEmojiPanel();
+            showKeyboard();
+        } else {
+            hideKeyboard();
+            collapsePanel();
+            postDelayed(this::expandEmojiPanel, 100);
         }
     }
 
@@ -320,8 +429,83 @@ public class ChatInputBar extends LinearLayout {
         }
     }
 
+    public void expandEmojiPanel() {
+        if (isEmojiPanelExpanded) return;
+        isEmojiPanelExpanded = true;
+        if (panelEmoji != null) {
+            panelEmoji.setPanelHeight(panelEmoji.getMinHeightPx());
+            panelEmoji.reloadStickers();
+            panelEmoji.setVisibility(VISIBLE);
+            panelEmoji.setAlpha(0f);
+            panelEmoji.animate().alpha(1f).setDuration(200).start();
+        }
+    }
+
+    public void collapseEmojiPanel() {
+        if (!isEmojiPanelExpanded) return;
+        isEmojiPanelExpanded = false;
+        if (panelEmoji != null) {
+            panelEmoji.animate().alpha(0f).setDuration(150).withEndAction(() -> panelEmoji.setVisibility(GONE)).start();
+        }
+    }
+
+    public void collapseAllPanels() {
+        collapsePanel();
+        collapseEmojiPanel();
+    }
+
+    public void collapseAllPanelsImmediately() {
+        isPanelExpanded = false;
+        isEmojiPanelExpanded = false;
+        if (btnTogglePanel != null) {
+            btnTogglePanel.animate().cancel();
+            btnTogglePanel.setRotation(0f);
+        }
+        if (panelMore != null) {
+            panelMore.animate().cancel();
+            panelMore.setVisibility(GONE);
+        }
+        if (panelEmoji != null) {
+            panelEmoji.animate().cancel();
+            panelEmoji.setVisibility(GONE);
+        }
+    }
+
+    public boolean isAnyPanelExpanded() {
+        return isPanelExpanded || isEmojiPanelExpanded;
+    }
+
+    public void reloadStickers() {
+        if (panelEmoji != null) {
+            panelEmoji.reloadStickers();
+        }
+    }
+
+    private void hideKeyboard() {
+        if (etMessage != null) {
+            InputMethodManager imm = (InputMethodManager) getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) {
+                imm.hideSoftInputFromWindow(etMessage.getWindowToken(), 0);
+            }
+        }
+    }
+
+    private void showKeyboard() {
+        if (etMessage != null) {
+            etMessage.requestFocus();
+            InputMethodManager imm = (InputMethodManager) getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) {
+                imm.showSoftInput(etMessage, InputMethodManager.SHOW_IMPLICIT);
+            }
+        }
+    }
+
     public boolean isPanelExpanded() {
         return isPanelExpanded;
+    }
+
+    public boolean isEmojiPanelExpanded() {
+        return isEmojiPanelExpanded;
     }
 
     public void setOnSendClickListener(OnSendClickListener listener) {
@@ -360,5 +544,9 @@ public class ChatInputBar extends LinearLayout {
 
     public ImageButton getTogglePanelButton() {
         return btnTogglePanel;
+    }
+
+    public ImageButton getEmojiButton() {
+        return btnEmoji;
     }
 }

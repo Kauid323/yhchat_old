@@ -19,6 +19,8 @@ import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.nago8.chat.old.ImagePreviewActivity;
 import com.nago8.chat.old.PostDetailActivity;
 import com.nago8.chat.old.R;
@@ -301,20 +303,41 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
 
         private View createRawBubble(MessagesAdapter adapter, MessageGroup group, Msg msg, int index, int count, Markwon markwon) {
             if (msg != null && msg.msg_delete_time <= 0) {
-                if (msg.content_type == 11 || (msg.content != null && msg.content.audio_url != null && !msg.content.audio_url.isEmpty())) {
-                    return createAudioBubble(group, msg, index, count);
-                }
-                if (msg.content_type == 10 || (msg.content != null && msg.content.video_url != null && !msg.content.video_url.isEmpty())) {
-                    return createVideoBubble(group, msg, index, count);
-                }
-                if (msg.content != null && msg.content.image_url != null && !msg.content.image_url.isEmpty()) {
-                    return createImageBubble(adapter, group, msg, index, count);
-                }
-                if (msg.content != null && msg.content.file_name != null && !msg.content.file_name.isEmpty() && msg.content.file_url != null && !msg.content.file_url.isEmpty()) {
-                    return createFileBubble(group, msg, index, count);
-                }
-                if (msg.content_type == 6 || (msg.content != null && msg.content.post_id != null && !msg.content.post_id.isEmpty())) {
-                    return createPostBubble(group, msg, index, count);
+                switch (msg.content_type) {
+                    case 2: // 图片消息
+                        return createImageBubble(adapter, group, msg, index, count);
+                    case 4: // 文件消息
+                        return createFileBubble(group, msg, index, count);
+                    case 6: // 文章消息
+                        return createPostBubble(group, msg, index, count);
+                    case 7: // 表情消息
+                        return createStickerBubble(adapter, group, msg, index, count);
+                    case 10: // 视频消息
+                        return createVideoBubble(group, msg, index, count);
+                    case 11: // 语音消息
+                        return createAudioBubble(group, msg, index, count);
+                    default:
+                        if (msg.content != null) {
+                            if (msg.content.audio_url != null && !msg.content.audio_url.isEmpty()) {
+                                return createAudioBubble(group, msg, index, count);
+                            }
+                            if (msg.content.video_url != null && !msg.content.video_url.isEmpty()) {
+                                return createVideoBubble(group, msg, index, count);
+                            }
+                            if (!TextUtils.isEmpty(msg.content.sticker_url) || msg.content.sticker_item_id > 0) {
+                                return createStickerBubble(adapter, group, msg, index, count);
+                            }
+                            if (msg.content.image_url != null && !msg.content.image_url.isEmpty()) {
+                                return createImageBubble(adapter, group, msg, index, count);
+                            }
+                            if (msg.content.file_name != null && !msg.content.file_name.isEmpty() && msg.content.file_url != null && !msg.content.file_url.isEmpty()) {
+                                return createFileBubble(group, msg, index, count);
+                            }
+                            if (msg.content.post_id != null && !msg.content.post_id.isEmpty()) {
+                                return createPostBubble(group, msg, index, count);
+                            }
+                        }
+                        break;
                 }
             }
             boolean isEdited = msg != null && msg.edit_time > 0;
@@ -1106,6 +1129,9 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
         private View createImageBubble(MessagesAdapter adapter, MessageGroup group, Msg msg, int index, int count) {
             Context ctx = itemView.getContext();
             String url = msg != null && msg.content != null ? msg.content.image_url : null;
+            if (TextUtils.isEmpty(url) && msg != null && msg.content != null) {
+                url = msg.content.sticker_url;
+            }
 
             boolean isEdited = msg != null && msg.edit_time > 0;
             int textColor = isEdited ? 0xFFFFFFFF : ContextCompat.getColor(ctx, group.mine ? android.R.color.white : R.color.bubble_text_left);
@@ -1155,13 +1181,13 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             params.gravity = group.mine ? Gravity.END : Gravity.START;
             container.setLayoutParams(params);
 
+            final String clickUrl = url;
             container.setOnClickListener(v -> {
-                if (!TextUtils.isEmpty(url)) {
-                    // 收集所有已加载的图片/表情消息（去重，保留 msg_seq）
+                if (!TextUtils.isEmpty(clickUrl)) {
                     ArrayList<String> allUrls = new ArrayList<>();
                     ArrayList<Long> allSeqs = new ArrayList<>();
                     int startIdx = 0;
-                    if (adapter != null) {
+                    if (adapter != null && adapter.groups != null) {
                         for (MessageGroup g : adapter.groups) {
                             if (g.messages == null) continue;
                             for (Msg m : g.messages) {
@@ -1173,7 +1199,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                                     imgUrl = m.content.sticker_url;
                                 }
                                 if (imgUrl != null && !allUrls.contains(imgUrl)) {
-                                    if (imgUrl.equals(url)) startIdx = allUrls.size();
+                                    if (imgUrl.equals(clickUrl)) startIdx = allUrls.size();
                                     allUrls.add(imgUrl);
                                     allSeqs.add(m.msg_seq);
                                 }
@@ -1181,7 +1207,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                         }
                     }
                     if (allUrls.isEmpty()) {
-                        allUrls.add(url);
+                        allUrls.add(clickUrl);
                         allSeqs.add(msg != null ? msg.msg_seq : 0L);
                     }
 
@@ -1189,6 +1215,97 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                     intent.putStringArrayListExtra(ImagePreviewActivity.EXTRA_IMAGE_URLS, allUrls);
                     intent.putExtra(ImagePreviewActivity.EXTRA_MSG_SEQS, allSeqs);
                     intent.putExtra(ImagePreviewActivity.EXTRA_START_INDEX, startIdx);
+                    if (adapter != null) {
+                        intent.putExtra(ImagePreviewActivity.EXTRA_CHAT_ID, adapter.chatId);
+                        intent.putExtra(ImagePreviewActivity.EXTRA_CHAT_TYPE, adapter.chatType);
+                        intent.putExtra(ImagePreviewActivity.EXTRA_TOKEN, adapter.token);
+                    }
+                    ctx.startActivity(intent);
+                }
+            });
+
+            return container;
+        }
+
+        private View createStickerBubble(MessagesAdapter adapter, MessageGroup group, Msg msg, int index, int count) {
+            Context ctx = itemView.getContext();
+            String rawUrl = msg != null && msg.content != null ? msg.content.sticker_url : null;
+            if (TextUtils.isEmpty(rawUrl) && msg != null && msg.content != null) {
+                rawUrl = msg.content.image_url;
+            }
+
+            final String fullUrl;
+            if (!TextUtils.isEmpty(rawUrl)) {
+                if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+                    fullUrl = rawUrl;
+                } else if (rawUrl.startsWith("/")) {
+                    fullUrl = "https://chat-img.jwznb.com" + rawUrl;
+                } else {
+                    fullUrl = "https://chat-img.jwznb.com/" + rawUrl;
+                }
+            } else {
+                fullUrl = "";
+            }
+
+            boolean isEdited = msg != null && msg.edit_time > 0;
+            int textColor = isEdited ? 0xFFFFFFFF : ContextCompat.getColor(ctx, group.mine ? android.R.color.white : R.color.bubble_text_left);
+
+            LinearLayout container = new LinearLayout(ctx);
+            container.setOrientation(LinearLayout.VERTICAL);
+            applyBubbleStyle(container, group.mine, isEdited, index, count);
+            container.setPadding(dp(12), dp(8), dp(12), dp(8));
+            container.setClickable(true);
+
+            View cmdBadge = createCmdBadgeView(ctx, msg, group.mine);
+            if (cmdBadge != null) {
+                container.addView(cmdBadge);
+            }
+
+            String quoteTextStr = getQuoteText(msg);
+            View quoteView = createQuoteView(ctx, msg, quoteTextStr);
+            if (quoteView != null) {
+                container.addView(quoteView);
+            }
+
+            LinearLayout stickerRow = new LinearLayout(ctx);
+            stickerRow.setOrientation(LinearLayout.HORIZONTAL);
+            stickerRow.setGravity(Gravity.CENTER_VERTICAL);
+
+            ImageView icon = new ImageView(ctx);
+            int iconSize = dp(20);
+            LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(iconSize, iconSize);
+            iconParams.rightMargin = dp(6);
+            icon.setLayoutParams(iconParams);
+            icon.setImageResource(R.drawable.ic_emoji);
+            icon.setColorFilter(textColor);
+            stickerRow.addView(icon);
+
+            TextView text = new TextView(ctx);
+            text.setText(R.string.message_sticker);
+            text.setTextSize(15);
+            text.setTextColor(textColor);
+            stickerRow.addView(text);
+
+            container.addView(stickerRow);
+
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            params.topMargin = dp(2);
+            params.leftMargin = group.mine ? dp(48) : 0;
+            params.rightMargin = group.mine ? 0 : dp(48);
+            params.gravity = group.mine ? Gravity.END : Gravity.START;
+            container.setLayoutParams(params);
+
+            container.setOnClickListener(v -> {
+                if (!TextUtils.isEmpty(fullUrl)) {
+                    ArrayList<String> allUrls = new ArrayList<>();
+                    allUrls.add(fullUrl);
+                    ArrayList<Long> allSeqs = new ArrayList<>();
+                    allSeqs.add(msg != null ? msg.msg_seq : 0L);
+
+                    Intent intent = new Intent(ctx, ImagePreviewActivity.class);
+                    intent.putStringArrayListExtra(ImagePreviewActivity.EXTRA_IMAGE_URLS, allUrls);
+                    intent.putExtra(ImagePreviewActivity.EXTRA_MSG_SEQS, allSeqs);
+                    intent.putExtra(ImagePreviewActivity.EXTRA_START_INDEX, 0);
                     if (adapter != null) {
                         intent.putExtra(ImagePreviewActivity.EXTRA_CHAT_ID, adapter.chatId);
                         intent.putExtra(ImagePreviewActivity.EXTRA_CHAT_TYPE, adapter.chatType);
@@ -1229,17 +1346,32 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                 return formatRecallTime(msg.msg_delete_time);
             }
             if (msg == null || msg.content == null) return itemView.getContext().getString(R.string.message_unsupported);
-            if (msg.content_type == 11 || !TextUtils.isEmpty(msg.content.audio_url)) {
-                long sec = msg.content.audio_time;
-                if (sec > 0) return itemView.getContext().getString(R.string.message_voice) + " (" + sec + "s)";
-                return itemView.getContext().getString(R.string.message_voice);
+            switch (msg.content_type) {
+                case 1:
+                case 3:
+                    return !TextUtils.isEmpty(msg.content.text) ? msg.content.text : "";
+                case 2:
+                    return itemView.getContext().getString(R.string.message_image);
+                case 4:
+                    return !TextUtils.isEmpty(msg.content.file_name) ? itemView.getContext().getString(R.string.message_file, msg.content.file_name) : itemView.getContext().getString(R.string.preview_file_generic);
+                case 6:
+                    return !TextUtils.isEmpty(msg.content.post_title) ? msg.content.post_title : itemView.getContext().getString(R.string.preview_article);
+                case 7:
+                    return itemView.getContext().getString(R.string.message_sticker);
+                case 10:
+                    return itemView.getContext().getString(R.string.preview_video);
+                case 11:
+                    long sec = msg.content.audio_time;
+                    if (sec > 0) return itemView.getContext().getString(R.string.message_voice) + " (" + sec + "s)";
+                    return itemView.getContext().getString(R.string.message_voice);
+                default:
+                    if (!TextUtils.isEmpty(msg.content.text)) return msg.content.text;
+                    if (!TextUtils.isEmpty(msg.content.image_url)) return itemView.getContext().getString(R.string.message_image);
+                    if (!TextUtils.isEmpty(msg.content.sticker_url)) return itemView.getContext().getString(R.string.message_sticker);
+                    if (!TextUtils.isEmpty(msg.content.file_name)) return itemView.getContext().getString(R.string.message_file, msg.content.file_name);
+                    if (!TextUtils.isEmpty(msg.content.tip)) return msg.content.tip;
+                    return itemView.getContext().getString(R.string.message_unsupported);
             }
-            if (!TextUtils.isEmpty(msg.content.text)) return msg.content.text;
-            if (!TextUtils.isEmpty(msg.content.image_url)) return itemView.getContext().getString(R.string.message_image);
-            if (!TextUtils.isEmpty(msg.content.file_name)) return itemView.getContext().getString(R.string.message_file, msg.content.file_name);
-            if (!TextUtils.isEmpty(msg.content.sticker_url)) return itemView.getContext().getString(R.string.message_sticker);
-            if (!TextUtils.isEmpty(msg.content.tip)) return msg.content.tip;
-            return itemView.getContext().getString(R.string.message_unsupported);
         }
 
         private int getMaxBubbleWidth(Context ctx) {

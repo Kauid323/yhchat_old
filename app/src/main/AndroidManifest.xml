@@ -51,7 +51,7 @@
         <activity android:name=".HomeActivity" />
         <activity
             android:name=".ChatActivity"
-            android:windowSoftInputMode="adjustResize" />
+            android:windowSoftInputMode="adjustNothing" />
         <activity android:name=".UserProfileActivity" />
         <activity android:name=".BotProfileActivity" />
         <activity android:name=".GroupProfileActivity" />
@@ -94,6 +94,8 @@
         <activity android:name=".ArchivedConversationsActivity" />
         <activity android:name=".FreeCopyActivity" />
         <activity android:name=".VoicePlaylistActivity" />
+        <activity android:name=".StickerPackManagerActivity" />
+        <activity android:name=".StickerPackDetailActivity" />
         <activity android:name=".VideoPlayerActivity"
             android:configChanges="orientation|screenSize"
             android:theme="@style/Theme.云湖Old.Fullscreen" />

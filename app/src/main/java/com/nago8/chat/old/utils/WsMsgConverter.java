@@ -35,6 +35,8 @@ public class WsMsgConverter {
             if (wsMsg.content.file_url != null) contentBuilder.file_url(wsMsg.content.file_url);
             if (wsMsg.content.quote_msg_text != null) contentBuilder.quote_msg_text(wsMsg.content.quote_msg_text);
             if (wsMsg.content.sticker_url != null) contentBuilder.sticker_url(wsMsg.content.sticker_url);
+            contentBuilder.sticker_item_id(wsMsg.content.sticker_item_id);
+            contentBuilder.sticker_pack_id(wsMsg.content.sticker_pack_id);
             contentBuilder.file_size(wsMsg.content.file_size);
             if (wsMsg.content.video_url != null) contentBuilder.video_url(wsMsg.content.video_url);
             if (wsMsg.content.audio_url != null) contentBuilder.audio_url(wsMsg.content.audio_url);
