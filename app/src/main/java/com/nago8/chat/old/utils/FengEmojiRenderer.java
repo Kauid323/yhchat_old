@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -94,19 +95,21 @@ public final class FengEmojiRenderer {
 
     @NonNull
     public static CharSequence apply(@NonNull Context context, CharSequence source, int sizePx) {
-        if (source == null || source.length() == 0) {
+        if (source == null || source.length() < 3) {
+            return source;
+        }
+        String str = source.toString();
+        if (!str.contains("[.")) {
             return source;
         }
         ensureEmojiNamesLoaded(context);
-        if (emojiNames == null || emojiNames.isEmpty()) {
-            return source;
-        }
 
         Matcher matcher = EMOJI_PATTERN.matcher(source);
         SpannableStringBuilder builder = null;
         while (matcher.find()) {
             String token = matcher.group();
-            if (token == null || !emojiNames.contains(token)) {
+            if (token == null) continue;
+            if (emojiNames != null && !emojiNames.isEmpty() && !emojiNames.contains(token)) {
                 continue;
             }
             Drawable drawable = getDrawable(context, token, sizePx);
@@ -129,12 +132,16 @@ public final class FengEmojiRenderer {
             if (emojiNames != null) {
                 return;
             }
+            emojiNames = new HashSet<>();
+        }
+        Context appContext = context.getApplicationContext();
+        new Thread(() -> {
             Set<String> names = new HashSet<>();
             try {
-                String[] files = context.getAssets().list(ASSET_DIR);
+                String[] files = appContext.getAssets().list(ASSET_DIR);
                 if (files != null) {
                     for (String file : files) {
-                        if (file == null || !file.toLowerCase().endsWith(".svg")) {
+                        if (file == null || !file.toLowerCase(Locale.ROOT).endsWith(".svg")) {
                             continue;
                         }
                         int dot = file.lastIndexOf('.');
@@ -145,8 +152,10 @@ public final class FengEmojiRenderer {
                 }
             } catch (IOException ignored) {
             }
-            emojiNames = Collections.unmodifiableSet(names);
-        }
+            synchronized (LOCK) {
+                emojiNames = Collections.unmodifiableSet(names);
+            }
+        }, "TwemojiNameLoader").start();
     }
 
     private static class CenteredImageSpan extends ImageSpan {

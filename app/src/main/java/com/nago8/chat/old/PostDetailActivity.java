@@ -55,12 +55,16 @@ public class PostDetailActivity extends AppCompatActivity {
 
     public static final String EXTRA_POST_ID = "extra_post_id";
     public static final String EXTRA_POST_TITLE = "extra_post_title";
+    public static final String EXTRA_BA_ID = "extra_ba_id";
+    public static final String EXTRA_BA_NAME = "extra_ba_name";
 
     // ==================== Views ====================
     private ProgressBar progressBar;
     private ScrollView scrollView;
     private TextView tvTitle;
     private TextView tvToolbarTitle;
+    private int baId = 0;
+    private String baName = "";
     private TextView tvAuthor;
     private TextView tvTime;
     private TextView tvContent;
@@ -245,6 +249,22 @@ public class PostDetailActivity extends AppCompatActivity {
             tvTitle.setText(title);
         }
 
+        // Initialize section / ba info
+        baId = getIntent().getIntExtra(EXTRA_BA_ID, 0);
+        baName = getIntent().getStringExtra(EXTRA_BA_NAME);
+        if (baName != null && !baName.isEmpty()) {
+            tvToolbarTitle.setText(baName);
+        } else {
+            tvToolbarTitle.setText(R.string.section_detail_title);
+        }
+
+        View layoutTopTitle = findViewById(R.id.layoutTopTitle);
+        if (layoutTopTitle != null) {
+            layoutTopTitle.setOnClickListener(v -> openSectionDetail());
+        } else if (tvToolbarTitle != null) {
+            tvToolbarTitle.setOnClickListener(v -> openSectionDetail());
+        }
+
         // Resolve postId
         String postIdStr = getIntent().getStringExtra(EXTRA_POST_ID);
         if (postIdStr == null || postIdStr.length() == 0) {
@@ -264,6 +284,47 @@ public class PostDetailActivity extends AppCompatActivity {
         }
 
         fetchPostDetail(String.valueOf(postId));
+    }
+
+    private void openSectionDetail() {
+        if (baId > 0) {
+            Intent intent = new Intent(this, SectionDetailActivity.class);
+            intent.putExtra(SectionDetailActivity.EXTRA_BA_ID, baId);
+            intent.putExtra(SectionDetailActivity.EXTRA_BA_NAME, (baName != null && !baName.isEmpty()) ? baName : getString(R.string.section_detail_title));
+            startActivity(intent);
+        }
+    }
+
+    private void fetchBaInfo(int id) {
+        String token = PrefUtils.getToken(this);
+        if (token == null || id <= 0) return;
+        communityRepo.getBaInfo(token, id, new CommunityRepository.StringCallback() {
+            @Override
+            public void onSuccess(String responseBody) {
+                try {
+                    org.json.JSONObject root = new org.json.JSONObject(responseBody);
+                    org.json.JSONObject data = root.optJSONObject("data");
+                    if (data != null) {
+                        String name = data.optString("name", "");
+                        if (name.isEmpty()) {
+                            org.json.JSONObject ba = data.optJSONObject("ba");
+                            if (ba != null) name = ba.optString("name", "");
+                        }
+                        if (!name.isEmpty()) {
+                            final String finalName = name;
+                            runOnUiThread(() -> {
+                                baName = finalName;
+                                if (tvToolbarTitle != null) {
+                                    tvToolbarTitle.setText(baName);
+                                }
+                            });
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+            @Override
+            public void onError(String msg) {}
+        });
     }
 
     // ==================== Fetch Article ====================
@@ -311,7 +372,41 @@ public class PostDetailActivity extends AppCompatActivity {
                             JsonObject post = data.has("post") && !data.get("post").isJsonNull()
                                     ? data.getAsJsonObject("post") : null;
                             if (post != null) {
-                                runOnUiThread(() -> renderPost(post));
+                                int parsedBaId = 0;
+                                String parsedBaName = "";
+
+                                parsedBaId = getJsonInt(post, "baId", 0);
+                                if (parsedBaId <= 0) parsedBaId = getJsonInt(post, "ba_id", 0);
+                                parsedBaName = getJsonString(post, "baName");
+                                if (parsedBaName.isEmpty()) parsedBaName = getJsonString(post, "ba_name");
+                                if (parsedBaName.isEmpty()) parsedBaName = getJsonString(post, "sectionName");
+
+                                if (data.has("ba") && !data.get("ba").isJsonNull()) {
+                                    JsonObject baObj = data.getAsJsonObject("ba");
+                                    if (parsedBaId <= 0) parsedBaId = getJsonInt(baObj, "id", 0);
+                                    if (parsedBaName.isEmpty()) parsedBaName = getJsonString(baObj, "name");
+                                } else if (data.has("board") && !data.get("board").isJsonNull()) {
+                                    JsonObject boardObj = data.getAsJsonObject("board");
+                                    if (parsedBaId <= 0) parsedBaId = getJsonInt(boardObj, "id", 0);
+                                    if (parsedBaName.isEmpty()) parsedBaName = getJsonString(boardObj, "name");
+                                }
+
+                                final int fBaId = parsedBaId;
+                                final String fBaName = parsedBaName;
+                                runOnUiThread(() -> {
+                                    if (fBaId > 0) {
+                                        baId = fBaId;
+                                    }
+                                    if (!fBaName.isEmpty()) {
+                                        baName = fBaName;
+                                        if (tvToolbarTitle != null) {
+                                            tvToolbarTitle.setText(baName);
+                                        }
+                                    } else if (baId > 0 && (baName == null || baName.isEmpty())) {
+                                        fetchBaInfo(baId);
+                                    }
+                                    renderPost(post);
+                                });
                             } else {
                                 runOnUiThread(() -> {
                                     progressBar.setVisibility(View.GONE);
@@ -366,7 +461,9 @@ public class PostDetailActivity extends AppCompatActivity {
 
         if (title.length() > 0) {
             tvTitle.setText(title);
-            tvToolbarTitle.setText(title);
+        }
+        if (baName != null && !baName.isEmpty()) {
+            tvToolbarTitle.setText(baName);
         }
         tvAuthor.setText(getString(R.string.post_author_format, senderNickname));
         tvTime.setText(getString(R.string.post_time_format, createTimeText));

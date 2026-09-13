@@ -55,6 +55,7 @@
         <activity android:name=".UserProfileActivity" />
         <activity android:name=".BotProfileActivity" />
         <activity android:name=".GroupProfileActivity" />
+        <activity android:name=".EditGroupInfoActivity" />
         <activity android:name=".SettingsActivity" />
         <activity android:name=".WsLogActivity" />
         <activity android:name=".CreateChatActivity" />

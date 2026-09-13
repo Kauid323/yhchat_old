@@ -46,6 +46,10 @@ public class VideoUploadUtils {
         public String mimeType;
     }
 
+    public interface ProgressListener {
+        void onProgress(long bytesWritten, long totalBytes, int percent);
+    }
+
     public interface TokenCallback {
         void onSuccess(String uploadToken);
         void onError(Exception e);
@@ -114,6 +118,13 @@ public class VideoUploadUtils {
      * 上传单个视频到七牛云 (bucket: chat68-video)
      */
     public static void uploadVideo(Context context, Uri videoUri, String uploadToken, UploadCallback callback) {
+        uploadVideo(context, videoUri, uploadToken, null, callback);
+    }
+
+    /**
+     * 上传单个视频到七牛云 (bucket: chat68-video，支持进度回调)
+     */
+    public static void uploadVideo(Context context, Uri videoUri, String uploadToken, ProgressListener progressListener, UploadCallback callback) {
         new Thread(() -> {
             File tempFile = null;
             try {
@@ -171,11 +182,18 @@ public class VideoUploadUtils {
                 }
                 if (queryResp.body() != null) queryResp.body().close();
 
+                RequestBody rawFileBody = RequestBody.create(MediaType.parse(mimeType), tempFile);
+                RequestBody fileBody = progressListener != null
+                        ? new com.nago8.chat.old.net.ProgressRequestBody(rawFileBody, (bytesWritten, contentLength, percent) -> {
+                            progressListener.onProgress(bytesWritten, contentLength, percent);
+                        })
+                        : rawFileBody;
+
                 RequestBody formBody = new MultipartBody.Builder()
                         .setType(MultipartBody.FORM)
                         .addFormDataPart("token", uploadToken)
                         .addFormDataPart("key", videoKey)
-                        .addFormDataPart("file", originalFileName, RequestBody.create(MediaType.parse(mimeType), tempFile))
+                        .addFormDataPart("file", originalFileName, fileBody)
                         .build();
 
                 Request uploadReq = new Request.Builder()

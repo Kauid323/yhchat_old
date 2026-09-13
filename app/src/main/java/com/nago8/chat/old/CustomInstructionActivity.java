@@ -157,9 +157,7 @@ public class CustomInstructionActivity extends AppCompatActivity {
             }
         } else {
             layoutRawParam.setVisibility(View.VISIBLE);
-            if (!TextUtils.isEmpty(instruction.defaultText)) {
-                etRawParam.setText(instruction.defaultText);
-            }
+            etRawParam.setText(instruction.getDefaultParam());
             if (!TextUtils.isEmpty(instruction.hintText)) {
                 tilRawParam.setHint(instruction.hintText);
             }
@@ -358,6 +356,11 @@ public class CustomInstructionActivity extends AppCompatActivity {
             } catch (Exception ignored) {}
         } else if (layoutRawParam.getVisibility() == View.VISIBLE) {
             String raw = etRawParam.getText() != null ? etRawParam.getText().toString().trim() : "";
+            if (TextUtils.isEmpty(raw)) {
+                raw = instruction.getDefaultParam();
+            } else if (!raw.startsWith("/")) {
+                raw = "/" + raw;
+            }
             textResult = raw;
             formResultJson = raw;
         }

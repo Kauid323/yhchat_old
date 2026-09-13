@@ -32,6 +32,8 @@ import com.nago8.chat.old.utils.LocaleHelper;
 import com.nago8.chat.old.utils.PrefUtils;
 import com.nago8.chat.old.utils.ThemeUtils;
 
+import com.google.android.material.switchmaterial.SwitchMaterial;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -97,6 +99,9 @@ public class StickerPackManagerActivity extends AppCompatActivity {
         menu.add(0, 1, 0, R.string.sticker_create_pack)
                 .setIcon(R.drawable.ic_add)
                 .setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
+        menu.add(0, 2, 0, R.string.sticker_panel_settings_title)
+                .setIcon(R.drawable.ic_settings)
+                .setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
         return super.onCreateOptionsMenu(menu);
     }
 
@@ -105,8 +110,134 @@ public class StickerPackManagerActivity extends AppCompatActivity {
         if (item.getItemId() == 1) {
             showCreatePackDialog();
             return true;
+        } else if (item.getItemId() == 2) {
+            showSettingsDialog();
+            return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    private void showSettingsDialog() {
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_emoji_panel_settings, null);
+        View layoutDefaultTab = dialogView.findViewById(R.id.layoutDefaultTab);
+        TextView tvDefaultTabSummary = dialogView.findViewById(R.id.tvDefaultTabSummary);
+        SwitchMaterial switchRandomPack = dialogView.findViewById(R.id.switchRandomPack);
+
+        Runnable updateSummary = () -> {
+            if (tvDefaultTabSummary == null) return;
+            if (PrefUtils.isEmojiRandomPackEnabled(this)) {
+                tvDefaultTabSummary.setText(R.string.sticker_random_pack_title);
+                return;
+            }
+            String tabType = PrefUtils.getEmojiDefaultTabType(this);
+            if (PrefUtils.EMOJI_TAB_TWEMOJI.equals(tabType)) {
+                tvDefaultTabSummary.setText(R.string.emoji_tab_twemoji);
+            } else if (PrefUtils.EMOJI_TAB_FAVORITE.equals(tabType)) {
+                tvDefaultTabSummary.setText(R.string.sticker_tab_favorite_title);
+            } else if (PrefUtils.EMOJI_TAB_PACK.equals(tabType)) {
+                String name = PrefUtils.getEmojiDefaultPackName(this);
+                if (TextUtils.isEmpty(name)) {
+                    long packId = PrefUtils.getEmojiDefaultPackId(this);
+                    for (StickerPack pack : packList) {
+                        if (pack.id == packId) {
+                            name = pack.name;
+                            break;
+                        }
+                    }
+                }
+                if (!TextUtils.isEmpty(name)) {
+                    tvDefaultTabSummary.setText(getString(R.string.sticker_tab_pack_prefix, name));
+                } else {
+                    tvDefaultTabSummary.setText(R.string.emoji_tab_unicode);
+                }
+            } else {
+                tvDefaultTabSummary.setText(R.string.emoji_tab_unicode);
+            }
+        };
+
+        if (switchRandomPack != null) {
+            switchRandomPack.setChecked(PrefUtils.isEmojiRandomPackEnabled(this));
+            switchRandomPack.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                PrefUtils.setEmojiRandomPackEnabled(this, isChecked);
+                updateSummary.run();
+            });
+        }
+
+        if (layoutDefaultTab != null) {
+            layoutDefaultTab.setOnClickListener(v -> {
+                showSelectDefaultTabDialog(() -> {
+                    if (switchRandomPack != null && switchRandomPack.isChecked()) {
+                        switchRandomPack.setChecked(false);
+                    }
+                    updateSummary.run();
+                });
+            });
+        }
+
+        updateSummary.run();
+
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.sticker_panel_settings_title)
+                .setView(dialogView)
+                .setPositiveButton(R.string.action_ok, null)
+                .show();
+    }
+
+    private void showSelectDefaultTabDialog(@Nullable Runnable onSelected) {
+        List<String> options = new ArrayList<>();
+        options.add(getString(R.string.emoji_tab_unicode));
+        options.add(getString(R.string.emoji_tab_twemoji));
+        options.add(getString(R.string.sticker_tab_favorite_title));
+
+        for (StickerPack pack : packList) {
+            String name = !TextUtils.isEmpty(pack.name) ? pack.name : "";
+            options.add(getString(R.string.sticker_tab_pack_prefix, name));
+        }
+
+        String currentType = PrefUtils.getEmojiDefaultTabType(this);
+        long currentPackId = PrefUtils.getEmojiDefaultPackId(this);
+
+        int checkedIndex = 0;
+        if (PrefUtils.EMOJI_TAB_TWEMOJI.equals(currentType)) {
+            checkedIndex = 1;
+        } else if (PrefUtils.EMOJI_TAB_FAVORITE.equals(currentType)) {
+            checkedIndex = 2;
+        } else if (PrefUtils.EMOJI_TAB_PACK.equals(currentType)) {
+            for (int i = 0; i < packList.size(); i++) {
+                if (packList.get(i).id == currentPackId) {
+                    checkedIndex = 3 + i;
+                    break;
+                }
+            }
+        }
+
+        String[] items = options.toArray(new String[0]);
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.sticker_default_tab_dialog_title)
+                .setSingleChoiceItems(items, checkedIndex, (dialog, which) -> {
+                    if (which == 0) {
+                        PrefUtils.setEmojiDefaultTabType(this, PrefUtils.EMOJI_TAB_UNICODE);
+                    } else if (which == 1) {
+                        PrefUtils.setEmojiDefaultTabType(this, PrefUtils.EMOJI_TAB_TWEMOJI);
+                    } else if (which == 2) {
+                        PrefUtils.setEmojiDefaultTabType(this, PrefUtils.EMOJI_TAB_FAVORITE);
+                    } else {
+                        int packIndex = which - 3;
+                        if (packIndex >= 0 && packIndex < packList.size()) {
+                            StickerPack selectedPack = packList.get(packIndex);
+                            PrefUtils.setEmojiDefaultTabType(this, PrefUtils.EMOJI_TAB_PACK);
+                            PrefUtils.setEmojiDefaultPackId(this, selectedPack.id);
+                            PrefUtils.setEmojiDefaultPackName(this, selectedPack.name);
+                        }
+                    }
+                    PrefUtils.setEmojiRandomPackEnabled(this, false);
+                    if (onSelected != null) {
+                        onSelected.run();
+                    }
+                    dialog.dismiss();
+                })
+                .setNegativeButton(R.string.dialog_cancel, null)
+                .show();
     }
 
     private void loadPacks(boolean showLoading) {

@@ -92,13 +92,37 @@
                         android:textSize="18sp"
                         android:textStyle="bold" />
 
-                    <TextView
-                        android:id="@+id/tvGroupId"
+                    <LinearLayout
+                        android:id="@+id/rowGroupId"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
-                        android:textColor="?android:attr/textColorSecondary"
-                        android:textSize="13sp" />
+                        android:background="?attr/selectableItemBackground"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp"
+                        android:paddingEnd="6dp">
+
+                        <TextView
+                            android:id="@+id/tvGroupId"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textColor="?android:attr/textColorSecondary"
+                            android:textSize="13sp" />
+
+                        <androidx.appcompat.widget.AppCompatImageView
+                            android:id="@+id/btnCopyGroupId"
+                            android:layout_width="14dp"
+                            android:layout_height="14dp"
+                            android:layout_marginStart="6dp"
+                            android:layout_marginLeft="6dp"
+                            android:contentDescription="@string/menu_copy"
+                            app:srcCompat="@drawable/ic_copy"
+                            app:tint="?android:attr/textColorSecondary" />
+                    </LinearLayout>
                 </LinearLayout>
 
                 <androidx.appcompat.widget.AppCompatImageView

@@ -288,6 +288,7 @@ public class CommunityPostsAdapter extends RecyclerView.Adapter<RecyclerView.Vie
                         Intent intent = new Intent(context, PostDetailActivity.class);
                         intent.putExtra(PostDetailActivity.EXTRA_POST_ID, String.valueOf(item.getId()));
                         intent.putExtra(PostDetailActivity.EXTRA_POST_TITLE, item.getTitle());
+                        intent.putExtra(PostDetailActivity.EXTRA_BA_ID, item.getBaId());
                         context.startActivity(intent);
                     }
                 }

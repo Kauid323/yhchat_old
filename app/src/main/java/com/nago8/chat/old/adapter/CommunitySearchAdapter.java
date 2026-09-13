@@ -154,6 +154,7 @@ public class CommunitySearchAdapter extends RecyclerView.Adapter<RecyclerView.Vi
                     Intent intent = new Intent(context, PostDetailActivity.class);
                     intent.putExtra(PostDetailActivity.EXTRA_POST_ID, String.valueOf(post.getId()));
                     intent.putExtra(PostDetailActivity.EXTRA_POST_TITLE, post.getTitle());
+                    intent.putExtra(PostDetailActivity.EXTRA_BA_ID, post.getBaId());
                     context.startActivity(intent);
                 }
             });

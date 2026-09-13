@@ -41,6 +41,10 @@ public class ImageUploadUtils {
         public String extension;
     }
 
+    public interface ProgressListener {
+        void onProgress(long bytesWritten, long totalBytes, int percent);
+    }
+
     public interface TokenCallback {
         void onSuccess(String uploadToken);
         void onError(Exception e);
@@ -109,6 +113,13 @@ public class ImageUploadUtils {
      * 上传单张图片到七牛云
      */
     public static void uploadImage(Context context, Uri imageUri, String uploadToken, UploadCallback callback) {
+        uploadImage(context, imageUri, uploadToken, null, callback);
+    }
+
+    /**
+     * 上传单张图片到七牛云 (支持进度回调)
+     */
+    public static void uploadImage(Context context, Uri imageUri, String uploadToken, ProgressListener progressListener, UploadCallback callback) {
         new Thread(() -> {
             File tempFile = null;
             try {
@@ -159,11 +170,18 @@ public class ImageUploadUtils {
                     queryResp.body().close();
                 }
 
+                RequestBody rawFileBody = RequestBody.create(MediaType.parse(mimeType), tempFile);
+                RequestBody fileBody = progressListener != null
+                        ? new com.nago8.chat.old.net.ProgressRequestBody(rawFileBody, (bytesWritten, contentLength, percent) -> {
+                            progressListener.onProgress(bytesWritten, contentLength, percent);
+                        })
+                        : rawFileBody;
+
                 RequestBody formBody = new MultipartBody.Builder()
                         .setType(MultipartBody.FORM)
                         .addFormDataPart("token", uploadToken)
                         .addFormDataPart("key", fileKey)
-                        .addFormDataPart("file", fileKey, RequestBody.create(MediaType.parse(mimeType), tempFile))
+                        .addFormDataPart("file", fileKey, fileBody)
                         .build();
 
                 Request uploadReq = new Request.Builder()

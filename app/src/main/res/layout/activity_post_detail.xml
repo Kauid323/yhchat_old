@@ -8,6 +8,7 @@
 
     <!-- 顶栏 -->
     <LinearLayout
+        android:id="@+id/topBar"
         android:layout_width="match_parent"
         android:layout_height="56dp"
         android:background="@color/app_primary"
@@ -18,22 +19,44 @@
             android:id="@+id/btnBack"
             android:layout_width="48dp"
             android:layout_height="match_parent"
-            android:background="@android:color/transparent"
+            android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/action_back"
             android:padding="12dp"
             app:srcCompat="@drawable/ic_back"
             app:tint="@color/text_white" />
 
-        <TextView
-            android:id="@+id/tvToolbarTitle"
+        <LinearLayout
+            android:id="@+id/layoutTopTitle"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:layout_weight="1"
-            android:singleLine="true"
-            android:text="@string/post_detail_title"
-            android:textColor="@color/text_white"
-            android:textSize="18sp"
-            android:textStyle="bold" />
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingEnd="16dp">
+
+            <TextView
+                android:id="@+id/tvToolbarTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:text="@string/section_detail_title"
+                android:textColor="@color/text_white"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/ivToolbarArrow"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:layout_marginStart="4dp"
+                android:layout_marginLeft="4dp"
+                app:srcCompat="@drawable/ic_arrow_right"
+                app:tint="@color/text_white" />
+        </LinearLayout>
     </LinearLayout>
 
     <!-- Tab 选择栏 (与 CommunityFragment 保持一致) -->

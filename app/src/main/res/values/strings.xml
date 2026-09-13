@@ -541,6 +541,14 @@
     <string name="emoji_tab_twemoji">云湖表情</string>
     <string name="sticker_manage_title">表情包管理</string>
     <string name="sticker_manage_empty">暂未添加任何表情包</string>
+    <string name="sticker_panel_settings_title">表情面板设置</string>
+    <string name="sticker_default_tab_title">打开表情面板默认显示</string>
+    <string name="sticker_default_tab_summary">设置打开表情面板时首次展示的页面</string>
+    <string name="sticker_default_tab_dialog_title">选择默认显示的表情分类</string>
+    <string name="sticker_random_pack_title">打开表情面板随机选中表情包</string>
+    <string name="sticker_random_pack_summary">开启后，每次打开表情面板随机展示已添加的某个表情包</string>
+    <string name="sticker_tab_favorite_title">我的表情收藏</string>
+    <string name="sticker_tab_pack_prefix">表情包: %1$s</string>
     <string name="sticker_create_pack">新建表情包</string>
     <string name="sticker_create_pack_name_hint">请输入表情包名称</string>
     <string name="sticker_pack_name_empty">表情包名称不能为空</string>
@@ -706,4 +714,22 @@
     <string name="time_format_month_day">MM月dd日</string>
     <string name="time_format_year_month_day">yyyy年MM月dd日</string>
     <string name="media_size_exceed_format">%1$s大小超过云端限制 (最大%2$dMB，当前%3$.2fMB)</string>
+    <string name="settings_disable_html_images">不加载 HTML 图片</string>
+    <string name="settings_disable_html_images_desc">聊天界面不自动加载 HTML 中的图片，点击占位可进入图片预览器查看</string>
+    <string name="html_image_tap_to_view">查看图片</string>
+    <string name="edit_group_info_title">修改群资料</string>
+    <string name="edit_group_avatar_hint">点击更换群头像</string>
+    <string name="edit_group_name_label">群聊名称</string>
+    <string name="edit_group_id_label">群聊 ID</string>
+    <string name="edit_group_avatar_url_label">自定义头像链接 (可选)</string>
+    <string name="edit_group_saving">正在保存群资料...</string>
+    <string name="edit_group_success">群资料修改成功</string>
+    <string name="edit_group_name_empty">群聊名称不能为空</string>
+    <string name="group_edit_permission_denied">仅群主和管理员可修改群资料</string>
+    <string name="settings_html_show_raw">HTML 消息显示原文</string>
+    <string name="settings_html_show_raw_desc">直接展示 HTML 源码文本，不解析为原生控件</string>
+    <string name="chat_uploading_images_progress">正在上传图片 (%1$d/%2$d)</string>
+    <string name="chat_uploading_files_progress">正在上传文件 (%1$d/%2$d)</string>
+    <string name="chat_uploading_videos_progress">正在上传视频 (%1$d/%2$d)</string>
+    <string name="chat_upload_success">上传完成</string>
 </resources>

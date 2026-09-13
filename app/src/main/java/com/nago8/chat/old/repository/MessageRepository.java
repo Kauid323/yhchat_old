@@ -38,6 +38,7 @@ public class MessageRepository {
 
     public interface ImageUploadListener {
         void onProgress(int index, int total);
+        default void onByteProgress(int index, int total, int percent, long bytesWritten, long totalBytes) {}
         void onImageSuccess(int index, int total);
         void onImageError(int index, int total, Exception error);
         void onAllCompleted();
@@ -45,6 +46,7 @@ public class MessageRepository {
 
     public interface FileUploadListener {
         void onProgress(int index, int total);
+        default void onByteProgress(int index, int total, int percent, long bytesWritten, long totalBytes) {}
         void onFileSuccess(int index, int total, String fileName);
         void onFileError(int index, int total, Exception error);
         void onAllCompleted();
@@ -52,6 +54,7 @@ public class MessageRepository {
 
     public interface VideoUploadListener {
         void onProgress(int index, int total);
+        default void onByteProgress(int index, int total, int percent, long bytesWritten, long totalBytes) {}
         void onVideoSuccess(int index, int total, String fileName);
         void onVideoError(int index, int total, Exception error);
         void onAllCompleted();
@@ -468,7 +471,11 @@ public class MessageRepository {
                     final int index = i + 1;
                     if (listener != null) listener.onProgress(index, total);
 
-                    ImageUploadUtils.uploadImage(context, imageUri, uploadToken, new ImageUploadUtils.UploadCallback() {
+                    ImageUploadUtils.uploadImage(context, imageUri, uploadToken, (bytesWritten, totalBytes, percent) -> {
+                        if (listener != null) {
+                            listener.onByteProgress(index, total, percent, bytesWritten, totalBytes);
+                        }
+                    }, new ImageUploadUtils.UploadCallback() {
                         @Override
                         public void onSuccess(ImageUploadUtils.QiniuResult res) {
                             sendImageMessage(token, chatId, chatType,
@@ -599,7 +606,11 @@ public class MessageRepository {
                     final int index = i + 1;
                     if (listener != null) listener.onProgress(index, total);
 
-                    FileUploadUtils.uploadFile(context, fileUri, uploadToken, new FileUploadUtils.UploadCallback() {
+                    FileUploadUtils.uploadFile(context, fileUri, uploadToken, (bytesWritten, totalBytes, percent) -> {
+                        if (listener != null) {
+                            listener.onByteProgress(index, total, percent, bytesWritten, totalBytes);
+                        }
+                    }, new FileUploadUtils.UploadCallback() {
                         @Override
                         public void onSuccess(FileUploadUtils.QiniuFileResult res) {
                             sendFileMessage(token, chatId, chatType,
@@ -732,7 +743,11 @@ public class MessageRepository {
                     final int index = i + 1;
                     if (listener != null) listener.onProgress(index, total);
 
-                    com.nago8.chat.old.utils.VideoUploadUtils.uploadVideo(context, videoUri, uploadToken, new com.nago8.chat.old.utils.VideoUploadUtils.UploadCallback() {
+                    com.nago8.chat.old.utils.VideoUploadUtils.uploadVideo(context, videoUri, uploadToken, (bytesWritten, totalBytes, percent) -> {
+                        if (listener != null) {
+                            listener.onByteProgress(index, total, percent, bytesWritten, totalBytes);
+                        }
+                    }, new com.nago8.chat.old.utils.VideoUploadUtils.UploadCallback() {
                         @Override
                         public void onSuccess(com.nago8.chat.old.utils.VideoUploadUtils.QiniuVideoResult res) {
                             sendVideoMessage(token, chatId, chatType,

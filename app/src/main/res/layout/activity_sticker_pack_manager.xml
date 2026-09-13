@@ -17,6 +17,8 @@
         app:navigationIcon="@drawable/ic_back"
         app:title="@string/sticker_manage_title" />
 
+
+
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent">

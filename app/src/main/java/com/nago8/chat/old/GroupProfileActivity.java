@@ -1,6 +1,8 @@
 package com.nago8.chat.old;
 
 import android.app.AlertDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
@@ -49,6 +51,7 @@ public class GroupProfileActivity extends AppCompatActivity {
 
     private static final String TAG = "GroupProfileActivity";
     public static final String EXTRA_GROUP_ID = "group_id";
+    private static final int REQUEST_CODE_EDIT_GROUP_INFO = 1005;
 
     private AppCompatImageView ivAvatar;
     private TextView tvName;
@@ -131,6 +134,17 @@ public class GroupProfileActivity extends AppCompatActivity {
         }
         tvName = findViewById(R.id.tvName);
         tvGroupId = findViewById(R.id.tvGroupId);
+        View rowGroupId = findViewById(R.id.rowGroupId);
+        View.OnClickListener copyListener = v -> copyGroupId();
+        if (rowGroupId != null) {
+            rowGroupId.setOnClickListener(copyListener);
+        } else if (tvGroupId != null) {
+            tvGroupId.setOnClickListener(copyListener);
+        }
+        View btnCopyGroupId = findViewById(R.id.btnCopyGroupId);
+        if (btnCopyGroupId != null) {
+            btnCopyGroupId.setOnClickListener(copyListener);
+        }
         tvIntroduction = findViewById(R.id.tvIntroduction);
         tvMemberCount = findViewById(R.id.tvMemberCount);
         tvCategory = findViewById(R.id.tvCategory);
@@ -170,9 +184,17 @@ public class GroupProfileActivity extends AppCompatActivity {
             }
         });
 
-        // 字符设置项点击事件 (可编辑字符)
+        // 字符设置项点击事件 (点击名称/头像卡片进入新 Activity 修改名称和头像)
         rowName.setOnClickListener(v -> {
-            if (checkMemberEditable()) showEditGroupNameDialog();
+            if (checkMemberEditable()) {
+                Intent intent = new Intent(this, EditGroupInfoActivity.class);
+                intent.putExtra(EditGroupInfoActivity.EXTRA_GROUP_ID, groupId);
+                if (currentGroup != null) {
+                    intent.putExtra(EditGroupInfoActivity.EXTRA_GROUP_NAME, currentGroup.name);
+                    intent.putExtra(EditGroupInfoActivity.EXTRA_AVATAR_URL, currentGroup.avatar_url);
+                }
+                startActivityForResult(intent, REQUEST_CODE_EDIT_GROUP_INFO);
+            }
         });
         rowIntroduction.setOnClickListener(v -> {
             if (checkMemberEditable()) showEditGroupIntroDialog();
@@ -195,6 +217,30 @@ public class GroupProfileActivity extends AppCompatActivity {
         setupSwitchListeners();
 
         fetchGroupInfo(groupId);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_CODE_EDIT_GROUP_INFO && resultCode == RESULT_OK) {
+            if (data != null) {
+                String newName = data.getStringExtra(EditGroupInfoActivity.RESULT_GROUP_NAME);
+                String newAvatar = data.getStringExtra(EditGroupInfoActivity.RESULT_AVATAR_URL);
+                if (newName != null && !newName.isEmpty()) {
+                    tvName.setText(newName);
+                    if (currentGroup != null) {
+                        currentGroup = currentGroup.newBuilder().name(newName).build();
+                    }
+                }
+                if (newAvatar != null && !newAvatar.isEmpty()) {
+                    ImageUtils.loadAvatar(this, newAvatar, ivAvatar);
+                    if (currentGroup != null) {
+                        currentGroup = currentGroup.newBuilder().avatar_url(newAvatar).build();
+                    }
+                }
+            }
+            fetchGroupInfo(groupId);
+        }
     }
 
     @Override
@@ -670,23 +716,53 @@ public class GroupProfileActivity extends AppCompatActivity {
         );
     }
 
-    // 自动删除消息 (以天数为单位)
+    // 自动删除消息格式化
     private String formatAutoDelete(long seconds) {
         if (seconds <= 0) return getString(R.string.group_profile_off);
-        long days = seconds / 86400;
-        if (days <= 0) days = 1;
-        return getString(R.string.group_profile_auto_delete_days_format, days);
+
+        // 如果数值在 1~365 之间，可能是直接保存的天数
+        if (seconds <= 365) {
+            return getString(R.string.group_profile_auto_delete_days_format, seconds);
+        }
+
+        // 如果是秒数
+        if (seconds % 86400 == 0) {
+            long days = seconds / 86400;
+            return getString(R.string.group_profile_auto_delete_days_format, days);
+        } else if (seconds >= 86400) {
+            long days = seconds / 86400;
+            long remHours = (seconds % 86400) / 3600;
+            if (remHours > 0) {
+                return days + " 天 " + remHours + " 小时";
+            }
+            return getString(R.string.group_profile_auto_delete_days_format, days);
+        } else if (seconds % 3600 == 0) {
+            long hours = seconds / 3600;
+            return hours + " 小时";
+        } else if (seconds >= 3600) {
+            long hours = seconds / 3600;
+            long remMins = (seconds % 3600) / 60;
+            if (remMins > 0) {
+                return hours + " 小时 " + remMins + " 分钟";
+            }
+            return hours + " 小时";
+        } else if (seconds % 60 == 0) {
+            long mins = seconds / 60;
+            return mins + " 分钟";
+        } else {
+            return seconds + " 秒";
+        }
     }
 
     private void showAutoDeleteDialog() {
         if (currentGroup == null) return;
         final String[] options = new String[]{
-                getString(R.string.group_profile_off) + " (" + getString(R.string.group_profile_days_format, 0) + ")",
-                getString(R.string.group_profile_days_format, 1),
-                getString(R.string.group_profile_days_format, 3),
-                getString(R.string.group_profile_days_format, 7),
-                getString(R.string.group_profile_days_format, 30),
-                getString(R.string.group_profile_days_format, 90),
+                getString(R.string.group_profile_off),
+                getString(R.string.group_profile_auto_delete_days_format, 1),
+                getString(R.string.group_profile_auto_delete_days_format, 3),
+                getString(R.string.group_profile_auto_delete_days_format, 7),
+                getString(R.string.group_profile_auto_delete_days_format, 30),
+                getString(R.string.group_profile_auto_delete_days_format, 90),
                 getString(R.string.auto_delete_custom)
         };
         final long[] secondsMap = new long[]{
@@ -701,10 +777,19 @@ public class GroupProfileActivity extends AppCompatActivity {
 
         long currentSecs = currentGroup.auto_delete_message;
         int checked = 0;
-        for (int i = 0; i < secondsMap.length - 1; i++) {
-            if (currentSecs == secondsMap[i]) {
-                checked = i;
-                break;
+        if (currentSecs <= 0) {
+            checked = 0;
+        } else {
+            boolean matched = false;
+            for (int i = 1; i < secondsMap.length - 1; i++) {
+                if (currentSecs == secondsMap[i] || currentSecs == (secondsMap[i] / 86400L)) {
+                    checked = i;
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) {
+                checked = options.length - 1;
             }
         }
 
@@ -727,6 +812,15 @@ public class GroupProfileActivity extends AppCompatActivity {
         editText.setInputType(InputType.TYPE_CLASS_NUMBER);
         editText.setHint(R.string.auto_delete_custom_hint);
 
+        long currentSecs = currentGroup != null ? currentGroup.auto_delete_message : 0;
+        if (currentSecs > 0) {
+            long days = currentSecs >= 86400 ? currentSecs / 86400 : currentSecs;
+            editText.setText(String.valueOf(days));
+            if (editText.getText() != null) {
+                editText.setSelection(editText.getText().length());
+            }
+        }
+
         new AlertDialog.Builder(this)
                 .setTitle(R.string.auto_delete_custom)
                 .setView(editText)
@@ -735,8 +829,11 @@ public class GroupProfileActivity extends AppCompatActivity {
                     if (!input.isEmpty()) {
                         try {
                             long days = Long.parseLong(input);
-                            if (days < 0) days = 0;
-                            updateAutoDeleteMessage(days * 86400L);
+                            if (days <= 0) {
+                                updateAutoDeleteMessage(0L);
+                            } else {
+                                updateAutoDeleteMessage(days * 86400L);
+                            }
                         } catch (NumberFormatException ignored) {
                         }
                     }
@@ -746,13 +843,15 @@ public class GroupProfileActivity extends AppCompatActivity {
     }
 
     private void updateAutoDeleteMessage(long seconds) {
-        long days = seconds / 86400;
+        long days = seconds >= 86400 ? seconds / 86400 : seconds;
         JsonObject bodyJson = new JsonObject();
         bodyJson.addProperty("groupId", groupId);
+        bodyJson.addProperty("group_id", groupId);
         bodyJson.addProperty("autoDeleteMessage", seconds);
+        bodyJson.addProperty("auto_delete_message", seconds);
         bodyJson.addProperty("time", seconds);
         bodyJson.addProperty("day", days);
-        bodyJson.addProperty("auto_delete_message", seconds);
+        bodyJson.addProperty("days", days);
 
         postSimpleJsonEdit("/v1/group/edit-auto-delete-message", bodyJson, () -> {
             if (currentGroup != null) {
@@ -1000,6 +1099,16 @@ public class GroupProfileActivity extends AppCompatActivity {
                     failureAction.run();
                 }
             });
+        }
+    }
+
+    private void copyGroupId() {
+        if (groupId != null && !groupId.isEmpty()) {
+            ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cm != null) {
+                cm.setPrimaryClip(ClipData.newPlainText("group_id", groupId));
+                Toast.makeText(this, R.string.toast_copied_to_clipboard, Toast.LENGTH_SHORT).show();
+            }
         }
     }
 }

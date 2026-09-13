@@ -112,6 +112,7 @@ public class CommunitySearchActivity extends AppCompatActivity {
                 Intent intent = new Intent(CommunitySearchActivity.this, PostDetailActivity.class);
                 intent.putExtra(PostDetailActivity.EXTRA_POST_ID, String.valueOf(post.getId()));
                 intent.putExtra(PostDetailActivity.EXTRA_POST_TITLE, post.getTitle());
+                intent.putExtra(PostDetailActivity.EXTRA_BA_ID, post.getBaId());
                 startActivity(intent);
             }
         });

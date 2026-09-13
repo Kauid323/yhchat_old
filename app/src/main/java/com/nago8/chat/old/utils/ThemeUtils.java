@@ -31,6 +31,7 @@ import com.google.android.material.appbar.AppBarLayout;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.tabs.TabLayout;
+import com.google.android.material.textfield.TextInputLayout;
 import com.nago8.chat.old.R;
 
 import java.lang.ref.WeakReference;
@@ -305,9 +306,17 @@ public class ThemeUtils {
                     createColorStateList(Color.parseColor("#888888"), primaryColor)
             );
         }
-        // H. 输入框处理（下划线着色）
+        // H. TextInputLayout 处理（边框聚焦颜色与提示词颜色）
+        else if (view instanceof TextInputLayout) {
+            TextInputLayout til = (TextInputLayout) view;
+            til.setBoxStrokeColor(primaryColor);
+            til.setHintTextColor(ColorStateList.valueOf(primaryColor));
+        }
+        // I. 输入框处理（下划线着色，但跳过 TextInputLayout 内部的输入框以保持 Material 样式）
         else if (view instanceof EditText) {
-            ViewCompat.setBackgroundTintList((EditText) view, ColorStateList.valueOf(primaryColor));
+            if (!isInsideTextInputLayout(view)) {
+                ViewCompat.setBackgroundTintList((EditText) view, ColorStateList.valueOf(primaryColor));
+            }
         }
         // I. 文本颜色检查（如作者链接等）
         else if (view instanceof TextView) {
@@ -531,5 +540,20 @@ public class ThemeUtils {
         } else {
             return context.getString(R.string.theme_color_custom, normalized);
         }
+    }
+
+    private static boolean isInsideTextInputLayout(View view) {
+        if (view == null) return false;
+        if (view.getClass().getName().contains("TextInputEditText")) {
+            return true;
+        }
+        android.view.ViewParent parent = view.getParent();
+        while (parent instanceof View) {
+            if (parent instanceof TextInputLayout) {
+                return true;
+            }
+            parent = parent.getParent();
+        }
+        return false;
     }
 }

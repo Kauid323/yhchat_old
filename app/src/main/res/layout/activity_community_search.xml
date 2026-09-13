@@ -20,14 +20,14 @@
         android:paddingTop="8dp"
         android:paddingBottom="8dp">
 
-        <ImageView
+        <androidx.appcompat.widget.AppCompatImageView
             android:id="@+id/btnBack"
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="返回"
             android:padding="10dp"
-            android:src="@drawable/ic_back"
+            app:srcCompat="@drawable/ic_back"
             app:tint="@color/text_primary" />
 
         <com.google.android.material.card.MaterialCardView
@@ -49,11 +49,11 @@
                 android:paddingStart="12dp"
                 android:paddingEnd="12dp">
 
-                <ImageView
+                <androidx.appcompat.widget.AppCompatImageView
                     android:layout_width="18dp"
                     android:layout_height="18dp"
                     android:contentDescription="@null"
-                    android:src="@drawable/ic_search"
+                    app:srcCompat="@drawable/ic_search"
                     app:tint="@color/text_hint" />
 
                 <EditText
@@ -72,13 +72,13 @@
                     android:textColorHint="@color/text_hint"
                     android:textSize="13.5sp" />
 
-                <ImageView
+                <androidx.appcompat.widget.AppCompatImageView
                     android:id="@+id/ivClearSearch"
                     android:layout_width="20dp"
                     android:layout_height="20dp"
                     android:contentDescription="@null"
                     android:padding="2dp"
-                    android:src="@drawable/ic_close"
+                    app:srcCompat="@drawable/ic_close"
                     android:visibility="gone"
                     app:tint="@color/text_hint"
                     tools:visibility="visible" />
@@ -138,12 +138,12 @@
                 android:padding="32dp"
                 android:visibility="gone">
 
-                <ImageView
+                <androidx.appcompat.widget.AppCompatImageView
                     android:id="@+id/ivEmptyIcon"
                     android:layout_width="56dp"
                     android:layout_height="56dp"
                     android:contentDescription="@null"
-                    android:src="@drawable/ic_search"
+                    app:srcCompat="@drawable/ic_search"
                     app:tint="@color/text_hint" />
 
                 <TextView

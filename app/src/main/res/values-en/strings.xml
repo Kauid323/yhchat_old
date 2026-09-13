@@ -540,6 +540,14 @@
     <string name="emoji_tab_twemoji">Twemoji</string>
     <string name="sticker_manage_title">Sticker Management</string>
     <string name="sticker_manage_empty">No sticker packs added yet</string>
+    <string name="sticker_panel_settings_title">Emoji Panel Settings</string>
+    <string name="sticker_default_tab_title">Default Tab on Open</string>
+    <string name="sticker_default_tab_summary">Set default tab when opening emoji panel</string>
+    <string name="sticker_default_tab_dialog_title">Choose Default Tab</string>
+    <string name="sticker_random_pack_title">Randomize Sticker Pack on Open</string>
+    <string name="sticker_random_pack_summary">When enabled, randomly pick an installed sticker pack on open</string>
+    <string name="sticker_tab_favorite_title">My Favorites</string>
+    <string name="sticker_tab_pack_prefix">Sticker Pack: %1$s</string>
     <string name="sticker_create_pack">New Sticker Pack</string>
     <string name="sticker_create_pack_name_hint">Enter sticker pack name</string>
     <string name="sticker_pack_name_empty">Sticker pack name cannot be empty</string>
@@ -705,4 +713,22 @@
     <string name="time_format_month_day">MMM dd</string>
     <string name="time_format_year_month_day">MMM dd, yyyy</string>
     <string name="media_size_exceed_format">%1$s size exceeds cloud limit (Max %2$dMB, current %3$.2fMB)</string>
+    <string name="settings_disable_html_images">Disable HTML Images</string>
+    <string name="settings_disable_html_images_desc">Do not auto-load images in HTML messages; tap placeholder to view in previewer</string>
+    <string name="html_image_tap_to_view">View Image</string>
+    <string name="edit_group_info_title">Edit Group Info</string>
+    <string name="edit_group_avatar_hint">Tap to change group avatar</string>
+    <string name="edit_group_name_label">Group Name</string>
+    <string name="edit_group_id_label">Group ID</string>
+    <string name="edit_group_avatar_url_label">Custom Avatar URL (Optional)</string>
+    <string name="edit_group_saving">Saving group info...</string>
+    <string name="edit_group_success">Group info updated successfully</string>
+    <string name="edit_group_name_empty">Group name cannot be empty</string>
+    <string name="group_edit_permission_denied">Only group owner and admins can edit group info</string>
+    <string name="settings_html_show_raw">Show Raw HTML Messages</string>
+    <string name="settings_html_show_raw_desc">Display raw HTML source code instead of parsing into native views</string>
+    <string name="chat_uploading_images_progress">Uploading images (%1$d/%2$d)</string>
+    <string name="chat_uploading_files_progress">Uploading files (%1$d/%2$d)</string>
+    <string name="chat_uploading_videos_progress">Uploading videos (%1$d/%2$d)</string>
+    <string name="chat_upload_success">Upload completed</string>
 </resources>

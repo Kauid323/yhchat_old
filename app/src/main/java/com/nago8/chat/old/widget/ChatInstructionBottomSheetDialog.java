@@ -211,7 +211,15 @@ public class ChatInstructionBottomSheetDialog extends BottomSheetDialog {
         dismiss();
         if (instruction == null) return;
 
-        // 1. 自定义指令 / 表单指令：打开单独的配置与执行界面
+        // 1. 直发指令：无需参数，点击直接发送，参数默认直接是指令名称
+        if (instruction.isDirectCommand()) {
+            if (callback != null) {
+                callback.onSendInstruction(instruction, instruction.getDefaultParam());
+            }
+            return;
+        }
+
+        // 2. 自定义指令 / 表单指令：打开单独的配置与执行界面
         if (instruction.isCustomFormCommand()) {
             Intent intent = new Intent(getContext(), CustomInstructionActivity.class);
             intent.putExtra(CustomInstructionActivity.EXTRA_INSTRUCTION, instruction);
@@ -221,15 +229,7 @@ public class ChatInstructionBottomSheetDialog extends BottomSheetDialog {
             return;
         }
 
-        // 2. 直发指令：无需参数，点击直接发送
-        if (instruction.isDirectCommand()) {
-            if (callback != null) {
-                callback.onSendInstruction(instruction, instruction.defaultText);
-            }
-            return;
-        }
-
-        // 3. 普通指令：弹出 Material 风格参数输入弹窗
+        // 3. 普通/带参指令：弹出 Material 风格参数输入弹窗
         View dialogView = LayoutInflater.from(getContext()).inflate(R.layout.dialog_instruction_input, null);
         TextView tvTitle = dialogView.findViewById(R.id.tvDialogCommandTitle);
         TextView tvDesc = dialogView.findViewById(R.id.tvDialogCommandDesc);
@@ -262,15 +262,21 @@ public class ChatInstructionBottomSheetDialog extends BottomSheetDialog {
             }
         }
 
-        if (etParam != null && !TextUtils.isEmpty(instruction.defaultText)) {
-            etParam.setText(instruction.defaultText);
-            etParam.setSelection(instruction.defaultText.length());
+        String initialParam = instruction.getDefaultParam();
+        if (etParam != null && !TextUtils.isEmpty(initialParam)) {
+            etParam.setText(initialParam);
+            etParam.setSelection(initialParam.length());
         }
 
         new com.google.android.material.dialog.MaterialAlertDialogBuilder(getContext())
                 .setView(dialogView)
                 .setPositiveButton(R.string.chat_instruction_send, (dialog, which) -> {
                     String text = etParam != null && etParam.getText() != null ? etParam.getText().toString().trim() : "";
+                    if (TextUtils.isEmpty(text)) {
+                        text = instruction.getDefaultParam();
+                    } else if (!text.startsWith("/")) {
+                        text = "/" + text;
+                    }
                     if (callback != null) {
                         callback.onSendInstruction(instruction, text);
                     }

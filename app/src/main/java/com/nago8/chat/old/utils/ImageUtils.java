@@ -113,10 +113,13 @@ public class ImageUtils {
             return trimmed;
         }
 
-        // 避开不支持七牛图片缩放处理的后缀格式（如 .tmp、.gif、.svg、.webp 等，避免七牛 CDN 触发 404 或破坏动图帧）
+        // 避开不支持七牛图片缩放处理的后缀格式（如 .tmp、.gif、.svg、.mp4 等非静态位图格式）
         String lower = trimmed.toLowerCase();
         String pathPart = lower.contains("?") ? lower.substring(0, lower.indexOf('?')) : lower;
-        if (pathPart.endsWith(".tmp") || pathPart.endsWith(".gif") || pathPart.endsWith(".svg") || pathPart.endsWith(".webp")) {
+        if (pathPart.endsWith(".tmp") || pathPart.endsWith(".gif") || pathPart.endsWith(".svg")
+                || pathPart.endsWith(".mp4") || pathPart.endsWith(".mp3") || pathPart.endsWith(".wav")
+                || pathPart.endsWith(".apk") || pathPart.endsWith(".zip") || pathPart.endsWith(".pdf")
+                || pathPart.endsWith(".doc") || pathPart.endsWith(".docx")) {
             return trimmed;
         }
 
@@ -126,7 +129,11 @@ public class ImageUtils {
         param.append("/q/75");
 
         if (trimmed.contains("?")) {
-            return trimmed + "&" + param.toString();
+            if (trimmed.endsWith("?") || trimmed.endsWith("&")) {
+                return trimmed + param.toString();
+            } else {
+                return trimmed + "&" + param.toString();
+            }
         } else {
             return trimmed + "?" + param.toString();
         }
@@ -194,111 +201,78 @@ public class ImageUtils {
         final String cacheKeyUrl = finalUrl;
         final String rawUrl = trimmedUrl;
 
-        // 优先同步快速检查本地文件缓存（毫秒级判断）
-        File cachedFile = AvatarCache.getAvatarFile(context, cacheKeyUrl);
-        if (cachedFile != null && cachedFile.exists()) {
-            if (cachedFile.length() > 64) {
-                Glide.with(context)
-                        .asBitmap()
-                        .load(cachedFile)
-                        .override(120, 120)
-                        .placeholder(android.R.drawable.ic_menu_gallery)
-                        .error(android.R.drawable.ic_menu_report_image)
-                        .circleCrop()
-                        .listener(new RequestListener<Bitmap>() {
-                            @Override
-                            public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Bitmap> target, boolean isFirstResource) {
-                                try {
-                                    if (cachedFile.exists()) {
-                                        cachedFile.delete();
-                                    }
-                                } catch (Exception ignored) {}
-                                fetchAvatarWithOkHttp(context, cacheKeyUrl, rawUrl, imageView);
-                                return false;
-                            }
-
-                            @Override
-                            public boolean onResourceReady(Bitmap resource, Object model, Target<Bitmap> target, DataSource dataSource, boolean isFirstResource) {
-                                return false;
-                            }
-                        })
-                        .into(imageView);
-                return;
+        try {
+            GlideUrl glideUrl;
+            if (cacheKeyUrl.contains(".jwznb.com")) {
+                glideUrl = new GlideUrl(cacheKeyUrl, new LazyHeaders.Builder()
+                        .addHeader("Referer", "https://myapp.jwznb.com")
+                        .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36")
+                        .build());
             } else {
-                try {
-                    cachedFile.delete();
-                } catch (Exception ignored) {}
+                glideUrl = new GlideUrl(cacheKeyUrl);
             }
+
+            Glide.with(context)
+                    .asBitmap()
+                    .load(glideUrl)
+                    .override(120, 120)
+                    .placeholder(android.R.drawable.ic_menu_gallery)
+                    .error(android.R.drawable.ic_menu_report_image)
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                    .circleCrop()
+                    .listener(new RequestListener<Bitmap>() {
+                        @Override
+                        public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Bitmap> target, boolean isFirstResource) {
+                            fetchAvatarWithOkHttp(context, cacheKeyUrl, rawUrl, imageView);
+                            return false;
+                        }
+
+                        @Override
+                        public boolean onResourceReady(Bitmap resource, Object model, Target<Bitmap> target, DataSource dataSource, boolean isFirstResource) {
+                            return false;
+                        }
+                    })
+                    .into(imageView);
+        } catch (Exception e) {
+            fetchAvatarWithOkHttp(context, cacheKeyUrl, rawUrl, imageView);
         }
-
-        // 未命中本地缓存时提交给专用线程池异步加载
-        getAvatarExecutor(context.getApplicationContext()).execute(() -> {
-            new Handler(Looper.getMainLooper()).post(() -> {
-                try {
-                    GlideUrl glideUrl;
-                    if (cacheKeyUrl.contains(".jwznb.com")) {
-                        glideUrl = new GlideUrl(cacheKeyUrl, new LazyHeaders.Builder()
-                                .addHeader("Referer", "https://myapp.jwznb.com")
-                                .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36")
-                                .build());
-                    } else {
-                        glideUrl = new GlideUrl(cacheKeyUrl);
-                    }
-
-                    Glide.with(context)
-                            .asBitmap()
-                            .load(glideUrl)
-                            .override(120, 120)
-                            .placeholder(android.R.drawable.ic_menu_gallery)
-                            .error(android.R.drawable.ic_menu_report_image)
-                            .diskCacheStrategy(DiskCacheStrategy.ALL)
-                            .circleCrop()
-                            .listener(new RequestListener<Bitmap>() {
-                                @Override
-                                public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Bitmap> target, boolean isFirstResource) {
-                                    fetchAvatarWithOkHttp(context, cacheKeyUrl, rawUrl, imageView);
-                                    return false;
-                                }
-
-                                @Override
-                                public boolean onResourceReady(Bitmap resource, Object model, Target<Bitmap> target, DataSource dataSource, boolean isFirstResource) {
-                                    if (resource != null) {
-                                        getAvatarExecutor(context.getApplicationContext()).execute(() ->
-                                                AvatarCache.saveAvatarCache(context, cacheKeyUrl, resource));
-                                    }
-                                    return false;
-                                }
-                            })
-                            .into(imageView);
-                } catch (Exception ignored) {}
-            });
-        });
     }
 
     private static void fetchAvatarWithOkHttp(Context context, String cacheKeyUrl, String targetUrl, ImageView imageView) {
         if (context == null || imageView == null || targetUrl == null || targetUrl.trim().isEmpty()) return;
         getAvatarExecutor(context.getApplicationContext()).execute(() -> {
             try {
+                String primaryUrl = (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")) ? targetUrl : cacheKeyUrl;
                 Request request = new Request.Builder()
-                        .url(targetUrl)
+                        .url(primaryUrl)
                         .header("Referer", "https://myapp.jwznb.com")
                         .header("User-Agent", "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36")
                         .build();
                 Response response = ApiClient.getClient().newCall(request).execute();
+                if (!response.isSuccessful() && !primaryUrl.equals(cacheKeyUrl)) {
+                    request = new Request.Builder()
+                            .url(cacheKeyUrl)
+                            .header("Referer", "https://myapp.jwznb.com")
+                            .header("User-Agent", "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36")
+                            .build();
+                    response = ApiClient.getClient().newCall(request).execute();
+                }
                 if (response.isSuccessful() && response.body() != null) {
                     byte[] bytes = response.body().bytes();
-                    Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-                    if (bitmap != null) {
-                        AvatarCache.saveAvatarCache(context, cacheKeyUrl, bitmap);
+                    if (bytes != null && bytes.length > 64) {
                         new Handler(Looper.getMainLooper()).post(() -> {
                             try {
-                                Glide.with(context)
-                                        .asBitmap()
-                                        .load(bitmap)
-                                        .placeholder(android.R.drawable.ic_menu_gallery)
-                                        .error(android.R.drawable.ic_menu_report_image)
-                                        .circleCrop()
-                                        .into(imageView);
+                                Object checkTag = imageView.getTag(R.id.ivAvatar);
+                                if (checkTag != null && checkTag.equals(targetUrl)) {
+                                    Glide.with(context)
+                                            .asBitmap()
+                                            .load(bytes)
+                                            .override(120, 120)
+                                            .placeholder(android.R.drawable.ic_menu_gallery)
+                                            .error(android.R.drawable.ic_menu_report_image)
+                                            .circleCrop()
+                                            .into(imageView);
+                                }
                             } catch (Exception ignored) {}
                         });
                     }

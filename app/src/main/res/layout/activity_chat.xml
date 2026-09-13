@@ -46,6 +46,61 @@
             app:tint="@color/text_white" />
     </LinearLayout>
 
+    <!-- 附件上传进度条 -->
+    <LinearLayout
+        android:id="@+id/layoutUploadProgress"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/card_background"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="8dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/ivUploadTypeIcon"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                app:srcCompat="@drawable/ic_send"
+                app:tint="?android:attr/textColorSecondary" />
+
+            <TextView
+                android:id="@+id/tvUploadStatus"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:layout_marginLeft="8dp"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:textColor="?android:attr/textColorPrimary"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/tvUploadPercent"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/app_primary"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <ProgressBar
+            android:id="@+id/progressUpload"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="4dp"
+            android:layout_marginTop="6dp"
+            android:max="100"
+            android:progress="0" />
+    </LinearLayout>
+
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"

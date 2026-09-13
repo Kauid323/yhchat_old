@@ -49,7 +49,11 @@ public class ChatInstructionAdapter extends RecyclerView.Adapter<ChatInstruction
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         ChatInstruction item = list.get(position);
-        holder.tvName.setText(item.name);
+        String displayName = item.name != null ? item.name : "";
+        if (displayName.startsWith("/")) {
+            displayName = displayName.substring(1);
+        }
+        holder.tvName.setText(displayName);
         holder.tvDesc.setText(item.desc);
 
         int primaryColor = com.nago8.chat.old.utils.ThemeUtils.getThemeColor(context);

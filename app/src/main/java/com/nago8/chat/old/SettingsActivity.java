@@ -80,6 +80,36 @@ public class SettingsActivity extends AppCompatActivity {
         tvAvatarThreads = findViewById(R.id.tvAvatarThreads);
         findViewById(R.id.menuAvatarThreads).setOnClickListener(v -> showAvatarThreadsDialog());
 
+        androidx.appcompat.widget.SwitchCompat switchDisableHtmlImages = findViewById(R.id.switchDisableHtmlImages);
+        boolean disableHtmlImages = com.nago8.chat.old.utils.PrefUtils.isDisableHtmlImagePreload(this);
+        if (switchDisableHtmlImages != null) {
+            switchDisableHtmlImages.setChecked(disableHtmlImages);
+        }
+
+        findViewById(R.id.menuDisableHtmlImages).setOnClickListener(v -> {
+            boolean current = com.nago8.chat.old.utils.PrefUtils.isDisableHtmlImagePreload(this);
+            boolean next = !current;
+            if (switchDisableHtmlImages != null) {
+                switchDisableHtmlImages.setChecked(next);
+            }
+            com.nago8.chat.old.utils.PrefUtils.setDisableHtmlImagePreload(this, next);
+        });
+
+        androidx.appcompat.widget.SwitchCompat switchHtmlShowRaw = findViewById(R.id.switchHtmlShowRaw);
+        boolean showRawHtml = com.nago8.chat.old.utils.PrefUtils.isShowRawHtml(this);
+        if (switchHtmlShowRaw != null) {
+            switchHtmlShowRaw.setChecked(showRawHtml);
+        }
+
+        findViewById(R.id.menuHtmlShowRaw).setOnClickListener(v -> {
+            boolean current = com.nago8.chat.old.utils.PrefUtils.isShowRawHtml(this);
+            boolean next = !current;
+            if (switchHtmlShowRaw != null) {
+                switchHtmlShowRaw.setChecked(next);
+            }
+            com.nago8.chat.old.utils.PrefUtils.setShowRawHtml(this, next);
+        });
+
         tvCacheSize = findViewById(R.id.tvCacheSize);
         findViewById(R.id.menuClearCache).setOnClickListener(v -> confirmClearCache());
 

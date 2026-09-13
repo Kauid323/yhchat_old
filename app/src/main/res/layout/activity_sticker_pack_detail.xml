@@ -86,12 +86,12 @@
                         android:orientation="horizontal"
                         android:paddingVertical="4dp">
 
-                        <ImageView
+                        <androidx.appcompat.widget.AppCompatImageView
                             android:id="@+id/ivCreatorAvatar"
                             android:layout_width="36dp"
                             android:layout_height="36dp"
                             android:scaleType="centerCrop"
-                            android:src="@drawable/ic_contacts" />
+                            app:srcCompat="@drawable/ic_contacts" />
 
                         <LinearLayout
                             android:layout_width="0dp"
@@ -117,10 +117,10 @@
                                 android:textSize="11sp" />
                         </LinearLayout>
 
-                        <ImageView
+                        <androidx.appcompat.widget.AppCompatImageView
                             android:layout_width="16dp"
                             android:layout_height="16dp"
-                            android:src="@drawable/ic_arrow_right"
+                            app:srcCompat="@drawable/ic_arrow_right"
                             app:tint="?android:attr/textColorSecondary" />
                     </LinearLayout>
 

@@ -16,19 +16,21 @@ import android.provider.MediaStore;
 import android.text.TextUtils;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.WindowInsets;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.AppCompatImageButton;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -96,6 +98,13 @@ public class ChatActivity extends AppCompatActivity {
     private String ownerId;
     private WsClient.MessageListener wsListener;
 
+    private View layoutUploadProgress;
+    private androidx.appcompat.widget.AppCompatImageView ivUploadTypeIcon;
+    private TextView tvUploadStatus;
+    private TextView tvUploadPercent;
+    private ProgressBar progressUpload;
+    private final android.os.Handler uploadHideHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+
     private String chatId;
     private int chatType;
     private String chatName;
@@ -110,7 +119,7 @@ public class ChatActivity extends AppCompatActivity {
         AppCompatDelegate.setCompatVectorFromResourcesEnabled(true);
         installCrashLogger();
         if (Build.VERSION.SDK_INT >= 30) {
-            getWindow().setDecorFitsSystemWindows(false);
+            Api30ImeAnimationHelper.setupWindowDecor(getWindow());
         } else {
             // Android 4.x ~ Android 10 (API < 30) 自动平稳降级为原生 adjustResize 窗口自适应
             getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
@@ -135,6 +144,22 @@ public class ChatActivity extends AppCompatActivity {
         recyclerView = findViewById(R.id.recyclerViewMessages);
         progressBar = findViewById(R.id.progressBar);
         tvEmpty = findViewById(R.id.tvEmpty);
+
+        layoutUploadProgress = findViewById(R.id.layoutUploadProgress);
+        ivUploadTypeIcon = findViewById(R.id.ivUploadTypeIcon);
+        tvUploadStatus = findViewById(R.id.tvUploadStatus);
+        tvUploadPercent = findViewById(R.id.tvUploadPercent);
+        progressUpload = findViewById(R.id.progressUpload);
+
+        int primaryColor = com.nago8.chat.old.utils.ThemeUtils.getThemeColor(this);
+        if (progressUpload != null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                progressUpload.setProgressTintList(android.content.res.ColorStateList.valueOf(primaryColor));
+            }
+        }
+        if (tvUploadPercent != null) {
+            tvUploadPercent.setTextColor(primaryColor);
+        }
 
         if (chatName == null || chatName.isEmpty()) chatName = chatId == null ? getString(R.string.chat_default_title) : chatId;
         tvTitle.setText(chatName);
@@ -195,25 +220,9 @@ public class ChatActivity extends AppCompatActivity {
         View topBar = findViewById(R.id.topBar);
         View rootContainer = findViewById(android.R.id.content);
         if (rootContainer != null) {
-            final int[] navBarHeightHolder = new int[]{0};
-
-            rootContainer.setOnApplyWindowInsetsListener((v, insets) -> {
-                int statusBarTop = 0;
-                int navBarBottom = 0;
-                int imeBottom = 0;
-                if (Build.VERSION.SDK_INT >= 30) {
-                    android.graphics.Insets sb = insets.getInsets(WindowInsets.Type.statusBars());
-                    android.graphics.Insets nb = insets.getInsets(WindowInsets.Type.navigationBars());
-                    android.graphics.Insets im = insets.getInsets(WindowInsets.Type.ime());
-                    statusBarTop = sb.top;
-                    navBarBottom = nb.bottom;
-                    imeBottom = im.bottom;
-                } else if (Build.VERSION.SDK_INT >= 20) {
-                    statusBarTop = insets.getSystemWindowInsetTop();
-                    navBarBottom = insets.getSystemWindowInsetBottom();
-                }
-
-                navBarHeightHolder[0] = navBarBottom;
+            ViewCompat.setOnApplyWindowInsetsListener(rootContainer, (v, insets) -> {
+                int statusBarTop = insets.getSystemWindowInsetTop();
+                int navBarBottom = insets.getSystemWindowInsetBottom();
 
                 if (topBar != null && statusBarTop > 0) {
                     topBar.setPadding(0, statusBarTop, 0, 0);
@@ -226,60 +235,14 @@ public class ChatActivity extends AppCompatActivity {
 
                 // 为输入栏保留系统全面屏手势导航栏的安全边距
                 if (chatInputBar != null) {
-                    if (Build.VERSION.SDK_INT < 30) {
-                        int bottomInset = Math.max(navBarBottom, imeBottom);
-                        chatInputBar.setPadding(0, 0, 0, bottomInset);
-                    } else {
-                        // Android 30+ 由 translationY 处理软键盘平移，静态时为底部导航栏留出内边距
-                        chatInputBar.setPadding(0, 0, 0, navBarBottom);
-                    }
+                    chatInputBar.setPadding(0, 0, 0, navBarBottom);
                 }
                 return insets;
             });
 
-            // 监听 Android 11+ / Android 14 软键盘实时弹出/收起动画（与 Telegram 完全相同的 WindowInsetsAnimationCallback 机制）
+            // 监听 Android 11+ / Android 14 软键盘实时弹出/收起动画（隔离至 API 30 辅助类，避免低版本虚拟机加载缺失类导致崩溃）
             if (Build.VERSION.SDK_INT >= 30) {
-                rootContainer.setWindowInsetsAnimationCallback(new android.view.WindowInsetsAnimation.Callback(
-                        android.view.WindowInsetsAnimation.Callback.DISPATCH_MODE_STOP) {
-                    @NonNull
-                    @Override
-                    public android.view.WindowInsets onProgress(
-                            @NonNull android.view.WindowInsets insets,
-                            @NonNull java.util.List<android.view.WindowInsetsAnimation> runningAnimations) {
-                        android.graphics.Insets imeInsets = insets.getInsets(WindowInsets.Type.ime());
-                        android.graphics.Insets navInsets = insets.getInsets(WindowInsets.Type.navigationBars());
-                        // 软键盘弹起时增加 12dp 的舒适视距空隙，确保光标与键盘上沿不紧贴
-                        int extraGap = dp(12);
-                        int imeHeight = 0;
-                        if (imeInsets.bottom > navInsets.bottom) {
-                            imeHeight = imeInsets.bottom - navInsets.bottom + extraGap;
-                        } else if (imeInsets.bottom > 0) {
-                            float progress = (float) imeInsets.bottom / navInsets.bottom;
-                            imeHeight = (int) (extraGap * progress);
-                        }
-                        if (chatInputBar != null) {
-                            chatInputBar.setTranslationY(-imeHeight);
-                        }
-                        if (recyclerView != null) {
-                            recyclerView.setTranslationY(-imeHeight);
-                        }
-                        return insets;
-                    }
-
-                    @Override
-                    public void onEnd(@NonNull android.view.WindowInsetsAnimation animation) {
-                        super.onEnd(animation);
-                        WindowInsets insets = rootContainer.getRootWindowInsets();
-                        if (insets != null) {
-                            android.graphics.Insets ime = insets.getInsets(WindowInsets.Type.ime());
-                            android.graphics.Insets nb = insets.getInsets(WindowInsets.Type.navigationBars());
-                            if (ime.bottom <= nb.bottom) {
-                                if (chatInputBar != null) chatInputBar.setTranslationY(0);
-                                if (recyclerView != null) recyclerView.setTranslationY(0);
-                            }
-                        }
-                    }
-                });
+                Api30ImeAnimationHelper.setup(rootContainer, chatInputBar, recyclerView, dp(12));
             }
         }
 
@@ -294,10 +257,27 @@ public class ChatActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
-        if (runningCall != null) runningCall.cancel();
-        if (olderCall != null) olderCall.cancel();
-        if (sendCall != null) sendCall.cancel();
-        if (groupInfoCall != null) groupInfoCall.cancel();
+        uploadHideHandler.removeCallbacksAndMessages(null);
+        if (wsListener != null) {
+            com.nago8.chat.old.ws.WsClient.getInstance().removeMessageListener(wsListener);
+            wsListener = null;
+        }
+        if (runningCall != null) {
+            runningCall.cancel();
+            runningCall = null;
+        }
+        if (olderCall != null) {
+            olderCall.cancel();
+            olderCall = null;
+        }
+        if (sendCall != null) {
+            sendCall.cancel();
+            sendCall = null;
+        }
+        if (groupInfoCall != null) {
+            groupInfoCall.cancel();
+            groupInfoCall = null;
+        }
         super.onDestroy();
     }
 
@@ -523,6 +503,51 @@ public class ChatActivity extends AppCompatActivity {
         }
     }
 
+    private void showUploadProgress(int iconRes, String statusText, int percent) {
+        runOnUiThread(() -> {
+            uploadHideHandler.removeCallbacksAndMessages(null);
+            if (layoutUploadProgress != null) {
+                layoutUploadProgress.setVisibility(View.VISIBLE);
+            }
+            if (ivUploadTypeIcon != null) {
+                ivUploadTypeIcon.setImageResource(iconRes);
+            }
+            if (tvUploadStatus != null) {
+                tvUploadStatus.setText(statusText);
+            }
+            if (tvUploadPercent != null) {
+                tvUploadPercent.setText(String.format(java.util.Locale.getDefault(), "%d%%", percent));
+            }
+            if (progressUpload != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    progressUpload.setProgress(percent, true);
+                } else {
+                    progressUpload.setProgress(percent);
+                }
+            }
+        });
+    }
+
+    private void hideUploadProgress(boolean success, String endMessage) {
+        runOnUiThread(() -> {
+            if (tvUploadStatus != null && endMessage != null) {
+                tvUploadStatus.setText(endMessage);
+            }
+            if (tvUploadPercent != null) {
+                tvUploadPercent.setText(success ? "100%" : "");
+            }
+            if (progressUpload != null && success) {
+                progressUpload.setProgress(100);
+            }
+            uploadHideHandler.removeCallbacksAndMessages(null);
+            uploadHideHandler.postDelayed(() -> {
+                if (layoutUploadProgress != null) {
+                    layoutUploadProgress.setVisibility(View.GONE);
+                }
+            }, success ? 1200 : 2500);
+        });
+    }
+
     private void uploadAndSendImages(List<Uri> uris) {
         String token = PrefUtils.getToken(this);
         if (token == null || token.isEmpty()) {
@@ -543,11 +568,18 @@ public class ChatActivity extends AppCompatActivity {
 
         if (validUris.isEmpty()) return;
 
-        Toast.makeText(this, getString(R.string.chat_sending_images_format, validUris.size()), Toast.LENGTH_SHORT).show();
+        final int total = validUris.size();
+        showUploadProgress(R.drawable.ic_image, getString(R.string.chat_uploading_images_progress, 1, total), 0);
 
         repository.uploadAndSendImages(this, token, chatId, chatType, validUris, new MessageRepository.ImageUploadListener() {
             @Override
             public void onProgress(int index, int total) {
+                showUploadProgress(R.drawable.ic_image, getString(R.string.chat_uploading_images_progress, index, total), 0);
+            }
+
+            @Override
+            public void onByteProgress(int index, int total, int percent, long bytesWritten, long totalBytes) {
+                showUploadProgress(R.drawable.ic_image, getString(R.string.chat_uploading_images_progress, index, total), percent);
             }
 
             @Override
@@ -560,11 +592,13 @@ public class ChatActivity extends AppCompatActivity {
 
             @Override
             public void onImageError(int index, int total, Exception error) {
-                runOnUiThread(() -> Toast.makeText(ChatActivity.this, getString(R.string.chat_image_failed_format, error.getMessage()), Toast.LENGTH_SHORT).show());
+                hideUploadProgress(false, getString(R.string.chat_image_failed_format, error != null ? error.getMessage() : ""));
+                runOnUiThread(() -> Toast.makeText(ChatActivity.this, getString(R.string.chat_image_failed_format, error != null ? error.getMessage() : ""), Toast.LENGTH_SHORT).show());
             }
 
             @Override
             public void onAllCompleted() {
+                hideUploadProgress(true, getString(R.string.chat_upload_success));
             }
         });
     }
@@ -594,11 +628,18 @@ public class ChatActivity extends AppCompatActivity {
 
         if (validUris.isEmpty()) return;
 
-        Toast.makeText(this, getString(R.string.chat_sending_files_format, validUris.size()), Toast.LENGTH_SHORT).show();
+        final int total = validUris.size();
+        showUploadProgress(R.drawable.ic_file, getString(R.string.chat_uploading_files_progress, 1, total), 0);
 
         repository.uploadAndSendFiles(this, token, chatId, chatType, validUris, new MessageRepository.FileUploadListener() {
             @Override
             public void onProgress(int index, int total) {
+                showUploadProgress(R.drawable.ic_file, getString(R.string.chat_uploading_files_progress, index, total), 0);
+            }
+
+            @Override
+            public void onByteProgress(int index, int total, int percent, long bytesWritten, long totalBytes) {
+                showUploadProgress(R.drawable.ic_file, getString(R.string.chat_uploading_files_progress, index, total), percent);
             }
 
             @Override
@@ -611,11 +652,13 @@ public class ChatActivity extends AppCompatActivity {
 
             @Override
             public void onFileError(int index, int total, Exception error) {
-                runOnUiThread(() -> Toast.makeText(ChatActivity.this, getString(R.string.chat_file_failed_format, error.getMessage()), Toast.LENGTH_SHORT).show());
+                hideUploadProgress(false, getString(R.string.chat_file_failed_format, error != null ? error.getMessage() : ""));
+                runOnUiThread(() -> Toast.makeText(ChatActivity.this, getString(R.string.chat_file_failed_format, error != null ? error.getMessage() : ""), Toast.LENGTH_SHORT).show());
             }
 
             @Override
             public void onAllCompleted() {
+                hideUploadProgress(true, getString(R.string.chat_upload_success));
             }
         });
     }
@@ -640,11 +683,18 @@ public class ChatActivity extends AppCompatActivity {
 
         if (validUris.isEmpty()) return;
 
-        Toast.makeText(this, getString(R.string.chat_preparing_send_videos, validUris.size()), Toast.LENGTH_SHORT).show();
+        final int total = validUris.size();
+        showUploadProgress(R.drawable.ic_send, getString(R.string.chat_uploading_videos_progress, 1, total), 0);
 
         repository.uploadAndSendVideos(this, token, chatId, chatType, validUris, new MessageRepository.VideoUploadListener() {
             @Override
             public void onProgress(int index, int total) {
+                showUploadProgress(R.drawable.ic_send, getString(R.string.chat_uploading_videos_progress, index, total), 0);
+            }
+
+            @Override
+            public void onByteProgress(int index, int total, int percent, long bytesWritten, long totalBytes) {
+                showUploadProgress(R.drawable.ic_send, getString(R.string.chat_uploading_videos_progress, index, total), percent);
             }
 
             @Override
@@ -657,11 +707,13 @@ public class ChatActivity extends AppCompatActivity {
 
             @Override
             public void onVideoError(int index, int total, Exception error) {
-                runOnUiThread(() -> Toast.makeText(ChatActivity.this, getString(R.string.chat_video_failed_format, error.getMessage()), Toast.LENGTH_SHORT).show());
+                hideUploadProgress(false, getString(R.string.chat_video_failed_format, error != null ? error.getMessage() : ""));
+                runOnUiThread(() -> Toast.makeText(ChatActivity.this, getString(R.string.chat_video_failed_format, error != null ? error.getMessage() : ""), Toast.LENGTH_SHORT).show());
             }
 
             @Override
             public void onAllCompleted() {
+                hideUploadProgress(true, getString(R.string.chat_upload_success));
             }
         });
     }
@@ -731,7 +783,15 @@ public class ChatActivity extends AppCompatActivity {
             return;
         }
 
-        repository.sendInstructionMessage(token, chatId, chatType, instruction.commandId, paramText, new MessageRepository.SendMessageCallback() {
+        String sendText = (paramText != null && !paramText.trim().isEmpty())
+                ? paramText.trim()
+                : (instruction != null ? instruction.getDefaultParam() : "");
+
+        if (!sendText.isEmpty() && !sendText.startsWith("/")) {
+            sendText = "/" + sendText;
+        }
+
+        repository.sendInstructionMessage(token, chatId, chatType, instruction.commandId, sendText, new MessageRepository.SendMessageCallback() {
             @Override
             public void onSuccess(send_message response) {
                 runOnUiThread(() -> {
@@ -1437,6 +1497,7 @@ public class ChatActivity extends AppCompatActivity {
         super.onBackPressed();
     }
 
+
     private void writeCrashLog(Throwable throwable) {
         try {
             File file = new File(getFilesDir(), "chat_crash.log");
@@ -1445,6 +1506,55 @@ public class ChatActivity extends AppCompatActivity {
             throwable.printStackTrace(writer);
             writer.close();
         } catch (Exception ignored) {
+        }
+    }
+
+    @RequiresApi(30)
+    private static class Api30ImeAnimationHelper {
+        static void setupWindowDecor(android.view.Window window) {
+            window.setDecorFitsSystemWindows(false);
+        }
+
+        static void setup(View rootContainer, ChatInputBar chatInputBar, RecyclerView recyclerView, int extraGap) {
+            rootContainer.setWindowInsetsAnimationCallback(new android.view.WindowInsetsAnimation.Callback(
+                    android.view.WindowInsetsAnimation.Callback.DISPATCH_MODE_STOP) {
+                @NonNull
+                @Override
+                public android.view.WindowInsets onProgress(
+                        @NonNull android.view.WindowInsets insets,
+                        @NonNull java.util.List<android.view.WindowInsetsAnimation> runningAnimations) {
+                    android.graphics.Insets imeInsets = insets.getInsets(android.view.WindowInsets.Type.ime());
+                    android.graphics.Insets navInsets = insets.getInsets(android.view.WindowInsets.Type.navigationBars());
+                    int imeHeight = 0;
+                    if (imeInsets.bottom > navInsets.bottom) {
+                        imeHeight = imeInsets.bottom - navInsets.bottom + extraGap;
+                    } else if (imeInsets.bottom > 0) {
+                        float progress = (float) imeInsets.bottom / navInsets.bottom;
+                        imeHeight = (int) (extraGap * progress);
+                    }
+                    if (chatInputBar != null) {
+                        chatInputBar.setTranslationY(-imeHeight);
+                    }
+                    if (recyclerView != null) {
+                        recyclerView.setTranslationY(-imeHeight);
+                    }
+                    return insets;
+                }
+
+                @Override
+                public void onEnd(@NonNull android.view.WindowInsetsAnimation animation) {
+                    super.onEnd(animation);
+                    android.view.WindowInsets insets = rootContainer.getRootWindowInsets();
+                    if (insets != null) {
+                        android.graphics.Insets ime = insets.getInsets(android.view.WindowInsets.Type.ime());
+                        android.graphics.Insets nb = insets.getInsets(android.view.WindowInsets.Type.navigationBars());
+                        if (ime.bottom <= nb.bottom) {
+                            if (chatInputBar != null) chatInputBar.setTranslationY(0);
+                            if (recyclerView != null) recyclerView.setTranslationY(0);
+                        }
+                    }
+                }
+            });
         }
     }
 }

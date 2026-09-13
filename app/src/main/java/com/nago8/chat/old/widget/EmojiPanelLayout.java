@@ -51,6 +51,7 @@ import com.nago8.chat.old.utils.ThemeUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 public class EmojiPanelLayout extends LinearLayout {
 
@@ -76,6 +77,12 @@ public class EmojiPanelLayout extends LinearLayout {
     private View btnBackspace;
     private View btnManageStickers;
     private View layoutDragHandle;
+
+    private TextView tvEmojiUnicodeSubTab;
+    private TextView tvEmojiTwemojiSubTab;
+    private RecyclerView rvEmojiSubTab;
+    private EmojiGridAdapter unicodeEmojiAdapter;
+    private EmojiGridAdapter twemojiEmojiAdapter;
 
     private int minHeightPx;
     private ValueAnimator heightAnimator;
@@ -492,7 +499,7 @@ public class EmojiPanelLayout extends LinearLayout {
     }
 
     private void reloadTabs() {
-        int previousPage = viewPagerEmoji.getCurrentItem();
+        int previousPage = viewPagerEmoji != null ? viewPagerEmoji.getCurrentItem() : 0;
         cachedPageViews.clear();
         tabViews.clear();
         layoutTabsContainer.removeAllViews();
@@ -514,9 +521,80 @@ public class EmojiPanelLayout extends LinearLayout {
 
         viewPagerEmoji.setAdapter(new EmojiPagerAdapter());
         int totalPages = 2 + stickerPacks.size();
-        int safePage = Math.min(previousPage, totalPages - 1);
-        viewPagerEmoji.setCurrentItem(Math.max(0, safePage), false);
-        updateSelectedTab(viewPagerEmoji.getCurrentItem());
+        if (previousPage > 0 && previousPage < totalPages) {
+            viewPagerEmoji.setCurrentItem(previousPage, false);
+            updateSelectedTab(previousPage);
+        } else {
+            applyDefaultOrRandomSelection();
+        }
+    }
+
+    public void switchEmojiSubTab(boolean isTwemoji) {
+        if (tvEmojiUnicodeSubTab == null || tvEmojiTwemojiSubTab == null || rvEmojiSubTab == null) return;
+        Context ctx = getContext();
+        if (isTwemoji) {
+            tvEmojiTwemojiSubTab.setTextColor(ThemeUtils.getThemeColor(ctx));
+            tvEmojiUnicodeSubTab.setTextColor(ContextCompat.getColor(ctx, R.color.text_secondary));
+            if (twemojiEmojiAdapter != null) {
+                rvEmojiSubTab.setAdapter(twemojiEmojiAdapter);
+            }
+        } else {
+            tvEmojiUnicodeSubTab.setTextColor(ThemeUtils.getThemeColor(ctx));
+            tvEmojiTwemojiSubTab.setTextColor(ContextCompat.getColor(ctx, R.color.text_secondary));
+            if (unicodeEmojiAdapter != null) {
+                rvEmojiSubTab.setAdapter(unicodeEmojiAdapter);
+            }
+        }
+    }
+
+    public void applyDefaultOrRandomSelection() {
+        Context ctx = getContext();
+        if (ctx == null || viewPagerEmoji == null) return;
+
+        int totalPages = (viewPagerEmoji.getAdapter() != null) ? viewPagerEmoji.getAdapter().getCount() : (2 + stickerPacks.size());
+        int targetPage = 0;
+        boolean isTwemoji = false;
+
+        if (PrefUtils.isEmojiRandomPackEnabled(ctx) && !stickerPacks.isEmpty()) {
+            int rand = new Random().nextInt(stickerPacks.size());
+            targetPage = 2 + rand;
+        } else {
+            String type = PrefUtils.getEmojiDefaultTabType(ctx);
+            if (PrefUtils.EMOJI_TAB_TWEMOJI.equals(type)) {
+                targetPage = 0;
+                isTwemoji = true;
+            } else if (PrefUtils.EMOJI_TAB_FAVORITE.equals(type)) {
+                targetPage = 1;
+            } else if (PrefUtils.EMOJI_TAB_PACK.equals(type)) {
+                long packId = PrefUtils.getEmojiDefaultPackId(ctx);
+                int foundIndex = -1;
+                for (int i = 0; i < stickerPacks.size(); i++) {
+                    if (stickerPacks.get(i).id == packId) {
+                        foundIndex = i;
+                        break;
+                    }
+                }
+                if (foundIndex >= 0) {
+                    targetPage = 2 + foundIndex;
+                } else {
+                    targetPage = 0;
+                }
+            } else {
+                targetPage = 0;
+                isTwemoji = false;
+            }
+        }
+
+        if (targetPage >= totalPages) {
+            targetPage = 0;
+        }
+
+        if (targetPage == 0) {
+            switchEmojiSubTab(isTwemoji);
+        }
+
+        viewPagerEmoji.setCurrentItem(targetPage, false);
+        updateSelectedTab(targetPage);
     }
 
     private View createEmojiPageView(Context ctx) {
@@ -571,19 +649,26 @@ public class EmojiPanelLayout extends LinearLayout {
             }
         });
 
-        recyclerView.setAdapter(unicodeAdapter);
+        this.tvEmojiUnicodeSubTab = tvUnicode;
+        this.tvEmojiTwemojiSubTab = tvTwemoji;
+        this.rvEmojiSubTab = recyclerView;
+        this.unicodeEmojiAdapter = unicodeAdapter;
+        this.twemojiEmojiAdapter = twemojiAdapter;
 
-        tvUnicode.setOnClickListener(v -> {
-            tvUnicode.setTextColor(ThemeUtils.getThemeColor(ctx));
-            tvTwemoji.setTextColor(ContextCompat.getColor(ctx, R.color.text_secondary));
-            recyclerView.setAdapter(unicodeAdapter);
-        });
-
-        tvTwemoji.setOnClickListener(v -> {
+        boolean isDefaultTwemoji = PrefUtils.EMOJI_TAB_TWEMOJI.equals(PrefUtils.getEmojiDefaultTabType(ctx))
+                && !PrefUtils.isEmojiRandomPackEnabled(ctx);
+        if (isDefaultTwemoji) {
             tvTwemoji.setTextColor(ThemeUtils.getThemeColor(ctx));
             tvUnicode.setTextColor(ContextCompat.getColor(ctx, R.color.text_secondary));
             recyclerView.setAdapter(twemojiAdapter);
-        });
+        } else {
+            tvUnicode.setTextColor(ThemeUtils.getThemeColor(ctx));
+            tvTwemoji.setTextColor(ContextCompat.getColor(ctx, R.color.text_secondary));
+            recyclerView.setAdapter(unicodeAdapter);
+        }
+
+        tvUnicode.setOnClickListener(v -> switchEmojiSubTab(false));
+        tvTwemoji.setOnClickListener(v -> switchEmojiSubTab(true));
 
         layout.addView(recyclerView);
         return layout;

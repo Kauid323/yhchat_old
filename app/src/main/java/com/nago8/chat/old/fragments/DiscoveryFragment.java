@@ -103,7 +103,7 @@ public class DiscoveryFragment extends Fragment {
         mainAdapter.getBotAdapter().setOnBotActionListener(this::handleApplyBot);
         mainAdapter.setGroupActionListener(this::handleApplyGroup);
 
-        StaggeredGridLayoutManager staggeredLayoutManager = new StaggeredGridLayoutManager(2, StaggeredGridLayoutManager.VERTICAL);
+        com.nago8.chat.old.widget.SafeStaggeredGridLayoutManager staggeredLayoutManager = new com.nago8.chat.old.widget.SafeStaggeredGridLayoutManager(2, StaggeredGridLayoutManager.VERTICAL);
         staggeredLayoutManager.setGapStrategy(StaggeredGridLayoutManager.GAP_HANDLING_NONE);
         rvMainDiscovery.setLayoutManager(staggeredLayoutManager);
         rvMainDiscovery.setAdapter(mainAdapter);

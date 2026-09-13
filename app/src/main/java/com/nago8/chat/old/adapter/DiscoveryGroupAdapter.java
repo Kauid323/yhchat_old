@@ -90,6 +90,7 @@ public class DiscoveryGroupAdapter extends RecyclerView.Adapter<RecyclerView.Vie
             int start = this.list.size();
             this.list.addAll(moreData);
             notifyItemRangeInserted(start, moreData.size());
+            notifyItemChanged(this.list.size());
         }
     }
 
@@ -248,7 +249,7 @@ public class DiscoveryGroupAdapter extends RecyclerView.Adapter<RecyclerView.Vie
         if (list.isEmpty()) {
             return 0;
         }
-        return list.size() + (isLoadingMore || !hasMore ? 1 : 0);
+        return list.size() + 1;
     }
 
     static class FooterViewHolder extends RecyclerView.ViewHolder {

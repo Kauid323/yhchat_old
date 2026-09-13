@@ -51,11 +51,11 @@
                 android:padding="32dp"
                 android:visibility="gone">
 
-                <ImageView
+                <androidx.appcompat.widget.AppCompatImageView
                     android:layout_width="56dp"
                     android:layout_height="56dp"
                     android:contentDescription="@null"
-                    android:src="@drawable/ic_bot"
+                    app:srcCompat="@drawable/ic_bot"
                     app:tint="@color/text_hint" />
 
                 <TextView

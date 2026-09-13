@@ -1,5 +1,8 @@
 package com.nago8.chat.old.components;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
@@ -13,6 +16,9 @@ import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.AccelerateInterpolator;
+import android.view.animation.DecelerateInterpolator;
+import android.view.animation.OvershootInterpolator;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.ImageButton;
@@ -26,6 +32,7 @@ import com.nago8.chat.old.R;
 import com.nago8.chat.old.StickerPackManagerActivity;
 import com.nago8.chat.old.model.StickerItem;
 import com.nago8.chat.old.proto.Msg;
+import com.nago8.chat.old.utils.HtmlNativeRenderer;
 import com.nago8.chat.old.widget.EmojiPanelLayout;
 
 /**
@@ -64,6 +71,9 @@ public class ChatInputBar extends LinearLayout {
 
     private boolean isPanelExpanded = false;
     private boolean isEmojiPanelExpanded = false;
+    private ValueAnimator panelMoreAnimator;
+    private ValueAnimator panelEmojiAnimator;
+    private int cachedPanelMoreHeight = 0;
 
     private OnSendClickListener sendClickListener;
     private OnPanelActionClickListener panelActionClickListener;
@@ -302,6 +312,9 @@ public class ChatInputBar extends LinearLayout {
                 }
                 break;
         }
+        if (HtmlNativeRenderer.isHtml(text)) {
+            text = android.text.Html.fromHtml(text).toString().trim();
+        }
         if (tvQuotePreviewText != null) {
             tvQuotePreviewText.setText(senderName.isEmpty() ? text : senderName + "：" + text);
         }
@@ -386,7 +399,6 @@ public class ChatInputBar extends LinearLayout {
     public void togglePanel() {
         if (isPanelExpanded) {
             collapsePanel();
-            showKeyboard();
         } else {
             hideKeyboard();
             collapseEmojiPanel();
@@ -408,44 +420,220 @@ public class ChatInputBar extends LinearLayout {
     public void expandPanel() {
         if (isPanelExpanded) return;
         isPanelExpanded = true;
+
         if (btnTogglePanel != null) {
-            btnTogglePanel.animate().rotation(45f).setDuration(200).start();
+            btnTogglePanel.animate().cancel();
+            btnTogglePanel.animate()
+                    .rotation(45f)
+                    .setDuration(220)
+                    .setInterpolator(new DecelerateInterpolator(1.8f))
+                    .start();
         }
+
         if (panelMore != null) {
+            if (panelMoreAnimator != null && panelMoreAnimator.isRunning()) {
+                panelMoreAnimator.cancel();
+            }
+
+            int targetH = cachedPanelMoreHeight;
+            if (targetH <= 0) {
+                int widthSpec = MeasureSpec.makeMeasureSpec(
+                        getWidth() > 0 ? getWidth() : getResources().getDisplayMetrics().widthPixels,
+                        MeasureSpec.EXACTLY
+                );
+                int heightSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
+                panelMore.measure(widthSpec, heightSpec);
+                targetH = panelMore.getMeasuredHeight();
+                if (targetH <= 0) {
+                    targetH = dp(getContext(), 200);
+                }
+                cachedPanelMoreHeight = targetH;
+            }
+
+            final int finalTargetH = targetH;
             panelMore.setVisibility(VISIBLE);
-            panelMore.setAlpha(0f);
-            panelMore.animate().alpha(1f).setDuration(200).start();
+            panelMore.setAlpha(1f);
+            panelMore.setTranslationY(0f);
+            ViewGroup.LayoutParams lp = panelMore.getLayoutParams();
+            int startH = (lp != null && lp.height > 0 && lp.height != ViewGroup.LayoutParams.WRAP_CONTENT) ? lp.height : 0;
+            if (lp != null) {
+                lp.height = startH;
+                panelMore.setLayoutParams(lp);
+            }
+
+            panelMoreAnimator = ValueAnimator.ofInt(startH, finalTargetH);
+            panelMoreAnimator.setDuration(220);
+            panelMoreAnimator.setInterpolator(new DecelerateInterpolator(1.8f));
+            panelMoreAnimator.addUpdateListener(animation -> {
+                int val = (int) animation.getAnimatedValue();
+                ViewGroup.LayoutParams p = panelMore.getLayoutParams();
+                if (p != null) {
+                    p.height = val;
+                    panelMore.setLayoutParams(p);
+                }
+            });
+            panelMoreAnimator.addListener(new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    if (isPanelExpanded && panelMore != null) {
+                        ViewGroup.LayoutParams p = panelMore.getLayoutParams();
+                        if (p != null) {
+                            p.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                            panelMore.setLayoutParams(p);
+                        }
+                    }
+                }
+            });
+            panelMoreAnimator.start();
         }
     }
 
     public void collapsePanel() {
         if (!isPanelExpanded) return;
         isPanelExpanded = false;
+
         if (btnTogglePanel != null) {
-            btnTogglePanel.animate().rotation(0f).setDuration(200).start();
+            btnTogglePanel.animate().cancel();
+            btnTogglePanel.animate()
+                    .rotation(0f)
+                    .setDuration(200)
+                    .setInterpolator(new DecelerateInterpolator(1.5f))
+                    .start();
         }
+
         if (panelMore != null) {
-            panelMore.animate().alpha(0f).setDuration(150).withEndAction(() -> panelMore.setVisibility(GONE)).start();
+            if (panelMoreAnimator != null && panelMoreAnimator.isRunning()) {
+                panelMoreAnimator.cancel();
+            }
+
+            int curH = panelMore.getHeight();
+            if (curH > 0) {
+                cachedPanelMoreHeight = curH;
+            } else {
+                curH = cachedPanelMoreHeight > 0 ? cachedPanelMoreHeight : dp(getContext(), 200);
+            }
+
+            panelMoreAnimator = ValueAnimator.ofInt(curH, 0);
+            panelMoreAnimator.setDuration(180);
+            panelMoreAnimator.setInterpolator(new DecelerateInterpolator(1.8f));
+            panelMoreAnimator.addUpdateListener(animation -> {
+                int val = (int) animation.getAnimatedValue();
+                ViewGroup.LayoutParams p = panelMore.getLayoutParams();
+                if (p != null) {
+                    p.height = val;
+                    panelMore.setLayoutParams(p);
+                }
+            });
+            panelMoreAnimator.addListener(new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    if (!isPanelExpanded && panelMore != null) {
+                        panelMore.setVisibility(GONE);
+                        ViewGroup.LayoutParams p = panelMore.getLayoutParams();
+                        if (p != null) {
+                            p.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                            panelMore.setLayoutParams(p);
+                        }
+                    }
+                }
+            });
+            panelMoreAnimator.start();
         }
     }
 
     public void expandEmojiPanel() {
         if (isEmojiPanelExpanded) return;
         isEmojiPanelExpanded = true;
+
+        if (btnEmoji != null) {
+            btnEmoji.animate().cancel();
+            btnEmoji.animate()
+                    .scaleX(1.15f)
+                    .scaleY(1.15f)
+                    .setDuration(160)
+                    .setInterpolator(new DecelerateInterpolator(1.5f))
+                    .withEndAction(() -> {
+                        if (btnEmoji != null) {
+                            btnEmoji.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start();
+                        }
+                    })
+                    .start();
+        }
+
         if (panelEmoji != null) {
-            panelEmoji.setPanelHeight(panelEmoji.getMinHeightPx());
+            if (panelEmojiAnimator != null && panelEmojiAnimator.isRunning()) {
+                panelEmojiAnimator.cancel();
+            }
+
+            int targetH = panelEmoji.getMinHeightPx();
             panelEmoji.reloadStickers();
+            panelEmoji.applyDefaultOrRandomSelection();
             panelEmoji.setVisibility(VISIBLE);
-            panelEmoji.setAlpha(0f);
-            panelEmoji.animate().alpha(1f).setDuration(200).start();
+            panelEmoji.setAlpha(1f);
+            panelEmoji.setTranslationY(0f);
+
+            int startH = 0;
+            ViewGroup.LayoutParams lp = panelEmoji.getLayoutParams();
+            if (lp != null && lp.height > 0 && lp.height != ViewGroup.LayoutParams.WRAP_CONTENT) {
+                startH = lp.height;
+            }
+            panelEmoji.setPanelHeight(startH);
+
+            panelEmojiAnimator = ValueAnimator.ofInt(startH, targetH);
+            panelEmojiAnimator.setDuration(220);
+            panelEmojiAnimator.setInterpolator(new DecelerateInterpolator(1.8f));
+            panelEmojiAnimator.addUpdateListener(animation -> {
+                int val = (int) animation.getAnimatedValue();
+                if (panelEmoji != null) {
+                    panelEmoji.setPanelHeight(val);
+                }
+            });
+            panelEmojiAnimator.start();
         }
     }
 
     public void collapseEmojiPanel() {
         if (!isEmojiPanelExpanded) return;
         isEmojiPanelExpanded = false;
+
+        if (btnEmoji != null) {
+            btnEmoji.animate().cancel();
+            btnEmoji.animate()
+                    .scaleX(1.0f)
+                    .scaleY(1.0f)
+                    .setDuration(150)
+                    .start();
+        }
+
         if (panelEmoji != null) {
-            panelEmoji.animate().alpha(0f).setDuration(150).withEndAction(() -> panelEmoji.setVisibility(GONE)).start();
+            if (panelEmojiAnimator != null && panelEmojiAnimator.isRunning()) {
+                panelEmojiAnimator.cancel();
+            }
+
+            int curH = panelEmoji.getHeight();
+            if (curH <= 0) {
+                curH = panelEmoji.getMinHeightPx();
+            }
+
+            panelEmojiAnimator = ValueAnimator.ofInt(curH, 0);
+            panelEmojiAnimator.setDuration(180);
+            panelEmojiAnimator.setInterpolator(new DecelerateInterpolator(1.8f));
+            panelEmojiAnimator.addUpdateListener(animation -> {
+                int val = (int) animation.getAnimatedValue();
+                if (panelEmoji != null) {
+                    panelEmoji.setPanelHeight(val);
+                }
+            });
+            panelEmojiAnimator.addListener(new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    if (!isEmojiPanelExpanded && panelEmoji != null) {
+                        panelEmoji.setVisibility(GONE);
+                        panelEmoji.setPanelHeight(panelEmoji.getMinHeightPx());
+                    }
+                }
+            });
+            panelEmojiAnimator.start();
         }
     }
 
@@ -460,14 +648,31 @@ public class ChatInputBar extends LinearLayout {
         if (btnTogglePanel != null) {
             btnTogglePanel.animate().cancel();
             btnTogglePanel.setRotation(0f);
+            btnTogglePanel.setScaleX(1.0f);
+            btnTogglePanel.setScaleY(1.0f);
+        }
+        if (btnEmoji != null) {
+            btnEmoji.animate().cancel();
+            btnEmoji.setScaleX(1.0f);
+            btnEmoji.setScaleY(1.0f);
+        }
+        if (panelMoreAnimator != null && panelMoreAnimator.isRunning()) {
+            panelMoreAnimator.cancel();
+        }
+        if (panelEmojiAnimator != null && panelEmojiAnimator.isRunning()) {
+            panelEmojiAnimator.cancel();
         }
         if (panelMore != null) {
-            panelMore.animate().cancel();
             panelMore.setVisibility(GONE);
+            ViewGroup.LayoutParams p = panelMore.getLayoutParams();
+            if (p != null) {
+                p.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                panelMore.setLayoutParams(p);
+            }
         }
         if (panelEmoji != null) {
-            panelEmoji.animate().cancel();
             panelEmoji.setVisibility(GONE);
+            panelEmoji.setPanelHeight(panelEmoji.getMinHeightPx());
         }
     }
 

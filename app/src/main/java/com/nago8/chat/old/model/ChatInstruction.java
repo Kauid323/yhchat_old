@@ -33,12 +33,43 @@ public class ChatInstruction implements Serializable {
     }
 
     public boolean isCustomFormCommand() {
-        return type == 3 || (form != null && !form.trim().isEmpty()) || (botSettingsJson != null && !botSettingsJson.trim().isEmpty());
+        if (type == 1 || type == 2) {
+            return false;
+        }
+        if (type == 3) {
+            return true;
+        }
+        if (form != null && !form.trim().isEmpty() && !form.trim().equals("{}") && !form.trim().equals("[]")) {
+            return true;
+        }
+        if (botSettingsJson != null && !botSettingsJson.trim().isEmpty() && !botSettingsJson.trim().equals("{}") && !botSettingsJson.trim().equals("[]")) {
+            return true;
+        }
+        return false;
     }
 
     public boolean isDirectCommand() {
-        if (isCustomFormCommand()) return false;
-        // type == 1 是标准直发指令；或者非参数指令(type != 2)且无输入提示
-        return type == 1 || (type != 2 && (hintText == null || hintText.trim().isEmpty()));
+        if (type == 1) {
+            return true;
+        }
+        if (type == 2 || type == 3) {
+            return false;
+        }
+        if (isCustomFormCommand()) {
+            return false;
+        }
+        return hintText == null || hintText.trim().isEmpty();
+    }
+
+    public String getDefaultParam() {
+        if (defaultText != null && !defaultText.trim().isEmpty()) {
+            String dt = defaultText.trim();
+            return dt.startsWith("/") ? dt : "/" + dt;
+        }
+        String cmdName = name != null ? name.trim() : "";
+        if (cmdName.isEmpty()) {
+            return "";
+        }
+        return cmdName.startsWith("/") ? cmdName : "/" + cmdName;
     }
 }

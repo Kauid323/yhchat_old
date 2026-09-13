@@ -7,11 +7,11 @@
     android:gravity="center"
     android:orientation="vertical">
 
-    <ImageView
+    <androidx.appcompat.widget.AppCompatImageView
         android:layout_width="48dp"
         android:layout_height="48dp"
         android:contentDescription="@null"
-        android:src="@drawable/ic_group"
+        app:srcCompat="@drawable/ic_group"
         app:tint="@color/text_hint" />
 
     <TextView

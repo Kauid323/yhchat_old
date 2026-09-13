@@ -18,68 +18,24 @@
         app:title="群聊发现"
         app:titleTextColor="@color/text_primary" />
 
-    <!-- 搜索框 (Material 规范设计) -->
+    <!-- 搜索框 (原生 MD SearchView) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@color/card_background"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
         android:paddingTop="4dp"
-        android:paddingBottom="10dp">
+        android:paddingBottom="8dp">
 
-        <com.google.android.material.card.MaterialCardView
+        <androidx.appcompat.widget.SearchView
+            android:id="@+id/searchView"
             android:layout_width="match_parent"
-            android:layout_height="42dp"
-            app:cardCornerRadius="21dp"
-            app:cardElevation="0dp"
-            app:strokeWidth="1dp"
-            app:strokeColor="#E4E6EA"
-            app:cardBackgroundColor="#F5F7FA">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingStart="12dp"
-                android:paddingEnd="12dp">
-
-                <ImageView
-                    android:layout_width="18dp"
-                    android:layout_height="18dp"
-                    android:contentDescription="@null"
-                    android:src="@drawable/ic_search"
-                    app:tint="@color/text_hint" />
-
-                <EditText
-                    android:id="@+id/etSearch"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_marginStart="8dp"
-                    android:layout_marginEnd="8dp"
-                    android:layout_weight="1"
-                    android:background="@null"
-                    android:hint="搜索公开群聊名称或关键词..."
-                    android:imeOptions="actionSearch"
-                    android:inputType="text"
-                    android:singleLine="true"
-                    android:textColor="@color/text_primary"
-                    android:textColorHint="@color/text_hint"
-                    android:textSize="13.5sp" />
-
-                <ImageView
-                    android:id="@+id/ivClearSearch"
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:contentDescription="@null"
-                    android:padding="2dp"
-                    android:src="@drawable/ic_close"
-                    android:visibility="gone"
-                    app:tint="@color/text_hint"
-                    tools:visibility="visible" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
+            android:layout_height="40dp"
+            android:background="@drawable/bg_search_input"
+            app:iconifiedByDefault="false"
+            app:queryBackground="@android:color/transparent"
+            app:queryHint="搜索公开群聊名称或关键词..." />
     </LinearLayout>
 
     <!-- 分类 TabLayout -->
@@ -128,11 +84,11 @@
                 android:orientation="vertical"
                 android:visibility="gone">
 
-                <ImageView
+                <androidx.appcompat.widget.AppCompatImageView
                     android:layout_width="56dp"
                     android:layout_height="56dp"
                     android:contentDescription="@null"
-                    android:src="@drawable/ic_group"
+                    app:srcCompat="@drawable/ic_group"
                     app:tint="@color/text_hint" />
 
                 <TextView

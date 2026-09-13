@@ -82,4 +82,66 @@ public class PrefUtils {
                 : androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM;
         androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(mode);
     }
+
+    public static final String EMOJI_TAB_UNICODE = "unicode";
+    public static final String EMOJI_TAB_TWEMOJI = "twemoji";
+    public static final String EMOJI_TAB_FAVORITE = "favorite";
+    public static final String EMOJI_TAB_PACK = "pack";
+
+    private static final String KEY_EMOJI_DEFAULT_TAB_TYPE = "emoji_default_tab_type";
+    private static final String KEY_EMOJI_DEFAULT_PACK_ID = "emoji_default_pack_id";
+    private static final String KEY_EMOJI_DEFAULT_PACK_NAME = "emoji_default_pack_name";
+    private static final String KEY_EMOJI_RANDOM_PACK_ENABLED = "emoji_random_pack_enabled";
+
+    public static String getEmojiDefaultTabType(Context context) {
+        return getPrefs(context).getString(KEY_EMOJI_DEFAULT_TAB_TYPE, EMOJI_TAB_UNICODE);
+    }
+
+    public static void setEmojiDefaultTabType(Context context, String tabType) {
+        getPrefs(context).edit().putString(KEY_EMOJI_DEFAULT_TAB_TYPE, tabType).apply();
+    }
+
+    public static long getEmojiDefaultPackId(Context context) {
+        return getPrefs(context).getLong(KEY_EMOJI_DEFAULT_PACK_ID, 0L);
+    }
+
+    public static void setEmojiDefaultPackId(Context context, long packId) {
+        getPrefs(context).edit().putLong(KEY_EMOJI_DEFAULT_PACK_ID, packId).apply();
+    }
+
+    public static String getEmojiDefaultPackName(Context context) {
+        return getPrefs(context).getString(KEY_EMOJI_DEFAULT_PACK_NAME, "");
+    }
+
+    public static void setEmojiDefaultPackName(Context context, String packName) {
+        getPrefs(context).edit().putString(KEY_EMOJI_DEFAULT_PACK_NAME, packName).apply();
+    }
+
+    public static boolean isEmojiRandomPackEnabled(Context context) {
+        return getPrefs(context).getBoolean(KEY_EMOJI_RANDOM_PACK_ENABLED, false);
+    }
+
+    public static void setEmojiRandomPackEnabled(Context context, boolean enabled) {
+        getPrefs(context).edit().putBoolean(KEY_EMOJI_RANDOM_PACK_ENABLED, enabled).apply();
+    }
+
+    private static final String KEY_DISABLE_HTML_IMAGE_PRELOAD = "disable_html_image_preload";
+
+    public static boolean isDisableHtmlImagePreload(Context context) {
+        return getPrefs(context).getBoolean(KEY_DISABLE_HTML_IMAGE_PRELOAD, false);
+    }
+
+    public static void setDisableHtmlImagePreload(Context context, boolean disable) {
+        getPrefs(context).edit().putBoolean(KEY_DISABLE_HTML_IMAGE_PRELOAD, disable).apply();
+    }
+
+    private static final String KEY_SHOW_RAW_HTML = "show_raw_html";
+
+    public static boolean isShowRawHtml(Context context) {
+        return getPrefs(context).getBoolean(KEY_SHOW_RAW_HTML, false);
+    }
+
+    public static void setShowRawHtml(Context context, boolean showRaw) {
+        getPrefs(context).edit().putBoolean(KEY_SHOW_RAW_HTML, showRaw).apply();
+    }
 }

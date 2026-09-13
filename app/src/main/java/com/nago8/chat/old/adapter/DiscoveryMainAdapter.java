@@ -113,10 +113,15 @@ public class DiscoveryMainAdapter extends RecyclerView.Adapter<RecyclerView.View
             this.hasMore = hasMore;
             this.isLoadingMore = false;
             notifyItemRangeInserted(start, moreGroups.size());
+            notifyItemChanged(1 + this.groupList.size());
         } else {
             this.hasMore = false;
             this.isLoadingMore = false;
-            notifyDataSetChanged();
+            if (!groupList.isEmpty()) {
+                notifyItemChanged(1 + this.groupList.size());
+            } else {
+                notifyDataSetChanged();
+            }
         }
     }
 
@@ -204,7 +209,7 @@ public class DiscoveryMainAdapter extends RecyclerView.Adapter<RecyclerView.View
         if (isLoadingGroups || groupList.isEmpty()) {
             return 2; // Header + Loading/Empty
         }
-        return 1 + groupList.size() + (isLoadingMore || !hasMore ? 1 : 0);
+        return 1 + groupList.size() + 1; // Header + Group items + Footer
     }
 
     @NonNull

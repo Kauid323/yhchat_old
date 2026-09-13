@@ -45,6 +45,10 @@ public class FileUploadUtils {
         public String fileUrl;
     }
 
+    public interface ProgressListener {
+        void onProgress(long bytesWritten, long totalBytes, int percent);
+    }
+
     public interface TokenCallback {
         void onSuccess(String uploadToken);
         void onError(Exception e);
@@ -113,6 +117,13 @@ public class FileUploadUtils {
      * 上传单个文件到七牛云 (bucket: chat68-file)
      */
     public static void uploadFile(Context context, Uri fileUri, String uploadToken, UploadCallback callback) {
+        uploadFile(context, fileUri, uploadToken, null, callback);
+    }
+
+    /**
+     * 上传单个文件到七牛云 (bucket: chat68-file，支持进度回调)
+     */
+    public static void uploadFile(Context context, Uri fileUri, String uploadToken, ProgressListener progressListener, UploadCallback callback) {
         new Thread(() -> {
             File tempFile = null;
             try {
@@ -165,11 +176,18 @@ public class FileUploadUtils {
                 }
                 if (queryResp.body() != null) queryResp.body().close();
 
+                RequestBody rawFileBody = RequestBody.create(MediaType.parse(mimeType), tempFile);
+                RequestBody fileBody = progressListener != null
+                        ? new com.nago8.chat.old.net.ProgressRequestBody(rawFileBody, (bytesWritten, contentLength, percent) -> {
+                            progressListener.onProgress(bytesWritten, contentLength, percent);
+                        })
+                        : rawFileBody;
+
                 RequestBody formBody = new MultipartBody.Builder()
                         .setType(MultipartBody.FORM)
                         .addFormDataPart("token", uploadToken)
                         .addFormDataPart("key", fileKey)
-                        .addFormDataPart("file", originalFileName, RequestBody.create(MediaType.parse(mimeType), tempFile))
+                        .addFormDataPart("file", originalFileName, fileBody)
                         .build();
 
                 Request uploadReq = new Request.Builder()

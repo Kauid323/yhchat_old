@@ -44,8 +44,7 @@ import okhttp3.Call;
 public class GroupDiscoveryActivity extends AppCompatActivity {
 
     private Toolbar toolbar;
-    private EditText etSearch;
-    private ImageView ivClearSearch;
+    private androidx.appcompat.widget.SearchView searchView;
     private TabLayout tabLayout;
     private SwipeRefreshLayout swipeRefreshLayout;
     private RecyclerView rvGroups;
@@ -97,8 +96,7 @@ public class GroupDiscoveryActivity extends AppCompatActivity {
 
     private void initViews() {
         toolbar = findViewById(R.id.toolbar);
-        etSearch = findViewById(R.id.etSearch);
-        ivClearSearch = findViewById(R.id.ivClearSearch);
+        searchView = findViewById(R.id.searchView);
         tabLayout = findViewById(R.id.tabLayout);
         swipeRefreshLayout = findViewById(R.id.swipeRefreshLayout);
         rvGroups = findViewById(R.id.rvGroups);
@@ -124,7 +122,7 @@ public class GroupDiscoveryActivity extends AppCompatActivity {
         adapter = new DiscoveryGroupAdapter(this, true); // 使用瀑布流错位卡片
         adapter.setOnGroupActionListener(this::handleApplyGroup);
 
-        StaggeredGridLayoutManager staggeredManager = new StaggeredGridLayoutManager(2, StaggeredGridLayoutManager.VERTICAL);
+        com.nago8.chat.old.widget.SafeStaggeredGridLayoutManager staggeredManager = new com.nago8.chat.old.widget.SafeStaggeredGridLayoutManager(2, StaggeredGridLayoutManager.VERTICAL);
         staggeredManager.setGapStrategy(StaggeredGridLayoutManager.GAP_HANDLING_NONE);
         rvGroups.setLayoutManager(staggeredManager);
         rvGroups.setAdapter(adapter);
@@ -175,37 +173,26 @@ public class GroupDiscoveryActivity extends AppCompatActivity {
             public void onTabReselected(TabLayout.Tab tab) {}
         });
 
-        etSearch.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+        if (searchView != null) {
+            searchView.setOnQueryTextListener(new androidx.appcompat.widget.SearchView.OnQueryTextListener() {
+                @Override
+                public boolean onQueryTextSubmit(String query) {
+                    currentKeyword = query != null ? query.trim() : "";
+                    searchHandler.removeCallbacks(searchRunnable);
+                    resetAndLoadGroups();
+                    searchView.clearFocus();
+                    return true;
+                }
 
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                String query = s != null ? s.toString().trim() : "";
-                ivClearSearch.setVisibility(query.isEmpty() ? View.GONE : View.VISIBLE);
-                currentKeyword = query;
-                searchHandler.removeCallbacks(searchRunnable);
-                searchHandler.postDelayed(searchRunnable, 400);
-            }
-
-            @Override
-            public void afterTextChanged(Editable s) {}
-        });
-
-        ivClearSearch.setOnClickListener(v -> {
-            etSearch.setText("");
-            ivClearSearch.setVisibility(View.GONE);
-            hideKeyboard();
-        });
-
-        etSearch.setOnEditorActionListener((v, actionId, event) -> {
-            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
-                resetAndLoadGroups();
-                hideKeyboard();
-                return true;
-            }
-            return false;
-        });
+                @Override
+                public boolean onQueryTextChange(String newText) {
+                    currentKeyword = newText != null ? newText.trim() : "";
+                    searchHandler.removeCallbacks(searchRunnable);
+                    searchHandler.postDelayed(searchRunnable, 400);
+                    return true;
+                }
+            });
+        }
     }
 
     private void initJoinedChatIds() {
@@ -387,8 +374,8 @@ public class GroupDiscoveryActivity extends AppCompatActivity {
     private void hideKeyboard() {
         try {
             InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-            if (imm != null && etSearch != null) {
-                imm.hideSoftInputFromWindow(etSearch.getWindowToken(), 0);
+            if (imm != null && searchView != null) {
+                imm.hideSoftInputFromWindow(searchView.getWindowToken(), 0);
             }
         } catch (Exception ignored) {}
     }

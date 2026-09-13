@@ -28,6 +28,7 @@ import com.nago8.chat.old.net.FileDownloadManager;
 import com.nago8.chat.old.proto.Msg;
 import com.nago8.chat.old.utils.AudioPlayerManager;
 import com.nago8.chat.old.utils.FengEmojiRenderer;
+import com.nago8.chat.old.utils.HtmlNativeRenderer;
 import com.nago8.chat.old.utils.ImageUtils;
 import com.nago8.chat.old.utils.InternalLinkUtils;
 import com.nago8.chat.old.utils.TimeUtils;
@@ -104,34 +105,37 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
     }
 
     private Markwon getMarkwon(Context context) {
-        int primaryColor = com.nago8.chat.old.utils.ThemeUtils.getThemeColor(context);
-        return Markwon.builder(context)
-                .usePlugin(StrikethroughPlugin.create())
-                .usePlugin(new AbstractMarkwonPlugin() {
-                    @Override
-                    public void configureTheme(@NonNull io.noties.markwon.core.MarkwonTheme.Builder builder) {
-                        builder.linkColor(primaryColor);
-                    }
+        if (markwon == null && context != null) {
+            int primaryColor = com.nago8.chat.old.utils.ThemeUtils.getThemeColor(context);
+            markwon = Markwon.builder(context.getApplicationContext())
+                    .usePlugin(StrikethroughPlugin.create())
+                    .usePlugin(new AbstractMarkwonPlugin() {
+                        @Override
+                        public void configureTheme(@NonNull io.noties.markwon.core.MarkwonTheme.Builder builder) {
+                            builder.linkColor(primaryColor);
+                        }
 
-                    @Override
-                    public void configureConfiguration(@NonNull MarkwonConfiguration.Builder builder) {
-                        builder.linkResolver((view, link) -> {
-                            if (!InternalLinkUtils.handleUrl(view.getContext(), link)) {
-                                try {
-                                    String openUrl = link;
-                                    if (!openUrl.startsWith("http://") && !openUrl.startsWith("https://") && !openUrl.startsWith("yunhu://")) {
-                                        openUrl = "http://" + openUrl;
+                        @Override
+                        public void configureConfiguration(@NonNull MarkwonConfiguration.Builder builder) {
+                            builder.linkResolver((view, link) -> {
+                                if (!InternalLinkUtils.handleUrl(view.getContext(), link)) {
+                                    try {
+                                        String openUrl = link;
+                                        if (!openUrl.startsWith("http://") && !openUrl.startsWith("https://") && !openUrl.startsWith("yunhu://")) {
+                                            openUrl = "http://" + openUrl;
+                                        }
+                                        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(openUrl));
+                                        view.getContext().startActivity(intent);
+                                    } catch (Exception e) {
+                                        Log.e("MessagesAdapter", "Failed to resolve link: " + link, e);
                                     }
-                                    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(openUrl));
-                                    view.getContext().startActivity(intent);
-                                } catch (Exception e) {
-                                    Log.e("MessagesAdapter", "Failed to resolve link: " + link, e);
                                 }
-                            }
-                        });
-                    }
-                })
-                .build();
+                            });
+                        }
+                    })
+                    .build();
+        }
+        return markwon;
     }
 
     @Override
@@ -347,9 +351,45 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
                 }
             }
             boolean isEdited = msg != null && msg.edit_time > 0;
+            String messageText = getMessageText(msg);
+            boolean isHtml = msg != null && msg.msg_delete_time <= 0
+                    && !com.nago8.chat.old.utils.PrefUtils.isShowRawHtml(itemView.getContext())
+                    && HtmlNativeRenderer.isHtml(messageText);
+
+            if (isHtml) {
+                Context ctx = itemView.getContext();
+                LinearLayout container = new LinearLayout(ctx);
+                container.setOrientation(LinearLayout.VERTICAL);
+                applyBubbleStyle(container, group.mine, isEdited, index, count);
+                container.setPadding(dp(12), dp(10), dp(12), dp(10));
+
+                View cmdBadge = createCmdBadgeView(ctx, msg, group.mine);
+                if (cmdBadge != null) {
+                    container.addView(cmdBadge);
+                }
+
+                String quoteTextStr = (msg != null && msg.msg_delete_time <= 0) ? getQuoteText(msg) : null;
+                if (!TextUtils.isEmpty(quoteTextStr)) {
+                    View quoteView = createQuoteView(ctx, msg, quoteTextStr);
+                    if (quoteView != null) {
+                        container.addView(quoteView);
+                    }
+                }
+
+                HtmlNativeRenderer.renderInto(ctx, container, messageText, group.mine, isEdited, getMaxBubbleWidth(ctx));
+
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                params.topMargin = dp(2);
+                params.leftMargin = group.mine ? dp(48) : 0;
+                params.rightMargin = group.mine ? 0 : dp(48);
+                params.gravity = group.mine ? Gravity.END : Gravity.START;
+                container.setLayoutParams(params);
+                return container;
+            }
+
             TextView textView = new TextView(itemView.getContext());
             int emojiSize = dp(22);
-            CharSequence displayText = FengEmojiRenderer.apply(itemView.getContext(), getMessageText(msg), emojiSize);
+            CharSequence displayText = FengEmojiRenderer.apply(itemView.getContext(), messageText, emojiSize);
             if (isEdited) {
                 textView.setTextColor(0xFFFFFFFF);
                 textView.setLinkTextColor(0xFFFFECB3);
@@ -362,7 +402,7 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
 
             boolean isMarkdown = msg != null && msg.content_type == 3 && msg.msg_delete_time <= 0;
             if (isMarkdown && markwon != null) {
-                markwon.setMarkdown(textView, getMessageText(msg));
+                markwon.setMarkdown(textView, messageText);
             } else {
                 textView.setText(displayText, TextView.BufferType.SPANNABLE);
                 InternalLinkUtils.processTextViewLinks(textView, group.mine);
@@ -769,7 +809,8 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
         private View createCmdBadgeView(Context ctx, Msg msg, boolean mine) {
             if (msg == null || msg.cmd == null || !com.nago8.chat.old.utils.WsMsgConverter.isBusinessCommand(msg.cmd.name)) return null;
             TextView tvCmd = new TextView(ctx);
-            tvCmd.setText(String.format("/%s", msg.cmd.name));
+            String cmdDisplay = msg.cmd.name.startsWith("/") ? msg.cmd.name : "/" + msg.cmd.name;
+            tvCmd.setText(cmdDisplay);
             tvCmd.setTextSize(12);
             int baseColor = mine ? 0xFFFFFFFF : ContextCompat.getColor(ctx, R.color.bubble_text_left);
             tvCmd.setTextColor(baseColor);
@@ -840,8 +881,12 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
             boolean isPureUrl = (mediaUrl != null && quoteMsgText.trim().equals(mediaUrl));
 
             if (!isPureUrl) {
+                String displayQuoteText = quoteMsgText;
+                if (HtmlNativeRenderer.isHtml(displayQuoteText)) {
+                    displayQuoteText = HtmlNativeRenderer.stripHtml(displayQuoteText);
+                }
                 TextView quoteText = new TextView(ctx);
-                quoteText.setText(FengEmojiRenderer.apply(ctx, quoteMsgText, dp(18)), TextView.BufferType.SPANNABLE);
+                quoteText.setText(FengEmojiRenderer.apply(ctx, displayQuoteText, dp(18)), TextView.BufferType.SPANNABLE);
                 quoteText.setTextSize(13);
                 quoteText.setTextColor(ContextCompat.getColor(ctx, R.color.text_secondary));
                 quoteText.setMaxLines(3);
