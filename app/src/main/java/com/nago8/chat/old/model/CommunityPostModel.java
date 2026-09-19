@@ -18,6 +18,7 @@ public class CommunityPostModel {
     private double amountNum;
     private boolean isLiked;
     private boolean isCollected;
+    private boolean isDraft;
 
     private String displayAuthorName;
     private String likeNumStr;
@@ -64,6 +65,11 @@ public class CommunityPostModel {
             model.isCollected = "1".equals(collectedObj.toString()) || Boolean.TRUE.toString().equalsIgnoreCase(collectedObj.toString());
         }
 
+        Object draftObj = json.opt("isDraft");
+        if (draftObj != null) {
+            model.isDraft = "1".equals(draftObj.toString()) || Boolean.TRUE.toString().equalsIgnoreCase(draftObj.toString()) || json.optInt("isDraft", 0) == 1;
+        }
+
         return model;
     }
 
@@ -82,6 +88,7 @@ public class CommunityPostModel {
     public double getAmountNum() { return amountNum; }
     public boolean isLiked() { return isLiked; }
     public boolean isCollected() { return isCollected; }
+    public boolean isDraft() { return isDraft; }
 
     public String getDisplayAuthorName() { return displayAuthorName != null ? displayAuthorName : ""; }
     public String getLikeNumStr() { return likeNumStr != null ? likeNumStr : "0"; }

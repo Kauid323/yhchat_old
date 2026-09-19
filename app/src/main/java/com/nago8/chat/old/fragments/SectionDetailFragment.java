@@ -22,7 +22,9 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.imageview.ShapeableImageView;
+import com.nago8.chat.old.CreatePostActivity;
 import com.nago8.chat.old.R;
 import com.nago8.chat.old.SectionInfoActivity;
 import com.nago8.chat.old.adapter.CommunityPostsAdapter;
@@ -174,6 +176,16 @@ public class SectionDetailFragment extends Fragment {
             startActivity(intent);
         });
         btnFollow.setOnClickListener(v -> toggleFollowState());
+
+        FloatingActionButton fabCreatePost = view.findViewById(R.id.fabCreatePost);
+        if (fabCreatePost != null) {
+            fabCreatePost.setOnClickListener(v -> {
+                Intent intent = new Intent(requireContext(), CreatePostActivity.class);
+                intent.putExtra(CreatePostActivity.EXTRA_BA_ID, baId);
+                intent.putExtra(CreatePostActivity.EXTRA_BA_NAME, baName != null ? baName : (currentBaModel != null ? currentBaModel.getName() : ""));
+                startActivity(intent);
+            });
+        }
 
         fetchSectionInfo();
         loadPosts(true, false);

@@ -110,6 +110,16 @@ public class DiscoveryFragment extends Fragment {
 
         rvMainDiscovery.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
+            public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
+                super.onScrollStateChanged(recyclerView, newState);
+                if (newState == RecyclerView.SCROLL_STATE_DRAGGING || newState == RecyclerView.SCROLL_STATE_SETTLING) {
+                    stopBannerAutoScroll();
+                } else if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                    startBannerAutoScroll();
+                }
+            }
+
+            @Override
             public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
                 super.onScrolled(recyclerView, dx, dy);
                 if (dy <= 0) return;

@@ -339,6 +339,23 @@ public class ChatInputBar extends LinearLayout {
         return pendingQuoteMsg;
     }
 
+    /**
+     * 计算除可展开面板（panelEmoji / panelMore）之外输入栏固有的总高度（含 padding、引用栏、输入控制行）
+     */
+    public int getNonPanelHeight() {
+        int h = getPaddingTop() + getPaddingBottom();
+        if (quotePreviewBar != null && quotePreviewBar.getVisibility() == VISIBLE) {
+            h += (quotePreviewBar.getHeight() > 0 ? quotePreviewBar.getHeight() : dp(getContext(), 42));
+        }
+        View inputRow = findViewById(R.id.layoutInputRow);
+        if (inputRow != null && inputRow.getHeight() > 0) {
+            h += inputRow.getHeight();
+        } else {
+            h += dp(getContext(), 56);
+        }
+        return h;
+    }
+
     public void setOnQuoteDismissListener(OnQuoteDismissListener listener) {
         this.quoteDismissListener = listener;
     }

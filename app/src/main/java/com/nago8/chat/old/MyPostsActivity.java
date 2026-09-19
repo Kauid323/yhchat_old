@@ -98,6 +98,20 @@ public class MyPostsActivity extends AppCompatActivity {
         loadPosts(true);
     }
 
+    private boolean isFirstResume = true;
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (isFirstResume) {
+            isFirstResume = false;
+        } else {
+            currentPage = 1;
+            hasReachedEnd = false;
+            loadPosts(false);
+        }
+    }
+
     @Override
     protected void onDestroy() {
         if (fetchCall != null) fetchCall.cancel();

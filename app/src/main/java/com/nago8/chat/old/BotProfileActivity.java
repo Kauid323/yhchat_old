@@ -324,6 +324,15 @@ public class BotProfileActivity extends AppCompatActivity {
         tvName.setText(name);
         tvBotId.setText(getString(R.string.user_id_format, data.bot_id));
         ImageUtils.loadAvatar(this, data.avatar_url, ivAvatar);
+        if (ivAvatar != null) {
+            ivAvatar.setOnClickListener(v -> {
+                if (data.avatar_url != null && !data.avatar_url.trim().isEmpty()) {
+                    Intent intent = new Intent(this, ImagePreviewActivity.class);
+                    intent.putExtra(ImagePreviewActivity.EXTRA_IMAGE_URL, com.nago8.chat.old.utils.ImageUtils.appendQiniuParam(data.avatar_url, 800, 800));
+                    startActivity(intent);
+                }
+            });
+        }
 
         String intro = data.introduction != null && !data.introduction.isEmpty() ? data.introduction : "";
         tvIntroduction.setText(getString(R.string.bot_profile_introduction, intro));

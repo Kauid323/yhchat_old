@@ -222,7 +222,15 @@ public class ChatActivity extends AppCompatActivity {
         if (rootContainer != null) {
             ViewCompat.setOnApplyWindowInsetsListener(rootContainer, (v, insets) -> {
                 int statusBarTop = insets.getSystemWindowInsetTop();
-                int navBarBottom = insets.getSystemWindowInsetBottom();
+                int rawBottom = insets.getSystemWindowInsetBottom();
+                int navBarBottom = 0;
+
+                if (Build.VERSION.SDK_INT >= 30) {
+                    navBarBottom = Api30ImeAnimationHelper.getNavigationBarBottom(v);
+                } else {
+                    // API < 30 下系统窗口内容默认自然布局在导航栏上方，无需额外设置 bottom padding，避免软键盘收起时产生残余位移
+                    navBarBottom = 0;
+                }
 
                 if (topBar != null && statusBarTop > 0) {
                     topBar.setPadding(0, statusBarTop, 0, 0);
@@ -1513,6 +1521,18 @@ public class ChatActivity extends AppCompatActivity {
     private static class Api30ImeAnimationHelper {
         static void setupWindowDecor(android.view.Window window) {
             window.setDecorFitsSystemWindows(false);
+        }
+
+        static int getNavigationBarBottom(View view) {
+            if (view == null) return 0;
+            android.view.WindowInsets insets = view.getRootWindowInsets();
+            if (insets != null) {
+                android.graphics.Insets navInsets = insets.getInsets(android.view.WindowInsets.Type.navigationBars());
+                if (navInsets != null) {
+                    return navInsets.bottom;
+                }
+            }
+            return 0;
         }
 
         static void setup(View rootContainer, ChatInputBar chatInputBar, RecyclerView recyclerView, int extraGap) {

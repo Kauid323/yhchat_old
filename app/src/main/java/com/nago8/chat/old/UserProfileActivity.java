@@ -107,7 +107,7 @@ public class UserProfileActivity extends AppCompatActivity {
             ivAvatar.setOnClickListener(v -> {
                 if (currentUserAvatar != null && currentUserAvatar.length() > 0) {
                     Intent intent = new Intent(this, ImagePreviewActivity.class);
-                    intent.putExtra(ImagePreviewActivity.EXTRA_IMAGE_URL, currentUserAvatar);
+                    intent.putExtra(ImagePreviewActivity.EXTRA_IMAGE_URL, com.nago8.chat.old.utils.ImageUtils.appendQiniuParam(currentUserAvatar, 800, 800));
                     startActivity(intent);
                 }
             });

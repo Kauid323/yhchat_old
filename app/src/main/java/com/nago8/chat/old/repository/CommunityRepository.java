@@ -162,6 +162,207 @@ public class CommunityRepository {
         return null;
     }
 
+    /**
+     * 发布文章 (POST /v1/community/posts/create)
+     * @param token 用户 Token
+     * @param baId 分区 ID
+     * @param title 文章标题
+     * @param content 文章内容
+     * @param contentType 1: 纯文本, 2: Markdown
+     * @param draftId 草稿 ID (若有则发布后自动删除草稿，没有传 0)
+     * @param cb 回调
+     */
+    @SuppressWarnings("UnusedReturnValue")
+    public Call createPost(String token, int baId, String title, String content, int contentType, long draftId, StringCallback cb) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("baId", baId);
+            json.put("groupId", "");
+            json.put("title", title);
+            json.put("content", content);
+            json.put("contentType", contentType);
+            json.put("draftId", draftId);
+            return post("/v1/community/posts/create", token, json.toString(), cb);
+        } catch (Exception e) {
+            cb.onError(e.getMessage());
+            return null;
+        }
+    }
+
+    @SuppressWarnings("UnusedReturnValue")
+    public Call createPost(String token, int baId, String title, String content, int contentType, StringCallback cb) {
+        return createPost(token, baId, title, content, contentType, 0, cb);
+    }
+
+    /**
+     * 保存/创建文章草稿 (POST /v1/community/posts/create-draft)
+     * @param token 用户 Token
+     * @param baId 分区 ID (可为 0)
+     * @param title 草稿标题
+     * @param content 草稿内容
+     * @param contentType 1: 纯文本, 2: Markdown
+     * @param draftId 已有草稿 ID (更新草稿时传入，新草稿传 0)
+     * @param cb 回调
+     */
+    @SuppressWarnings("UnusedReturnValue")
+    public Call createDraft(String token, int baId, String title, String content, int contentType, long draftId, StringCallback cb) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("baId", baId);
+            json.put("title", title);
+            json.put("content", content);
+            json.put("contentType", contentType);
+            json.put("draftId", draftId);
+            return post("/v1/community/posts/create-draft", token, json.toString(), cb);
+        } catch (Exception e) {
+            cb.onError(e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 获取文章草稿信息 (POST /v1/community/posts/get-draft)
+     * @param token 用户 Token
+     * @param baId 分区 ID (一般为 0)
+     * @param draftId 草稿 ID
+     * @param cb 回调
+     */
+    @SuppressWarnings("UnusedReturnValue")
+    public Call getDraft(String token, int baId, long draftId, StringCallback cb) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("baId", baId);
+            json.put("draftId", draftId);
+            return post("/v1/community/posts/get-draft", token, json.toString(), cb);
+        } catch (Exception e) {
+            cb.onError(e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 删除文章草稿 (POST /v1/community/posts/cancel-draft)
+     * @param token 用户 Token
+     * @param draftId 草稿 ID
+     * @param cb 回调
+     */
+    @SuppressWarnings("UnusedReturnValue")
+    public Call cancelDraft(String token, long draftId, SimpleCallback cb) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("draftId", draftId);
+            simplePost("/v1/community/posts/cancel-draft", token, json.toString(), cb);
+        } catch (Exception e) {
+            cb.onError(e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * 删除文章 (POST /v1/community/posts/delete)
+     * @param token 用户 Token
+     * @param postId 文章 ID
+     * @param cb 回调
+     */
+    @SuppressWarnings("UnusedReturnValue")
+    public Call deletePost(String token, long postId, SimpleCallback cb) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("postId", postId);
+            json.put("id", postId);
+            simplePost("/v1/community/posts/delete", token, json.toString(), cb);
+        } catch (Exception e) {
+            cb.onError(e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * 编辑文章 (POST /v1/community/posts/edit)
+     * @param token 用户 Token
+     * @param postId 文章 ID
+     * @param title 文章标题
+     * @param content 文章内容
+     * @param contentType 1: 纯文本, 2: Markdown
+     * @param cb 回调
+     */
+    @SuppressWarnings("UnusedReturnValue")
+    public Call editPost(String token, long postId, String title, String content, int contentType, StringCallback cb) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("postId", postId);
+            json.put("id", postId);
+            json.put("title", title);
+            json.put("content", content);
+            json.put("contentType", contentType);
+            return post("/v1/community/posts/edit", token, json.toString(), cb);
+        } catch (Exception e) {
+            cb.onError(e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 置顶/取消置顶文章 (POST /v1/community/posts/edit-sticky)
+     * @param token 用户 Token
+     * @param postId 文章 ID
+     * @param cb 回调
+     */
+    @SuppressWarnings("UnusedReturnValue")
+    public Call editSticky(String token, long postId, SimpleCallback cb) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("postId", postId);
+            json.put("id", postId);
+            simplePost("/v1/community/posts/edit-sticky", token, json.toString(), cb);
+        } catch (Exception e) {
+            cb.onError(e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * 移动文章到其他板块 (POST /v1/community/posts/move)
+     * @param token 用户 Token
+     * @param postId 文章 ID
+     * @param targetBaId 目标板块 ID
+     * @param cb 回调
+     */
+    @SuppressWarnings("UnusedReturnValue")
+    public Call movePost(String token, long postId, int targetBaId, SimpleCallback cb) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("postId", postId);
+            json.put("id", postId);
+            json.put("baId", targetBaId);
+            simplePost("/v1/community/posts/move", token, json.toString(), new SimpleCallback() {
+                @Override
+                public void onSuccess() {
+                    cb.onSuccess();
+                }
+
+                @Override
+                public void onError(String msg) {
+                    // Fallback to move-post endpoint if move is not recognized
+                    simplePost("/v1/community/posts/move-post", token, json.toString(), new SimpleCallback() {
+                        @Override
+                        public void onSuccess() {
+                            cb.onSuccess();
+                        }
+
+                        @Override
+                        public void onError(String msg2) {
+                            cb.onError(msg != null ? msg : msg2);
+                        }
+                    });
+                }
+            });
+        } catch (Exception e) {
+            cb.onError(e.getMessage());
+        }
+        return null;
+    }
+
     // ==================== 文章列表获取 API ====================
 
     /** 获取文章列表（POST /v1/community/posts/post-list） */

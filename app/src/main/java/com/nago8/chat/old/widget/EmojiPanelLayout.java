@@ -88,9 +88,10 @@ public class EmojiPanelLayout extends LinearLayout {
     private ValueAnimator heightAnimator;
     private int touchSlop;
     private VelocityTracker velocityTracker;
-    private float lastTouchRawY;
     private float touchDownRawX;
     private float touchDownRawY;
+    private float dragInitialRawY;
+    private int dragInitialHeight = 0;
     private long touchDownTime;
     private boolean isPanelDragging = false;
     private boolean isDraggingFromHandle = false;
@@ -204,14 +205,26 @@ public class EmojiPanelLayout extends LinearLayout {
     }
 
     @Override
+    public void requestDisallowInterceptTouchEvent(boolean disallowIntercept) {
+        int curH = getHeight() > 0 ? getHeight() : (getLayoutParams() != null ? getLayoutParams().height : minHeightPx);
+        int maxH = getMaxHeightPx();
+        // 如果正在拖拽，或手指在把手上，或面板尚未完全展开，禁止子列表抢夺拦截
+        if (isPanelDragging || isDraggingFromHandle || curH < maxH) {
+            return;
+        }
+        super.requestDisallowInterceptTouchEvent(disallowIntercept);
+    }
+
+    @Override
     public boolean onInterceptTouchEvent(MotionEvent ev) {
         int action = ev.getActionMasked();
         switch (action) {
             case MotionEvent.ACTION_DOWN:
                 touchDownRawX = ev.getRawX();
                 touchDownRawY = ev.getRawY();
-                lastTouchRawY = ev.getRawY();
+                dragInitialRawY = ev.getRawY();
                 touchDownTime = System.currentTimeMillis();
+                dragInitialHeight = getHeight() > 0 ? getHeight() : (getLayoutParams() != null ? getLayoutParams().height : minHeightPx);
                 isPanelDragging = false;
 
                 int handleH = (layoutDragHandle != null && layoutDragHandle.getHeight() > 0)
@@ -236,27 +249,29 @@ public class EmojiPanelLayout extends LinearLayout {
                 float dx = ev.getRawX() - touchDownRawX;
                 float dy = ev.getRawY() - touchDownRawY;
 
-                // 水平滑动切换 Tab 时不拦截
+                // 水平滑动切换 Tab / Page 时不拦截
                 if (Math.abs(dx) > Math.abs(dy)) {
                     return false;
                 }
 
                 if (Math.abs(dy) > touchSlop) {
-                    int curH = getHeight();
+                    int curH = getHeight() > 0 ? getHeight() : dragInitialHeight;
                     int maxH = getMaxHeightPx();
                     int minH = minHeightPx;
 
                     // 1. 如果手指在顶部拖拽条上滑动，直接拦截接管拖拽
                     if (isDraggingFromHandle) {
                         isPanelDragging = true;
-                        lastTouchRawY = ev.getRawY();
+                        dragInitialHeight = curH;
+                        dragInitialRawY = ev.getRawY();
                         return true;
                     }
 
                     // 2. 面板未完全展开时，向上滑动（dy < 0）直接拦截并向上拉伸展开面板
                     if (dy < 0 && curH < maxH) {
                         isPanelDragging = true;
-                        lastTouchRawY = ev.getRawY();
+                        dragInitialHeight = curH;
+                        dragInitialRawY = ev.getRawY();
                         return true;
                     }
 
@@ -265,7 +280,8 @@ public class EmojiPanelLayout extends LinearLayout {
                         RecyclerView rv = getCurrentPageRecyclerView();
                         if (rv == null || !rv.canScrollVertically(-1)) {
                             isPanelDragging = true;
-                            lastTouchRawY = ev.getRawY();
+                            dragInitialHeight = curH;
+                            dragInitialRawY = ev.getRawY();
                             return true;
                         }
                     }
@@ -292,8 +308,9 @@ public class EmojiPanelLayout extends LinearLayout {
             case MotionEvent.ACTION_DOWN:
                 touchDownRawX = ev.getRawX();
                 touchDownRawY = ev.getRawY();
-                lastTouchRawY = ev.getRawY();
+                dragInitialRawY = ev.getRawY();
                 touchDownTime = System.currentTimeMillis();
+                dragInitialHeight = getHeight() > 0 ? getHeight() : (getLayoutParams() != null ? getLayoutParams().height : minHeightPx);
                 isPanelDragging = false;
                 int handleH = (layoutDragHandle != null && layoutDragHandle.getHeight() > 0)
                         ? layoutDragHandle.getHeight() : dp(30);
@@ -306,26 +323,30 @@ public class EmojiPanelLayout extends LinearLayout {
 
             case MotionEvent.ACTION_MOVE:
                 float rawY = ev.getRawY();
-                float frameDy = rawY - lastTouchRawY;
-                lastTouchRawY = rawY;
-
                 if (!isPanelDragging) {
                     float totalDy = rawY - touchDownRawY;
-                    if (Math.abs(totalDy) > touchSlop) {
+                    float totalDx = ev.getRawX() - touchDownRawX;
+                    if (Math.abs(totalDy) > touchSlop && Math.abs(totalDy) > Math.abs(totalDx)) {
                         isPanelDragging = true;
+                        dragInitialHeight = getHeight() > 0 ? getHeight() : (getLayoutParams() != null ? getLayoutParams().height : minHeightPx);
+                        dragInitialRawY = rawY;
                     }
                 }
 
                 if (isPanelDragging) {
-                    int curH = getHeight();
+                    float deltaY = dragInitialRawY - rawY; // 向上拖拽 rawY变小，deltaY为正
+                    int targetH = (int) (dragInitialHeight + deltaY);
                     int maxH = getMaxHeightPx();
                     int minH = minHeightPx;
 
-                    // 帧增量平滑物理位移：手指向上 (frameDy < 0) 高度增加；手指向下 (frameDy > 0) 高度减小
-                    int targetH = curH - (int) frameDy;
                     int clampedH = Math.max(minH, Math.min(maxH, targetH));
-                    if (clampedH != curH) {
-                        setPanelHeight(clampedH);
+                    setPanelHeight(clampedH);
+
+                    // 越界时调整基准点 dragInitialRawY，实现反向滑动零死区即时响应，且绝不破坏原始基准
+                    if (targetH > maxH) {
+                        dragInitialRawY = rawY + (maxH - dragInitialHeight);
+                    } else if (targetH < minH) {
+                        dragInitialRawY = rawY + (minH - dragInitialHeight);
                     }
                     return true;
                 }
@@ -342,18 +363,18 @@ public class EmojiPanelLayout extends LinearLayout {
                 if (isDraggingFromHandle && totalMoved < touchSlop && duration < 300) {
                     toggleExpand();
                 } else if (isPanelDragging) {
-                    int curH = getHeight();
+                    int curH = getHeight() > 0 ? getHeight() : (getLayoutParams() != null ? getLayoutParams().height : minHeightPx);
                     int maxH = getMaxHeightPx();
                     int minH = minHeightPx;
 
-                    if (vy < -1500) {
+                    if (vy < -1200) {
                         // 快速向上猛甩：平滑展开至最大高度
                         animateToHeight(maxH);
-                    } else if (vy > 1500) {
+                    } else if (vy > 1200) {
                         // 快速向下猛甩：平滑收缩至默认高度
                         animateToHeight(minH);
                     } else {
-                        // 随心所欲自由悬停：松手直接停留在当前任意高度，超出安全边界才回弹
+                        // 随心所欲自由悬停：松手停在当前任意高度，超出安全边界才回弹
                         if (curH < minH) {
                             animateToHeight(minH);
                         } else if (curH > maxH) {
@@ -368,7 +389,7 @@ public class EmojiPanelLayout extends LinearLayout {
 
             case MotionEvent.ACTION_CANCEL:
                 if (isPanelDragging) {
-                    int curH = getHeight();
+                    int curH = getHeight() > 0 ? getHeight() : (getLayoutParams() != null ? getLayoutParams().height : minHeightPx);
                     int maxH = getMaxHeightPx();
                     int minH = minHeightPx;
                     if (curH < minH) {
@@ -400,7 +421,7 @@ public class EmojiPanelLayout extends LinearLayout {
     // ======================================================================================
 
     /**
-     * 计算面板可拉伸的最大高度（恰好使聊天输入框触碰顶栏底部）
+     * 精确计算面板可拉伸的最大高度（恰好使聊天输入框触碰顶栏/上传进度条底部，且底栏严密贴合屏幕底缘不溢出）
      */
     public int getMaxHeightPx() {
         Context context = getContext();
@@ -409,25 +430,38 @@ public class EmojiPanelLayout extends LinearLayout {
             View contentView = activity.findViewById(android.R.id.content);
             if (contentView != null && contentView.getHeight() > 0) {
                 View topBar = activity.findViewById(R.id.topBar);
-                int topBarH = (topBar != null && topBar.getHeight() > 0) ? topBar.getHeight() : dp(56);
-
-                View chatInputBar = activity.findViewById(R.id.chatInputBar);
-                int otherInputH = dp(56);
-                if (chatInputBar instanceof ViewGroup) {
-                    ViewGroup inputGroup = (ViewGroup) chatInputBar;
-                    int curPanelH = (getVisibility() == VISIBLE) ? getHeight() : 0;
-                    if (inputGroup.getHeight() > curPanelH) {
-                        otherInputH = inputGroup.getHeight() - curPanelH;
-                    }
+                View uploadProgress = activity.findViewById(R.id.layoutUploadProgress);
+                int topBoundary;
+                if (uploadProgress != null && uploadProgress.getVisibility() == VISIBLE && uploadProgress.getBottom() > 0) {
+                    topBoundary = uploadProgress.getBottom();
+                } else if (topBar != null && topBar.getBottom() > 0) {
+                    topBoundary = topBar.getBottom();
+                } else {
+                    int topBarH = (topBar != null && topBar.getHeight() > 0) ? topBar.getHeight() : dp(56);
+                    int uploadH = (uploadProgress != null && uploadProgress.getVisibility() == VISIBLE)
+                            ? (uploadProgress.getHeight() > 0 ? uploadProgress.getHeight() : dp(32)) : 0;
+                    topBoundary = topBarH + uploadH;
                 }
-                int calculatedMax = contentView.getHeight() - topBarH - otherInputH;
+
+                int nonPanelH = dp(56);
+                View chatInputBar = activity.findViewById(R.id.chatInputBar);
+                if (chatInputBar instanceof com.nago8.chat.old.components.ChatInputBar) {
+                    nonPanelH = ((com.nago8.chat.old.components.ChatInputBar) chatInputBar).getNonPanelHeight();
+                } else if (chatInputBar instanceof ViewGroup) {
+                    ViewGroup inputGroup = (ViewGroup) chatInputBar;
+                    nonPanelH = inputGroup.getPaddingTop() + inputGroup.getPaddingBottom();
+                    View inputRow = inputGroup.findViewById(R.id.layoutInputRow);
+                    nonPanelH += (inputRow != null && inputRow.getHeight() > 0) ? inputRow.getHeight() : dp(56);
+                }
+
+                int calculatedMax = contentView.getHeight() - topBoundary - nonPanelH;
                 if (calculatedMax > minHeightPx) {
                     return calculatedMax;
                 }
             }
         }
         int screenHeight = context.getResources().getDisplayMetrics().heightPixels;
-        return Math.max(minHeightPx + dp(120), screenHeight - dp(120));
+        return Math.max(minHeightPx, screenHeight - dp(184));
     }
 
     public int getMinHeightPx() {
@@ -894,7 +928,7 @@ public class EmojiPanelLayout extends LinearLayout {
 
     public void toggleExpand() {
         int maxH = getMaxHeightPx();
-        int curH = getHeight();
+        int curH = getHeight() > 0 ? getHeight() : (getLayoutParams() != null ? getLayoutParams().height : minHeightPx);
         int mid = minHeightPx + (maxH - minHeightPx) / 2;
         animateToHeight(curH >= mid ? minHeightPx : maxH);
     }
@@ -903,7 +937,7 @@ public class EmojiPanelLayout extends LinearLayout {
         if (heightAnimator != null && heightAnimator.isRunning()) {
             heightAnimator.cancel();
         }
-        int curH = getHeight();
+        int curH = getHeight() > 0 ? getHeight() : (getLayoutParams() != null ? getLayoutParams().height : minHeightPx);
         if (curH == targetH) return;
         heightAnimator = ValueAnimator.ofInt(curH, targetH);
         heightAnimator.setDuration(260);
@@ -917,9 +951,13 @@ public class EmojiPanelLayout extends LinearLayout {
 
     public void setPanelHeight(int height) {
         ViewGroup.LayoutParams lp = getLayoutParams();
-        if (lp != null && lp.height != height) {
-            lp.height = height;
-            setLayoutParams(lp);
+        if (lp != null) {
+            if (lp.height != height) {
+                lp.height = height;
+                setLayoutParams(lp);
+            }
+        } else {
+            setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height));
         }
     }
 

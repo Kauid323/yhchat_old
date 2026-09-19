@@ -15,6 +15,15 @@ public class App extends Application {
     @Override
     public void onCreate() {
         super.onCreate();
+        try {
+            com.bumptech.glide.Glide.get(this).getRegistry().replace(
+                    com.bumptech.glide.load.model.GlideUrl.class,
+                    java.io.InputStream.class,
+                    new com.nago8.chat.old.net.OkHttpUrlLoader.Factory(com.nago8.chat.old.net.ApiClient.getClient())
+            );
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         com.nago8.chat.old.utils.PrefUtils.applyDarkMode(this);
         androidx.appcompat.app.AppCompatDelegate.setCompatVectorFromResourcesEnabled(true);
         registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks() {

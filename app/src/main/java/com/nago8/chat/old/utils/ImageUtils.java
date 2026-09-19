@@ -147,10 +147,6 @@ public class ImageUtils {
         }
 
         String finalUrl = appendQiniuParam(url.trim(), reqWidth, reqHeight);
-        if (Build.VERSION.SDK_INT < 21 && finalUrl.startsWith("https://")) {
-            finalUrl = "http://" + finalUrl.substring(8);
-        }
-
         try {
             GlideUrl glideUrl;
             if (finalUrl.contains(".jwznb.com")) {
@@ -193,23 +189,15 @@ public class ImageUtils {
 
         String finalUrl = appendQiniuParam(trimmedUrl, 120, 120);
 
-        // 兼容 Android 4.x (SDK < 21) 系统 SSL/TLS 协议低版本导致的 HTTPS 握手失败
-        if (Build.VERSION.SDK_INT < 21 && finalUrl.startsWith("https://")) {
-            finalUrl = "http://" + finalUrl.substring(8);
-        }
-
-        final String cacheKeyUrl = finalUrl;
-        final String rawUrl = trimmedUrl;
-
         try {
             GlideUrl glideUrl;
-            if (cacheKeyUrl.contains(".jwznb.com")) {
-                glideUrl = new GlideUrl(cacheKeyUrl, new LazyHeaders.Builder()
+            if (finalUrl.contains(".jwznb.com")) {
+                glideUrl = new GlideUrl(finalUrl, new LazyHeaders.Builder()
                         .addHeader("Referer", "https://myapp.jwznb.com")
                         .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36")
                         .build());
             } else {
-                glideUrl = new GlideUrl(cacheKeyUrl);
+                glideUrl = new GlideUrl(finalUrl);
             }
 
             Glide.with(context)
@@ -220,65 +208,8 @@ public class ImageUtils {
                     .error(android.R.drawable.ic_menu_report_image)
                     .diskCacheStrategy(DiskCacheStrategy.ALL)
                     .circleCrop()
-                    .listener(new RequestListener<Bitmap>() {
-                        @Override
-                        public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Bitmap> target, boolean isFirstResource) {
-                            fetchAvatarWithOkHttp(context, cacheKeyUrl, rawUrl, imageView);
-                            return false;
-                        }
-
-                        @Override
-                        public boolean onResourceReady(Bitmap resource, Object model, Target<Bitmap> target, DataSource dataSource, boolean isFirstResource) {
-                            return false;
-                        }
-                    })
                     .into(imageView);
-        } catch (Exception e) {
-            fetchAvatarWithOkHttp(context, cacheKeyUrl, rawUrl, imageView);
-        }
-    }
-
-    private static void fetchAvatarWithOkHttp(Context context, String cacheKeyUrl, String targetUrl, ImageView imageView) {
-        if (context == null || imageView == null || targetUrl == null || targetUrl.trim().isEmpty()) return;
-        getAvatarExecutor(context.getApplicationContext()).execute(() -> {
-            try {
-                String primaryUrl = (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")) ? targetUrl : cacheKeyUrl;
-                Request request = new Request.Builder()
-                        .url(primaryUrl)
-                        .header("Referer", "https://myapp.jwznb.com")
-                        .header("User-Agent", "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36")
-                        .build();
-                Response response = ApiClient.getClient().newCall(request).execute();
-                if (!response.isSuccessful() && !primaryUrl.equals(cacheKeyUrl)) {
-                    request = new Request.Builder()
-                            .url(cacheKeyUrl)
-                            .header("Referer", "https://myapp.jwznb.com")
-                            .header("User-Agent", "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36")
-                            .build();
-                    response = ApiClient.getClient().newCall(request).execute();
-                }
-                if (response.isSuccessful() && response.body() != null) {
-                    byte[] bytes = response.body().bytes();
-                    if (bytes != null && bytes.length > 64) {
-                        new Handler(Looper.getMainLooper()).post(() -> {
-                            try {
-                                Object checkTag = imageView.getTag(R.id.ivAvatar);
-                                if (checkTag != null && checkTag.equals(targetUrl)) {
-                                    Glide.with(context)
-                                            .asBitmap()
-                                            .load(bytes)
-                                            .override(120, 120)
-                                            .placeholder(android.R.drawable.ic_menu_gallery)
-                                            .error(android.R.drawable.ic_menu_report_image)
-                                            .circleCrop()
-                                            .into(imageView);
-                                }
-                            } catch (Exception ignored) {}
-                        });
-                    }
-                }
-            } catch (Exception ignored) {}
-        });
+        } catch (Exception ignored) {}
     }
 
     public static void loadSticker(Context context, String url, ImageView imageView) {
@@ -305,11 +236,7 @@ public class ImageUtils {
         int targetWidth = reqWidth > 0 ? reqWidth : 120;
         int targetHeight = reqHeight > 0 ? reqHeight : 120;
         String finalUrl = appendQiniuParam(trimmedUrl, targetWidth, targetHeight);
-        if (Build.VERSION.SDK_INT < 21 && finalUrl.startsWith("https://")) {
-            finalUrl = "http://" + finalUrl.substring(8);
-        }
 
-        final String cacheKeyUrl = finalUrl;
         final String rawUrl = trimmedUrl;
 
         Object currentTag = imageView.getTag(R.id.ivSticker);
@@ -318,12 +245,16 @@ public class ImageUtils {
         }
         imageView.setTag(R.id.ivSticker, rawUrl);
 
-        // 直接使用 Glide 异步磁盘与内存缓存调度（命中内存缓存时 0 延时瞬时渲染，无需主线程磁盘I/O）
         try {
-            GlideUrl glideUrl = new GlideUrl(cacheKeyUrl, new LazyHeaders.Builder()
-                    .addHeader("Referer", "https://myapp.jwznb.com")
-                    .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36")
-                    .build());
+            GlideUrl glideUrl;
+            if (finalUrl.contains(".jwznb.com")) {
+                glideUrl = new GlideUrl(finalUrl, new LazyHeaders.Builder()
+                        .addHeader("Referer", "https://myapp.jwznb.com")
+                        .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36")
+                        .build());
+            } else {
+                glideUrl = new GlideUrl(finalUrl);
+            }
 
             Glide.with(context)
                     .load(glideUrl)
@@ -332,68 +263,7 @@ public class ImageUtils {
                     .error(R.drawable.ic_image)
                     .diskCacheStrategy(DiskCacheStrategy.ALL)
                     .dontAnimate()
-                    .listener(new RequestListener<Drawable>() {
-                        @Override
-                        public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Drawable> target, boolean isFirstResource) {
-                            fetchStickerWithOkHttp(context, cacheKeyUrl, rawUrl, imageView, targetWidth, targetHeight);
-                            return false;
-                        }
-
-                        @Override
-                        public boolean onResourceReady(Drawable resource, Object model, Target<Drawable> target, DataSource dataSource, boolean isFirstResource) {
-                            return false;
-                        }
-                    })
                     .into(imageView);
-        } catch (Exception e) {
-            fetchStickerWithOkHttp(context, cacheKeyUrl, rawUrl, imageView, targetWidth, targetHeight);
-        }
-    }
-
-    private static void fetchStickerWithOkHttp(Context context, String cacheKeyUrl, String targetUrl, ImageView imageView, int targetWidth, int targetHeight) {
-        if (context == null || imageView == null || targetUrl == null || targetUrl.trim().isEmpty()) return;
-        getAvatarExecutor(context.getApplicationContext()).execute(() -> {
-            try {
-                String primaryUrl = (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")) ? targetUrl : cacheKeyUrl;
-                Request request = new Request.Builder()
-                        .url(primaryUrl)
-                        .header("Referer", "https://myapp.jwznb.com")
-                        .header("User-Agent", "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36")
-                        .build();
-                Response response = ApiClient.getClient().newCall(request).execute();
-                if (!response.isSuccessful() && !primaryUrl.equals(cacheKeyUrl)) {
-                    request = new Request.Builder()
-                            .url(cacheKeyUrl)
-                            .header("Referer", "https://myapp.jwznb.com")
-                            .header("User-Agent", "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36")
-                            .build();
-                    response = ApiClient.getClient().newCall(request).execute();
-                }
-                if (response.isSuccessful() && response.body() != null) {
-                    byte[] bytes = response.body().bytes();
-                    if (bytes != null && bytes.length > 64) {
-                        String head = new String(bytes, 0, Math.min(bytes.length, 64)).toLowerCase();
-                        if (head.contains("html") || head.contains("xml") || head.contains("error") || head.contains("denied")) {
-                            return;
-                        }
-                        StickerCache.saveStickerBytes(context, cacheKeyUrl, bytes);
-                        new Handler(Looper.getMainLooper()).post(() -> {
-                            try {
-                                Object checkTag = imageView.getTag(R.id.ivSticker);
-                                if (checkTag != null && checkTag.equals(targetUrl)) {
-                                    Glide.with(context)
-                                            .load(bytes)
-                                            .override(targetWidth, targetHeight)
-                                            .placeholder(R.drawable.ic_image)
-                                            .error(R.drawable.ic_image)
-                                            .diskCacheStrategy(DiskCacheStrategy.NONE)
-                                            .into(imageView);
-                                }
-                            } catch (Exception ignored) {}
-                        });
-                    }
-                }
-            } catch (Exception ignored) {}
-        });
+        } catch (Exception ignored) {}
     }
 }

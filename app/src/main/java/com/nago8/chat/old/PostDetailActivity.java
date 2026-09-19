@@ -23,6 +23,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.AppCompatButton;
+import androidx.appcompat.widget.AppCompatImageButton;
 import androidx.appcompat.widget.AppCompatImageView;
 import android.content.res.ColorStateList;
 
@@ -102,6 +103,14 @@ public class PostDetailActivity extends AppCompatActivity {
     // replyTarget: 0 = top-level comment, >0 = reply to this commentId
     private long replyTargetCommentId = 0;
     private String replyHint = "";
+
+    private String currentRawTitle = "";
+    private String currentRawContent = "";
+    private int currentContentType = 1;
+    private int isSticky = 0;
+    private AppCompatImageButton btnMore;
+    private static final int REQUEST_CODE_EDIT_POST = 1001;
+    private static final int REQUEST_CODE_MOVE_POST = 1002;
 
     private SwipeRefreshLayout swipeRefreshLayout;
     private CommunityRepository communityRepo;
@@ -188,8 +197,12 @@ public class PostDetailActivity extends AppCompatActivity {
             });
         }
 
-        // Back
+        // Back & More
         findViewById(R.id.btnBack).setOnClickListener(v -> onBackPressed());
+        btnMore = findViewById(R.id.btnMore);
+        if (btnMore != null) {
+            btnMore.setOnClickListener(this::showMorePopupMenu);
+        }
 
         // Author block
         authorBlock.setOnClickListener(v -> {
@@ -449,6 +462,11 @@ public class PostDetailActivity extends AppCompatActivity {
         String createTimeText = getJsonString(post, "createTimeText");
         String content = getJsonString(post, "content");
         int contentType = getJsonInt(post, "contentType", 1);
+
+        currentRawTitle = title;
+        currentRawContent = content;
+        currentContentType = contentType;
+        isSticky = getJsonIntOrString(post, "isSticky");
 
         // Interaction state from API
         isLiked = getJsonIntOrString(post, "isLiked") == 1;
@@ -1167,6 +1185,174 @@ public class PostDetailActivity extends AppCompatActivity {
                 return Integer.parseInt(obj.get(key).getAsString());
             } catch (Exception e2) {
                 return 0;
+            }
+        }
+    }
+
+    // ==================== More Dropmenu Actions ====================
+
+    private void showMorePopupMenu(View anchor) {
+        androidx.appcompat.widget.PopupMenu popup = new androidx.appcompat.widget.PopupMenu(this, anchor);
+        final int MENU_COPY_RAW = 1;
+        final int MENU_EDIT = 2;
+        final int MENU_DELETE = 3;
+        final int MENU_MOVE = 4;
+        final int MENU_STICKY = 5;
+
+        popup.getMenu().add(0, MENU_COPY_RAW, 0, R.string.post_action_copy_raw);
+        popup.getMenu().add(0, MENU_EDIT, 1, R.string.post_action_edit);
+        popup.getMenu().add(0, MENU_DELETE, 2, R.string.post_action_delete);
+        popup.getMenu().add(0, MENU_MOVE, 3, R.string.post_action_move);
+        popup.getMenu().add(0, MENU_STICKY, 4, isSticky > 0 ? R.string.post_action_unpin : R.string.post_action_pin);
+
+        popup.setOnMenuItemClickListener(item -> {
+            int id = item.getItemId();
+            if (id == MENU_COPY_RAW) {
+                copyRawContent();
+                return true;
+            } else if (id == MENU_EDIT) {
+                editCurrentPost();
+                return true;
+            } else if (id == MENU_DELETE) {
+                confirmDeletePost();
+                return true;
+            } else if (id == MENU_MOVE) {
+                moveCurrentPost();
+                return true;
+            } else if (id == MENU_STICKY) {
+                toggleSticky();
+                return true;
+            }
+            return false;
+        });
+
+        popup.show();
+    }
+
+    private void copyRawContent() {
+        if (TextUtils.isEmpty(currentRawContent)) {
+            Toast.makeText(this, R.string.empty_content, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        android.content.ClipboardManager clipboard = (android.content.ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        if (clipboard != null) {
+            android.content.ClipData clip = android.content.ClipData.newPlainText("Post Content", currentRawContent);
+            clipboard.setPrimaryClip(clip);
+            Toast.makeText(this, R.string.post_content_copied, Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void editCurrentPost() {
+        if (postId <= 0) return;
+        Intent intent = new Intent(this, CreatePostActivity.class);
+        intent.putExtra(CreatePostActivity.EXTRA_POST_ID, postId);
+        intent.putExtra(CreatePostActivity.EXTRA_INITIAL_TITLE, currentRawTitle);
+        intent.putExtra(CreatePostActivity.EXTRA_INITIAL_CONTENT, currentRawContent);
+        intent.putExtra(CreatePostActivity.EXTRA_INITIAL_CONTENT_TYPE, currentContentType);
+        intent.putExtra(CreatePostActivity.EXTRA_BA_ID, baId);
+        intent.putExtra(CreatePostActivity.EXTRA_BA_NAME, baName);
+        startActivityForResult(intent, REQUEST_CODE_EDIT_POST);
+    }
+
+    private void confirmDeletePost() {
+        if (postId <= 0) return;
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.post_delete_confirm_title)
+                .setMessage(R.string.post_delete_confirm_msg)
+                .setPositiveButton(R.string.delete, (dialog, which) -> executeDeletePost())
+                .setNegativeButton(R.string.cancel, null)
+                .show();
+    }
+
+    private void executeDeletePost() {
+        String token = PrefUtils.getToken(this);
+        if (TextUtils.isEmpty(token)) {
+            Toast.makeText(this, R.string.not_logged_in, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        progressBar.setVisibility(View.VISIBLE);
+        communityRepo.deletePost(token, postId, new CommunityRepository.SimpleCallback() {
+            @Override
+            public void onSuccess() {
+                runOnUiThread(() -> {
+                    progressBar.setVisibility(View.GONE);
+                    Toast.makeText(PostDetailActivity.this, R.string.post_deleted_success, Toast.LENGTH_SHORT).show();
+                    setResult(RESULT_OK);
+                    finish();
+                });
+            }
+
+            @Override
+            public void onError(String msg) {
+                runOnUiThread(() -> {
+                    progressBar.setVisibility(View.GONE);
+                    String err = !TextUtils.isEmpty(msg) ? msg : getString(R.string.operation_failed);
+                    Toast.makeText(PostDetailActivity.this, getString(R.string.post_delete_failed, err), Toast.LENGTH_SHORT).show();
+                });
+            }
+        });
+    }
+
+    private void moveCurrentPost() {
+        if (postId <= 0) return;
+        Intent intent = new Intent(this, MovePostActivity.class);
+        intent.putExtra(MovePostActivity.EXTRA_POST_ID, postId);
+        intent.putExtra(MovePostActivity.EXTRA_CURRENT_BA_ID, baId);
+        intent.putExtra(MovePostActivity.EXTRA_CURRENT_BA_NAME, baName);
+        startActivityForResult(intent, REQUEST_CODE_MOVE_POST);
+    }
+
+    private void toggleSticky() {
+        if (postId <= 0) return;
+        String token = PrefUtils.getToken(this);
+        if (TextUtils.isEmpty(token)) {
+            Toast.makeText(this, R.string.not_logged_in, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        progressBar.setVisibility(View.VISIBLE);
+        communityRepo.editSticky(token, postId, new CommunityRepository.SimpleCallback() {
+            @Override
+            public void onSuccess() {
+                runOnUiThread(() -> {
+                    progressBar.setVisibility(View.GONE);
+                    isSticky = (isSticky > 0) ? 0 : 1;
+                    Toast.makeText(PostDetailActivity.this, (isSticky > 0 ? R.string.post_pin_success : R.string.post_unpin_success), Toast.LENGTH_SHORT).show();
+                    fetchPostDetail(String.valueOf(postId));
+                });
+            }
+
+            @Override
+            public void onError(String msg) {
+                runOnUiThread(() -> {
+                    progressBar.setVisibility(View.GONE);
+                    String err = !TextUtils.isEmpty(msg) ? msg : getString(R.string.operation_failed);
+                    Toast.makeText(PostDetailActivity.this, getString(R.string.post_pin_failed, err), Toast.LENGTH_SHORT).show();
+                });
+            }
+        });
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (resultCode == RESULT_OK) {
+            if (requestCode == REQUEST_CODE_EDIT_POST) {
+                if (postId > 0) {
+                    fetchPostDetail(String.valueOf(postId));
+                }
+            } else if (requestCode == REQUEST_CODE_MOVE_POST) {
+                if (data != null) {
+                    int newBaId = data.getIntExtra(MovePostActivity.EXTRA_NEW_BA_ID, 0);
+                    String newBaName = data.getStringExtra(MovePostActivity.EXTRA_NEW_BA_NAME);
+                    if (newBaId > 0) baId = newBaId;
+                    if (!TextUtils.isEmpty(newBaName)) {
+                        baName = newBaName;
+                        if (tvToolbarTitle != null) tvToolbarTitle.setText(baName);
+                    }
+                }
+                if (postId > 0) {
+                    fetchPostDetail(String.valueOf(postId));
+                }
             }
         }
     }

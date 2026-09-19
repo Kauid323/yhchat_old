@@ -78,6 +78,14 @@ public class ExpressionGridAdapter extends RecyclerView.Adapter<ExpressionGridAd
     }
 
     @Override
+    public void onViewRecycled(@NonNull ViewHolder holder) {
+        super.onViewRecycled(holder);
+        try {
+            com.bumptech.glide.Glide.with(context).clear(holder.ivSticker);
+        } catch (Exception ignored) {}
+    }
+
+    @Override
     public int getItemCount() {
         return items.size();
     }

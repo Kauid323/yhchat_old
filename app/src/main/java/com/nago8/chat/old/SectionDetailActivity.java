@@ -147,6 +147,16 @@ public class SectionDetailActivity extends AppCompatActivity {
         });
         btnFollow.setOnClickListener(v -> toggleFollowState());
 
+        FloatingActionButton fabCreatePost = findViewById(R.id.fabCreatePost);
+        if (fabCreatePost != null) {
+            fabCreatePost.setOnClickListener(v -> {
+                Intent intent = new Intent(SectionDetailActivity.this, CreatePostActivity.class);
+                intent.putExtra(CreatePostActivity.EXTRA_BA_ID, baId);
+                intent.putExtra(CreatePostActivity.EXTRA_BA_NAME, baName != null ? baName : (currentBaModel != null ? currentBaModel.getName() : ""));
+                startActivity(intent);
+            });
+        }
+
         fetchSectionInfo();
         loadPosts(true, false);
     }

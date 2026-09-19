@@ -92,6 +92,10 @@
         <activity android:name=".GroupMembersActivity" />
         <activity android:name=".SectionDetailActivity" />
         <activity android:name=".SectionInfoActivity" />
+        <activity
+            android:name=".CreatePostActivity"
+            android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".MovePostActivity" />
         <activity android:name=".ArchivedConversationsActivity" />
         <activity android:name=".FreeCopyActivity" />
         <activity android:name=".VoicePlaylistActivity" />

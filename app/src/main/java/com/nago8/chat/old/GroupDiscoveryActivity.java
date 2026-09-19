@@ -4,14 +4,13 @@ import android.content.Context;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.text.Editable;
+
 import android.text.TextUtils;
-import android.text.TextWatcher;
+
 import android.view.View;
-import android.view.inputmethod.EditorInfo;
+
 import android.view.inputmethod.InputMethodManager;
-import android.widget.EditText;
-import android.widget.ImageView;
+
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;

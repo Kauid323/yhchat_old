@@ -1,6 +1,7 @@
 package com.nago8.chat.old;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.os.Bundle;
@@ -19,6 +20,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.imageview.ShapeableImageView;
 import com.google.android.material.tabs.TabLayout;
 import com.nago8.chat.old.adapter.SectionGroupsAdapter;
@@ -113,7 +115,7 @@ public class SectionInfoActivity extends AppCompatActivity {
         ivBaAvatar.setOnClickListener(v -> {
             if (currentBaModel != null && currentBaModel.getAvatar() != null && !currentBaModel.getAvatar().trim().isEmpty()) {
                 android.content.Intent intent = new android.content.Intent(this, ImagePreviewActivity.class);
-                intent.putExtra(ImagePreviewActivity.EXTRA_IMAGE_URL, currentBaModel.getAvatar());
+                intent.putExtra(ImagePreviewActivity.EXTRA_IMAGE_URL, ImageUtils.appendQiniuParam(currentBaModel.getAvatar(), 800, 800));
                 startActivity(intent);
             }
         });
@@ -180,6 +182,17 @@ public class SectionInfoActivity extends AppCompatActivity {
         rvGroups.setAdapter(groupsAdapter);
 
         swipeRefreshGroups.setOnRefreshListener(this::fetchBoundGroups);
+
+        FloatingActionButton fabCreatePost = findViewById(R.id.fabCreatePost);
+        if (fabCreatePost != null) {
+            fabCreatePost.bringToFront();
+            fabCreatePost.setOnClickListener(v -> {
+                Intent intent = new Intent(SectionInfoActivity.this, CreatePostActivity.class);
+                intent.putExtra(CreatePostActivity.EXTRA_BA_ID, baId);
+                intent.putExtra(CreatePostActivity.EXTRA_BA_NAME, baName != null ? baName : (currentBaModel != null ? currentBaModel.getName() : ""));
+                startActivity(intent);
+            });
+        }
 
         fetchSectionInfo();
     }
@@ -269,7 +282,7 @@ public class SectionInfoActivity extends AppCompatActivity {
             ivCreatorAvatar.setOnClickListener(v -> {
                 if (baCreator != null && baCreator.getAvatarUrl() != null && !baCreator.getAvatarUrl().isEmpty()) {
                     android.content.Intent intent = new android.content.Intent(this, ImagePreviewActivity.class);
-                    intent.putExtra(ImagePreviewActivity.EXTRA_IMAGE_URL, baCreator.getAvatarUrl());
+                    intent.putExtra(ImagePreviewActivity.EXTRA_IMAGE_URL, ImageUtils.appendQiniuParam(baCreator.getAvatarUrl(), 800, 800));
                     startActivity(intent);
                 }
             });
@@ -324,7 +337,7 @@ public class SectionInfoActivity extends AppCompatActivity {
         iv.setOnClickListener(v -> {
             if (mgr.getAvatarUrl() != null && !mgr.getAvatarUrl().isEmpty()) {
                 android.content.Intent intent = new android.content.Intent(this, ImagePreviewActivity.class);
-                intent.putExtra(ImagePreviewActivity.EXTRA_IMAGE_URL, mgr.getAvatarUrl());
+                intent.putExtra(ImagePreviewActivity.EXTRA_IMAGE_URL, ImageUtils.appendQiniuParam(mgr.getAvatarUrl(), 800, 800));
                 startActivity(intent);
             }
         });

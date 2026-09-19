@@ -13,7 +13,7 @@ import javax.net.ssl.SSLSocketFactory;
  * For Android 4.0.x, it might still help if the system supports it.
  */
 public class Tls12SocketFactory extends SSLSocketFactory {
-    private static final String[] TLS_V12_ONLY = {"TLSv1.2"};
+    private static final String[] TLS_PROTOCOLS = {"TLSv1.2", "TLSv1.1", "TLSv1"};
 
     final SSLSocketFactory delegate;
 
@@ -58,7 +58,7 @@ public class Tls12SocketFactory extends SSLSocketFactory {
 
     private Socket patch(Socket socket) {
         if (socket instanceof SSLSocket) {
-            ((SSLSocket) socket).setEnabledProtocols(TLS_V12_ONLY);
+            ((SSLSocket) socket).setEnabledProtocols(TLS_PROTOCOLS);
         }
         return socket;
     }

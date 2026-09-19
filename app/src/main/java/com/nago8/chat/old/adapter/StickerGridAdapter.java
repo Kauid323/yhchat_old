@@ -88,6 +88,14 @@ public class StickerGridAdapter extends RecyclerView.Adapter<StickerGridAdapter.
     }
 
     @Override
+    public void onViewRecycled(@NonNull ViewHolder holder) {
+        super.onViewRecycled(holder);
+        try {
+            com.bumptech.glide.Glide.with(context).clear(holder.ivSticker);
+        } catch (Exception ignored) {}
+    }
+
+    @Override
     public int getItemCount() {
         return items.size();
     }

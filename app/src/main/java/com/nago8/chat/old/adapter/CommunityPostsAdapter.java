@@ -13,6 +13,7 @@ import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.nago8.chat.old.CreatePostActivity;
 import com.nago8.chat.old.PostDetailActivity;
 import com.nago8.chat.old.R;
 import com.nago8.chat.old.model.CommunityPostModel;
@@ -284,6 +285,11 @@ public class CommunityPostsAdapter extends RecyclerView.Adapter<RecyclerView.Vie
                     CommunityPostModel item = postList.get(realPos);
                     if (onPostClickListener != null) {
                         onPostClickListener.onPostClick(item);
+                    } else if (item.isDraft()) {
+                        Intent intent = new Intent(context, CreatePostActivity.class);
+                        intent.putExtra(CreatePostActivity.EXTRA_DRAFT_ID, item.getId());
+                        intent.putExtra(CreatePostActivity.EXTRA_BA_ID, item.getBaId());
+                        context.startActivity(intent);
                     } else {
                         Intent intent = new Intent(context, PostDetailActivity.class);
                         intent.putExtra(PostDetailActivity.EXTRA_POST_ID, String.valueOf(item.getId()));
@@ -300,7 +306,13 @@ public class CommunityPostsAdapter extends RecyclerView.Adapter<RecyclerView.Vie
 
             tvPostAuthorName.setText(item.getDisplayAuthorName());
             tvPostTime.setText(item.getCreateTimeText() != null ? item.getCreateTimeText() : "");
-            tvPostTitle.setText(item.getTitle() != null ? item.getTitle() : "");
+
+            if (item.isDraft()) {
+                String draftTag = "[" + context.getString(R.string.post_tag_draft) + "] ";
+                tvPostTitle.setText(draftTag + (item.getTitle() != null ? item.getTitle() : ""));
+            } else {
+                tvPostTitle.setText(item.getTitle() != null ? item.getTitle() : "");
+            }
             tvPostContent.setText(item.getContent() != null ? item.getContent() : "");
 
             tvLikeCount.setText(item.getLikeNumStr());

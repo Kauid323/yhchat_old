@@ -103,6 +103,13 @@ public class DiscoveryBotAdapter extends RecyclerView.Adapter<DiscoveryBotAdapte
         }
 
         ImageUtils.loadAvatar(context, item.avatarUrl, holder.ivBotAvatar);
+        holder.ivBotAvatar.setOnClickListener(v -> {
+            if (item.avatarUrl != null && !item.avatarUrl.trim().isEmpty()) {
+                Intent intent = new Intent(context, com.nago8.chat.old.ImagePreviewActivity.class);
+                intent.putExtra(com.nago8.chat.old.ImagePreviewActivity.EXTRA_IMAGE_URL, ImageUtils.appendQiniuParam(item.avatarUrl, 600, 600));
+                context.startActivity(intent);
+            }
+        });
 
         int themeColor = com.nago8.chat.old.utils.ThemeUtils.getThemeColor(context);
         float radiusPx = holder.itemView.getResources().getDisplayMetrics().density * 14;
@@ -156,6 +163,14 @@ public class DiscoveryBotAdapter extends RecyclerView.Adapter<DiscoveryBotAdapte
             intent.putExtra(BotProfileActivity.EXTRA_BOT_ID, item.chatId);
             context.startActivity(intent);
         });
+    }
+
+    @Override
+    public void onViewRecycled(@NonNull BotViewHolder holder) {
+        super.onViewRecycled(holder);
+        try {
+            com.bumptech.glide.Glide.with(context).clear(holder.ivBotAvatar);
+        } catch (Exception ignored) {}
     }
 
     @Override

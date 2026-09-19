@@ -127,7 +127,7 @@ public class GroupProfileActivity extends AppCompatActivity {
             ivAvatar.setOnClickListener(v -> {
                 if (currentGroup != null && currentGroup.avatar_url != null && !currentGroup.avatar_url.isEmpty()) {
                     Intent intent = new Intent(this, ImagePreviewActivity.class);
-                    intent.putExtra(ImagePreviewActivity.EXTRA_IMAGE_URL, currentGroup.avatar_url);
+                    intent.putExtra(ImagePreviewActivity.EXTRA_IMAGE_URL, com.nago8.chat.old.utils.ImageUtils.appendQiniuParam(currentGroup.avatar_url, 800, 800));
                     startActivity(intent);
                 }
             });

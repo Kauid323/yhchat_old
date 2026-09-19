@@ -639,6 +639,10 @@
     <string name="action_details">详情</string>
     <string name="action_close">关闭</string>
     <string name="action_ok">确定</string>
+    <string name="confirm">确定</string>
+    <string name="cancel">取消</string>
+    <string name="delete">删除</string>
+    <string name="empty_content">内容为空</string>
     <string name="action_share_image">分享图片</string>
     <string name="action_failed">操作失败</string>
     <string name="delete_failed">删除失败</string>
@@ -732,4 +736,64 @@
     <string name="chat_uploading_files_progress">正在上传文件 (%1$d/%2$d)</string>
     <string name="chat_uploading_videos_progress">正在上传视频 (%1$d/%2$d)</string>
     <string name="chat_upload_success">上传完成</string>
+
+    <!-- Create Post & Draft -->
+    <string name="create_post_title">发布文章</string>
+    <string name="create_post_title_edit_draft">编辑草稿</string>
+    <string name="create_post_title_hint">请输入文章标题</string>
+    <string name="create_post_content_hint_text">请输入文章内容...</string>
+    <string name="create_post_content_hint_markdown">请输入文章内容 (支持 Markdown 语法)...</string>
+    <string name="create_post_format_text">纯文本</string>
+    <string name="create_post_format_markdown">Markdown</string>
+    <string name="create_post_title_empty">文章标题不能为空</string>
+    <string name="create_post_content_empty">文章内容不能为空</string>
+    <string name="create_post_draft_empty_tip">草稿标题或内容不能为空</string>
+    <string name="create_post_section_invalid">无效的分区</string>
+    <string name="create_post_submitting">正在发布文章...</string>
+    <string name="create_post_saving_draft">正在保存草稿...</string>
+    <string name="create_post_loading_draft">正在加载草稿...</string>
+    <string name="create_post_success">文章发布成功</string>
+    <string name="create_post_draft_saved">草稿已保存</string>
+    <string name="create_post_draft_load_failed">获取草稿失败: %1$s</string>
+    <string name="create_post_save_draft_failed">保存草稿失败: %1$s</string>
+    <string name="create_post_failed_format">发布文章失败: %1$s</string>
+    <string name="create_post_target_format">发布至：%1$s</string>
+    <string name="create_post_word_count_format">%1$d 字</string>
+    <string name="post_tag_draft">草稿</string>
+    <string name="create_post_save_draft">存草稿</string>
+    <string name="action_create_post">发文章</string>
+    <string name="action_send_post">发送</string>
+    <string name="not_logged_in">请先登录</string>
+
+    <!-- Post Detail Dropmenu & Actions -->
+    <string name="post_action_copy_raw">复制原文</string>
+    <string name="post_action_edit">编辑</string>
+    <string name="post_action_delete">删除</string>
+    <string name="post_action_move">移动文章</string>
+    <string name="post_action_pin">置顶</string>
+    <string name="post_action_unpin">取消置顶</string>
+    <string name="post_content_copied">原文已复制到剪贴板</string>
+    <string name="post_delete_confirm_title">删除文章</string>
+    <string name="post_delete_confirm_msg">确定要删除这篇文章吗？删除后将无法恢复。</string>
+    <string name="post_deleting">正在删除文章...</string>
+    <string name="post_deleted_success">文章已删除</string>
+    <string name="post_delete_failed">删除文章失败: %1$s</string>
+    <string name="post_pin_success">文章已置顶</string>
+    <string name="post_unpin_success">已取消置顶</string>
+    <string name="post_pin_failed">置顶操作失败: %1$s</string>
+    <string name="create_post_title_edit_post">编辑文章</string>
+    <string name="create_post_edit_success">文章修改成功</string>
+    <string name="create_post_edit_failed">修改文章失败: %1$s</string>
+
+    <!-- Move Post -->
+    <string name="move_post_title">移动文章</string>
+    <string name="move_post_current_section">当前板块：%1$s</string>
+    <string name="move_post_select_target">选择目标板块 (已关注)</string>
+    <string name="move_post_empty_sections">暂无关注的板块</string>
+    <string name="move_post_confirm_title">移动文章确认</string>
+    <string name="move_post_confirm_msg">确定将文章移动至【%1$s】板块吗？</string>
+    <string name="move_post_already_in_section">文章已在该板块中</string>
+    <string name="move_post_moving">正在移动文章...</string>
+    <string name="move_post_success">文章已移动到【%1$s】</string>
+    <string name="move_post_failed">移动文章失败: %1$s</string>
 </resources>

@@ -78,6 +78,21 @@
             android:layout_gravity="center"
             android:visibility="gone" />
 
+        <!-- 发文章浮空按钮 -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/fabCreatePost"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="20dp"
+            android:contentDescription="@string/action_create_post"
+            app:backgroundTint="@color/app_primary"
+            app:elevation="6dp"
+            app:fabSize="normal"
+            app:pressedTranslationZ="12dp"
+            app:srcCompat="@drawable/ic_edit"
+            app:tint="@color/text_white" />
+
     </androidx.coordinatorlayout.widget.CoordinatorLayout>
 
 </LinearLayout>

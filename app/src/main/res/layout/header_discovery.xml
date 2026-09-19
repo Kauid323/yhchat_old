@@ -6,12 +6,12 @@
     android:layout_height="wrap_content"
     android:orientation="vertical">
 
-    <!-- 轮播 Banner 区域 -->
+    <!-- 简洁优雅的轮播 Banner 区域 -->
     <FrameLayout
         android:id="@+id/layoutBannerContainer"
         android:layout_width="match_parent"
-        android:layout_height="160dp"
-        android:layout_marginTop="8dp">
+        android:layout_height="120dp"
+        android:layout_marginTop="6dp">
 
         <androidx.viewpager2.widget.ViewPager2
             android:id="@+id/vpBanners"
@@ -24,7 +24,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|center_horizontal"
-            android:layout_marginBottom="14dp"
+            android:layout_marginBottom="8dp"
             android:orientation="horizontal" />
     </FrameLayout>
 

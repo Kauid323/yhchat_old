@@ -64,16 +64,8 @@ public class DiscoveryBannerAdapter extends RecyclerView.Adapter<DiscoveryBanner
     @Override
     public void onBindViewHolder(@NonNull BannerViewHolder holder, int position) {
         DiscoveryModels.BannerItem item = list.get(position);
-        holder.tvBannerTitle.setText(item.title != null ? item.title : "");
-        if (item.introduction != null && !item.introduction.trim().isEmpty()) {
-            holder.tvBannerDesc.setText(item.introduction);
-            holder.tvBannerDesc.setVisibility(View.VISIBLE);
-        } else {
-            holder.tvBannerDesc.setVisibility(View.GONE);
-        }
-
         if (item.imageUrl != null && !item.imageUrl.trim().isEmpty()) {
-            ImageUtils.loadImage(context, item.imageUrl, holder.ivBannerImage, 800, 360);
+            ImageUtils.loadImage(context, item.imageUrl, holder.ivBannerImage, 600, 240);
         } else {
             holder.ivBannerImage.setImageDrawable(null);
         }
@@ -85,6 +77,14 @@ public class DiscoveryBannerAdapter extends RecyclerView.Adapter<DiscoveryBanner
             }
             handleBannerDefaultClick(item);
         });
+    }
+
+    @Override
+    public void onViewRecycled(@NonNull BannerViewHolder holder) {
+        super.onViewRecycled(holder);
+        try {
+            com.bumptech.glide.Glide.with(context).clear(holder.ivBannerImage);
+        } catch (Exception ignored) {}
     }
 
     private void handleBannerDefaultClick(DiscoveryModels.BannerItem item) {
@@ -114,14 +114,10 @@ public class DiscoveryBannerAdapter extends RecyclerView.Adapter<DiscoveryBanner
 
     static class BannerViewHolder extends RecyclerView.ViewHolder {
         ImageView ivBannerImage;
-        TextView tvBannerTitle;
-        TextView tvBannerDesc;
 
         public BannerViewHolder(@NonNull View itemView) {
             super(itemView);
             ivBannerImage = itemView.findViewById(R.id.ivBannerImage);
-            tvBannerTitle = itemView.findViewById(R.id.tvBannerTitle);
-            tvBannerDesc = itemView.findViewById(R.id.tvBannerDesc);
         }
     }
 }
